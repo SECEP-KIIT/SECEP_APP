@@ -1,0 +1,19 @@
+{
+  "name": "secep-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SECEP API & Orchestrator (M6)",
+  "type": "module",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "node --watch --env-file=.env src/server.js",
+    "start": "node src/server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "express": "^5.3.0"
+  }
+}
