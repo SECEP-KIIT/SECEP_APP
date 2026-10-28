@@ -1,0 +1,82 @@
+/*
+ * Design tokens — the only file with literal colours, radii, shadows and timings.
+ * Contrast ratios (WCAG 2.x) are measured against the surface they sit on; AA = 4.5 text, 3.0 non-text.
+ */
+:root {
+  color-scheme: light;
+
+  /* Surfaces */
+  --page: #eceef6;
+  --card: #fafbff;
+
+  /* Text — the only text colours allowed on clay surfaces */
+  --ink: #1e2230;        /* 15.31 on card, 13.66 on page, ≥12.65 on every tray */
+  --ink-muted: #4a5068;  /* 7.70 on card, 6.87 on page, ≥6.36 on every tray */
+
+  /* Column trays, one pastel per email type */
+  --tray-task: #dde7ff;
+  --tray-info: #ddf2e4;
+  --tray-credentials: #ffe2d9;
+  --tray-meeting: #ece1ff;
+  --tray-approval: #fff0c9;
+
+  /* Urgency badges: dark same-hue text on pastel fill */
+  --urgency-low-bg: #e4e8f0;      --urgency-low-fg: #334155;      /* 8.43 */
+  --urgency-medium-bg: #fdf0c4;   --urgency-medium-fg: #713f12;   /* 7.61 */
+  --urgency-high-bg: #ffe3cc;     --urgency-high-fg: #9a3412;     /* 5.95 */
+  --urgency-critical-bg: #ffd9d9; --urgency-critical-fg: #991b1b; /* 6.40 */
+
+  /* Sentiment dots (non-text; the label carries the meaning) */
+  --sentiment-positive: #15803d;   /* 4.85 on card */
+  --sentiment-neutral: #64748b;    /* 4.60 */
+  --sentiment-negative: #b45309;   /* 4.86 */
+  --sentiment-frustrated: #b91c1c; /* 6.26 */
+
+  /* Masked-credential chip */
+  --masked-bg: #e8e4f3;
+  --masked-fg: #3b2f63; /* 9.49 */
+
+  --focus-ring: #3b5bdb; /* 5.48 on card */
+
+  /* Radii */
+  --radius-column: 36px;
+  --radius-card: 28px;
+  --radius-pill: 999px;
+
+  /* Clay depth tiers: page is flat, columns are inset trays, cards are raised */
+  --shadow-inset:
+    inset 6px 6px 14px rgb(30 34 48 / 0.08),
+    inset -6px -6px 14px rgb(255 255 255 / 0.7);
+  --shadow-raised:
+    8px 10px 22px rgb(30 34 48 / 0.12),
+    -6px -6px 16px rgb(255 255 255 / 0.85),
+    inset 2px 2px 4px rgb(255 255 255 / 0.9),
+    inset -3px -3px 6px rgb(30 34 48 / 0.06);
+  --border-clay: 1px solid transparent;
+
+  /* Spacing */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+
+  /* Motion — critically damped feel, no overshoot (apple-design §4) */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --dur-press: 100ms;
+  --dur-settle: 300ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-press: 0ms;
+    --dur-settle: 0ms;
+  }
+}
+
+/* Soft shadows alone can be too faint; give every clay surface a real edge */
+@media (prefers-contrast: more) {
+  :root {
+    --border-clay: 1px solid var(--ink-muted); /* 7.70 on card */
+  }
+}
