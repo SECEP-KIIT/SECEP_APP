@@ -39,6 +39,7 @@ ask before changing `ml-service/` or anything in `backend/prisma/schema.prisma`.
 ## How to work with me
 - Only touch the folder/module I name in the request.
 - Plan first for anything multi-file; wait for my approval.
+- Apply the ponytail skill on all coding tasks.
 - For OAuth, auth, tokens, credential masking, and security code: explain each part — I need to understand it, not just paste it.
 - Never hardcode secrets. Use `.env` files and provide a `.env.example`.
 - After changes, run the relevant lint/tests and report results.
