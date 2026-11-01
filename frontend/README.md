@@ -25,4 +25,5 @@ Before calling a change done, run `lint`, `typecheck`, `test` and `build`.
 ## API in development
 The dev server proxies `/api` (including the Socket.io WebSocket at `/api/socket.io`) to the backend on
 `http://localhost:4000`, so the app uses same-origin paths just as it does in production behind Caddy.
-Until a backend route exists, MSW mocks return the §6.4.1 shapes.
+Until a backend route exists, MSW mocks return the §6.4.1 shapes: copy `.env.example` to `.env.local`
+(`VITE_MOCK=1`) and restart `npm run dev`. Mocks are dev-only; production builds contain no MSW code or worker.
