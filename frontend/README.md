@@ -1,32 +1,28 @@
-# React + TypeScript + Vite
+# SECEP frontend (M8 — Web dashboard)
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+React 18 + TypeScript + Vite. Requirements: SRS §3.4, §3.8–3.15 and §6.7 (M8); design detail in
+`../docs/frontend-decisions.md`; wire shapes in SRS §6.4.1.
 
-Currently, two official plugins are available:
-
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+## Setup
+```powershell
+cd frontend
+npm install
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## Scripts
+| Command | What it does |
+| --- | --- |
+| `npm run dev` | Dev server on port 5173 |
+| `npm run build` | Typecheck and production build |
+| `npm run typecheck` | `tsc -b` only |
+| `npm run lint` | Lint with oxlint |
+| `npm test` | Run tests with vitest |
+| `npm run preview` | Serve the production build |
+
+Before calling a change done, run `lint`, `typecheck`, `test` and `build`.
+
+## API in development
+The dev server proxies `/api` (including the Socket.io WebSocket at `/api/socket.io`) to the backend on
+`http://localhost:4000`, so the app uses same-origin paths just as it does in production behind Caddy.
+Until a backend route exists, MSW mocks return the §6.4.1 shapes.

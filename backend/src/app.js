@@ -10,8 +10,8 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
 
-// Express recognises error handlers by their 4-argument signature, so `next` must stay.
-app.use((err, req, res, next) => {
+// Express recognises error handlers by their 4-argument signature, so `_next` must stay.
+app.use((err, req, res, _next) => {
   console.error(err);
   res.status(err.status || 500).json({ error: err.expose ? err.message : 'Internal server error' });
 });
