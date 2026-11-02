@@ -65,7 +65,7 @@ async function execute(a: ActionRow, user: UserRow): Promise<Response | ActionRo
   a.updated_at = now()
   try {
     if (a.type === 'create_jira_issue') {
-      a.external_ref = await createIssue() // FR-ORC-003
+      a.external_ref = await createIssue({ assignee: user.email }) // FR-ORC-003; assigned to the caller (§12.2)
       a.external_status = 'To Do'
     } else if (a.type === 'add_calendar_event') {
       a.external_ref = `evt_${crypto.randomUUID().slice(0, 8)}` // simulated Google Calendar events.insert (FR-ORC-010)

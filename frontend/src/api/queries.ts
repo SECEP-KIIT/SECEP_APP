@@ -1,6 +1,6 @@
 import { QueryClient, infiniteQueryOptions, keepPreviousData, queryOptions, useMutation, useQuery, type InfiniteData } from '@tanstack/react-query'
 import { ApiError, api, apiBlob } from './client'
-import { patchActionCache, patchEmailCache } from './realtime'
+import { patchActionCache, patchEmailCache, signalArrival } from './realtime'
 import type {
   Action,
   ActionType,
@@ -111,22 +111,43 @@ export async function createAction(emailId: string, type: ActionType, payload: P
 
 type ListData = InfiniteData<{ items: EmailListItem[]; next_cursor: string | null }, string | null>
 
+/** Whether a list's per-user state views admit the email: the Handled view holds only handled mail, every other list none. */
+export const stateAdmits = (query: string, e: Pick<EmailListItem, 'handled'>) =>
+  (new URLSearchParams(query).get('view')?.split(',') ?? []).includes('handled') === e.handled
+
 /**
- * PATCH /emails/:id {pinned, handled} (proposals §10.3). The detail is replaced with the response and every list
- * copy patched in place. When `handled` flips, the email leaves the lists that no longer match it (the default inbox
- * hides handled mail; the Handled view shows only it): a deliberate removal, not a layout shift (item 9).
+ * Settles every cached list after the caller's own state for one email changed (handled, proposals §10.3). It is
+ * decided here, from the PATCH response alone, so the outcome never depends on whether the socket echo arrives
+ * before or after the response (F11):
+ * - a list the email no longer belongs to drops it: a deliberate removal, not a layout shift (item 9);
+ * - a list it now belongs to never gets it inserted (NFR-PERF-011). On screen, the list counts it in "↑ n new"; off
+ *   screen (a view not shown right now), the list is marked stale, so it reloads the next time it's shown. Lists
+ *   are otherwise never refetched (staleTime: Infinity), so without this a cached view would stay wrong.
+ */
+function settleLists(detail: EmailListItem) {
+  for (const [key, data] of queryClient.getQueriesData<ListData>({ queryKey: ['emails', 'list'] })) {
+    if (!data) continue
+    const held = data.pages.some((p) => p.items.some((e) => e.id === detail.id))
+    const admits = stateAdmits(String(key[2] ?? ''), detail)
+    if (held && !admits) {
+      queryClient.setQueryData<ListData>(key, { ...data, pages: data.pages.map((p) => ({ ...p, items: p.items.filter((e) => e.id !== detail.id) })) })
+    } else if (!held && admits) {
+      const onScreen = (queryClient.getQueryCache().find({ queryKey: key, exact: true })?.getObserversCount() ?? 0) > 0
+      if (onScreen) signalArrival(detail)
+      else void queryClient.invalidateQueries({ queryKey: key, exact: true, refetchType: 'none' })
+    }
+  }
+}
+
+/**
+ * PATCH /emails/:id {pinned, handled} (proposals §10.3, owner-only and per user, §12.1). The detail is replaced with
+ * the response and every list copy patched in place; a handled change then settles list membership (settleLists).
  */
 export async function updateEmail(id: string, patch: EmailPatch) {
   const detail = await api<EmailDetail>(`/emails/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) })
   queryClient.setQueryData(['email', id], detail)
   patchEmailCache(queryClient, id, detail)
-  if (patch.handled !== undefined) {
-    for (const [key, data] of queryClient.getQueriesData<ListData>({ queryKey: ['emails', 'list'] })) {
-      const view = new URLSearchParams(String(key[2] ?? '')).get('view')?.split(',') ?? []
-      if (!data || view.includes('handled') === detail.handled) continue
-      queryClient.setQueryData<ListData>(key, { ...data, pages: data.pages.map((p) => ({ ...p, items: p.items.filter((e) => e.id !== id) })) })
-    }
-  }
+  if (patch.handled !== undefined) settleLists(detail)
   return detail
 }
 

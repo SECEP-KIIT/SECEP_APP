@@ -119,7 +119,7 @@ export function Column({ title, onLegend }: Props) {
     <section className="column" aria-labelledby="col-title" data-density={density}>
       <header className="col-head">
         <div className="col-title-row">
-          <h2 className="col-title" id="col-title">
+          <h2 className="col-title" id="col-title" tabIndex={-1}>
             {title}
           </h2>
           <span className="col-count" title={more ? `${items.length} loaded, more below` : `${items.length} emails`}>
@@ -128,8 +128,9 @@ export function Column({ title, onLegend }: Props) {
           </span>
           <div className="col-tools">
             <FilterPopover filters={filters} onChange={setFilters} />
-            <label className="col-select" title="Sort">
+            <label className="col-select" title="Sort" data-set={sort !== 'newest' || undefined}>
               <ArrowDownUp size={16} aria-hidden="true" />
+              <span className="col-tool-dot" aria-hidden="true" />
               <span className="sr-only">Sort</span>
               <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)}>
                 {SORTS.map((s) => (
@@ -139,8 +140,9 @@ export function Column({ title, onLegend }: Props) {
                 ))}
               </select>
             </label>
-            <label className="col-select" title="Density">
+            <label className="col-select" title="Density" data-set={density !== 'comfortable' || undefined}>
               <Rows3 size={16} aria-hidden="true" />
+              <span className="col-tool-dot" aria-hidden="true" />
               <span className="sr-only">Density</span>
               <select value={density} onChange={(e) => setDensity(e.target.value as Density)}>
                 {DENSITIES.map((d) => (

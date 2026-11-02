@@ -1,9 +1,11 @@
 // Task 7 client paths against the real mock (msw/node): handled removal, accept, links, .ics.
+import { InfiniteQueryObserver } from '@tanstack/react-query'
 import { setupServer } from 'msw/node'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { acceptAction, emailListOptions, followLink, queryClient, rejectAction, updateEmail } from '../api/queries'
 import { apiBlob } from '../api/client'
-import type { EmailDetail, EmailListItem, Page } from '../api/types'
+import { arrivals } from '../api/realtime'
+import type { DecoderActionPayload, EmailDetail, EmailListItem, Page } from '../api/types'
 import { control } from '../mocks/control'
 import { handlers } from '../mocks/handlers'
 import { signIn } from '../mocks/session'
@@ -20,6 +22,7 @@ beforeEach(() => {
   control.jiraMode = 'ok'
   signIn(db.users[0].id)
   queryClient.clear()
+  arrivals.clear()
 })
 
 const items = (query: string) => queryClient.getQueryData<{ pages: Page<EmailListItem>[] }>(emailListOptions(query).queryKey)!.pages.flatMap((p) => p.items)
@@ -35,15 +38,36 @@ describe('drawer and quick actions (task 7)', () => {
     expect(items('').map((e) => e.id)).toEqual(before.filter((e) => e.id !== target.id).map((e) => e.id))
     expect(queryClient.getQueryData<EmailDetail>(['email', target.id])?.handled).toBe(true)
 
-    // Restoring removes it from the Handled view list (it no longer matches) without inserting into the inbox list.
-    await queryClient.fetchInfiniteQuery(emailListOptions('view=handled'))
-    expect(items('view=handled').some((e) => e.id === target.id)).toBe(false) // cached before the change
-    queryClient.removeQueries({ queryKey: emailListOptions('view=handled').queryKey })
+    // F11: the Handled list was cached before the change and isn't on screen: it's marked stale, so showing it
+    // reloads it with the email, whatever order the socket echo and the response came in.
+    expect(queryClient.getQueryState(emailListOptions('view=handled').queryKey)?.isInvalidated).toBe(true)
     await queryClient.fetchInfiniteQuery(emailListOptions('view=handled'))
     expect(items('view=handled').some((e) => e.id === target.id)).toBe(true)
+
+    // Restore with the inbox on screen: it leaves Handled, isn't inserted into the inbox, and counts in "↑ n new".
+    const onScreen = new InfiniteQueryObserver(queryClient, emailListOptions(''))
+    const stop = onScreen.subscribe(() => {})
     await updateEmail(target.id, { handled: false })
     expect(items('view=handled').some((e) => e.id === target.id)).toBe(false)
-    expect(items('').some((e) => e.id === target.id)).toBe(false) // comes back via "↑ n new" / refetch, never inserted
+    expect(items('').some((e) => e.id === target.id)).toBe(false)
+    expect(arrivals.get().map((a) => a.email)).toContainEqual(expect.objectContaining({ id: target.id, handled: false }))
+    stop()
+  })
+
+  it('Done then Restore is deterministic across repeated toggles (F11)', async () => {
+    await queryClient.fetchInfiniteQuery(emailListOptions(''))
+    await queryClient.fetchInfiniteQuery(emailListOptions('view=handled'))
+    const target = items('')[2]
+    for (let i = 0; i < 3; i++) {
+      await updateEmail(target.id, { handled: true })
+      await queryClient.fetchInfiniteQuery(emailListOptions('view=handled'))
+      expect(items('').some((e) => e.id === target.id)).toBe(false)
+      expect(items('view=handled').some((e) => e.id === target.id)).toBe(true)
+      await updateEmail(target.id, { handled: false })
+      await queryClient.fetchInfiniteQuery(emailListOptions(''))
+      expect(items('view=handled').some((e) => e.id === target.id)).toBe(false)
+      expect(items('').some((e) => e.id === target.id)).toBe(true)
+    }
   })
 
   it('accept sends the proposal and patches the open detail; a 502 refetches it as failed', async () => {
@@ -82,5 +106,35 @@ describe('drawer and quick actions (task 7)', () => {
     const meeting = [...db.actions.values()].find((a) => a.user_id === db.users[0].id && a.type === 'add_calendar_event' && db.emails.get(a.email_id!)?.triage?.email_type.label === 'Meeting')!
     const blob = await apiBlob(`/emails/${meeting.email_id}/ics`, { headers: { Accept: 'text/calendar' } })
     expect(await blob.text()).toMatch(/^BEGIN:VCALENDAR/)
+  })
+})
+
+describe('seed data for the browser checks', () => {
+  it('one email carries every click-time link outcome, plus a slow check', async () => {
+    const sample = [...db.emails.values()].find((e) => e.user_id === db.users[0].id && e.subject === 'Links for this week’s planning')!
+    const checks = db.urlChecks.filter((c) => c.email_id === sample.id)
+    const go = (anchor: string) => followLink(`/api/v1/links/${checks.find((c) => c.anchor_text === anchor)!.id}/go`)
+    expect(await go('Sprint board')).toMatchObject({ action: 'open' })
+    // Delivered clean; the click-time resolver finds the redirect now lands somewhere suspicious.
+    expect(checks.find((c) => c.anchor_text === 'Shared slides')!.verdict).toBe('clean')
+    expect(await go('Shared slides')).toMatchObject({ action: 'interstitial', final_url: 'https://slides-share.example/view/88' })
+    expect(await go('Vendor portal')).toMatchObject({ action: 'interstitial', verdict: 'suspicious' })
+    expect(await go('Invoice viewer')).toMatchObject({ action: 'blocked' })
+    expect(checks.find((c) => c.anchor_text === 'Last year’s archive')!.click_delay_ms).toBeGreaterThan(5_000)
+  })
+
+  it('event times match the summary text (wall clock, never before the email)', () => {
+    const events = [...db.actions.values()].filter((a) => a.type === 'add_calendar_event').map((a) => ({ ...a, payload: a.payload as DecoderActionPayload })).filter((a) => a.payload.start)
+    expect(events.length).toBeGreaterThan(0)
+    for (const a of events) {
+      const email = db.emails.get(a.email_id!)!
+      const start = new Date(a.payload.start!)
+      expect(start.getTime()).toBeGreaterThan(Date.parse(email.received_at))
+      const want = { 'Contoso renewal call': [15, null], 'Onboarding flow design review': [11, 4], 'Weekly sync': [10, 1] }[a.payload.title!]
+      if (!want) continue
+      expect(start.getHours()).toBe(want[0])
+      expect(start.getMinutes()).toBe(0)
+      if (want[1] !== null) expect(start.getDay()).toBe(want[1])
+    }
   })
 })

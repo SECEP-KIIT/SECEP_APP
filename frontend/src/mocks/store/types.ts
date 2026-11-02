@@ -77,6 +77,10 @@ export interface UrlCheckRow {
   signals: string[]
   final_url: string
   chain: string[]
+  /** Mock only, never on the wire: a worse verdict the click-time resolver finds (LinkSpec.clickVerdict). */
+  click_verdict?: 'suspicious' | 'malicious'
+  /** Mock only: how long the click-time check takes. */
+  click_delay_ms?: number
 }
 
 export interface SecretRow {

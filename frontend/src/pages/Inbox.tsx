@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Column } from '../inbox/Column'
 import { InboxContext, useToasts, type InboxApi, type OpenOptions } from '../inbox/inboxContext'
 import { Legend } from '../inbox/Legend'
@@ -13,7 +13,27 @@ export function Component() {
   const [legend, setLegend] = useState(false)
   const [drawer, setDrawer] = useState<({ id: string } & OpenOptions) | null>(null)
   const { toasts, push, dismiss } = useToasts()
-  const api = useMemo<InboxApi>(() => ({ open: (id, opts) => setDrawer({ id, ...opts }), toast: push }), [push])
+  // The dialog returns focus to its opener on close. If the drawer's own change removed that card (Mark handled),
+  // focus goes to the opener's column title instead of being lost to <body>.
+  const opener = useRef<{ el: HTMLElement | null; column: HTMLElement | null }>({ el: null, column: null })
+  const api = useMemo<InboxApi>(
+    () => ({
+      open: (id, opts) => {
+        const el = document.activeElement instanceof HTMLElement ? document.activeElement : null
+        opener.current = { el, column: el?.closest<HTMLElement>('.column')?.querySelector<HTMLElement>('.col-title') ?? null }
+        setDrawer({ id, ...opts })
+      },
+      toast: push,
+    }),
+    [push],
+  )
+  const closeDrawer = () => {
+    setDrawer(null)
+    const { el, column } = opener.current
+    requestAnimationFrame(() => {
+      if (el && !el.isConnected) column?.focus()
+    })
+  }
 
   // `?` shows the card legend (FR-UI-014). Never while typing or with a modifier (Shift is how `?` is typed).
   useEffect(() => {
@@ -36,7 +56,7 @@ export function Component() {
         <Legend open={legend} onClose={() => setLegend(false)} />
         {drawer && (
           <Suspense fallback={null}>
-            <EmailDrawer key={drawer.id} id={drawer.id} compose={drawer.compose} onClose={() => setDrawer(null)} />
+            <EmailDrawer key={drawer.id} id={drawer.id} compose={drawer.compose} onClose={closeDrawer} />
           </Suspense>
         )}
         <Toaster toasts={toasts} onDismiss={dismiss} />

@@ -31,6 +31,10 @@ export interface LinkSpec {
   signals?: string[]
   /** Redirect chain the click-time resolver would find; defaults to [url]. */
   chain?: string[]
+  /** Mock only: the click-time resolver finds a worse verdict than delivery did (a redirect that changed since). */
+  clickVerdict?: 'suspicious' | 'malicious'
+  /** Mock only: the click-time check takes this long (exercises the popup-blocking fallback, proposals §11.2). */
+  clickDelayMs?: number
 }
 
 export interface ActionSpec {
@@ -38,10 +42,15 @@ export interface ActionSpec {
   title: string
   description: string
   priority?: JiraPriority
-  /** Days from received_at. */
+  /** Due date, days from the received date (for "today", "within 5 days", "no rush"). */
   dueInDays?: number
-  /** Meeting start, hours from received_at, and length in minutes. */
-  startInHours?: number
+  /** Due date on the next given weekday on or after the received date (0 = Sunday), for "by Friday". */
+  dueOn?: number
+  /**
+   * Meeting start as the summary states it, in local wall-clock time: the same day as received ("today at 3 pm") or
+   * the next given weekday ("Thu 11:00"). If that moment has passed when the email arrives, the next day or week.
+   */
+  startAt?: { day: 'same' | number; hour: number; minute?: number }
   minutes?: number
 }
 
@@ -65,6 +74,26 @@ export interface Template {
 const PPTX = 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
 const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 
+/**
+ * One email whose links cover every click-time outcome (FR-SEC-004), so the link flow can be checked by hand: open
+ * (clean), an interstitial found only at click time (delivered clean, the redirect now lands elsewhere), suspicious
+ * (interstitial with the inline warning), malicious (blocked), and a slow check (6 s, past the browser's popup window).
+ */
+export const LINK_SAMPLES: Template = {
+  type: 'Info', urgency: 'Low', sentiment: 'Neutral', from: 3,
+  subject: 'Links for this week’s planning',
+  body: 'Hi,\n\nEverything for Thursday’s planning in one place: the sprint board, the shared slides, the vendor portal for the renewal quote, the invoice viewer Finance sent round, and last year’s archive (that server is slow).\n\nLena',
+  oneLine: 'Lena collected the planning links: board, slides, vendor portal, invoice viewer, archive.',
+  short: 'Lena shares the links for Thursday’s planning: the sprint board, the shared slides, the vendor portal for the renewal quote, an invoice viewer from Finance, and last year’s archive, which is slow to load.',
+  links: [
+    { anchor: 'Sprint board', url: 'https://boards.northwind.example/sprint-42', verdict: 'clean' },
+    { anchor: 'Shared slides', url: 'https://lnk.example/q3-slides', verdict: 'clean', clickVerdict: 'suspicious', signals: ['shortener', 'redirect_changed', 'new_domain'], chain: ['https://lnk.example/q3-slides', 'https://slides-share.example/view/88'] },
+    { anchor: 'Vendor portal', url: 'https://northwlnd-vendors.example/login', verdict: 'suspicious', signals: ['lookalike'] },
+    { anchor: 'Invoice viewer', url: 'https://invoice-view.example/open', verdict: 'malicious', signals: ['safe_browsing', 'new_domain'] },
+    { anchor: 'Last year’s archive', url: 'https://archive.northwind.example/2025', verdict: 'clean', clickDelayMs: 6_000 },
+  ],
+}
+
 export const TEMPLATES: Template[] = [
   {
     type: 'Task', urgency: 'Critical', sentiment: 'Neutral', from: 0,
@@ -72,7 +101,7 @@ export const TEMPLATES: Template[] = [
     body: 'Hi,\n\nFinance signed off the Q3 numbers this morning. Can you put the final revenue and churn figures into slides 4–7 of the attached board deck and send it back by Friday 5 pm?\n\nThanks,\nR. Sen',
     oneLine: 'Add the final Q3 revenue and churn figures to slides 4–7 and send the deck by Friday 5 pm.',
     short: 'R. Sen needs the board deck finished before Friday’s meeting. Finance has signed off the Q3 revenue and churn numbers; they go on slides 4–7. Send the updated deck back by Friday 5 pm.',
-    action: { type: 'create_jira_issue', title: 'Finalise Q3 board deck (slides 4–7)', description: 'Add the signed-off Q3 revenue and churn figures to slides 4–7 and send the deck to R. Sen.', priority: 'Highest', dueInDays: 2 },
+    action: { type: 'create_jira_issue', title: 'Finalise Q3 board deck (slides 4–7)', description: 'Add the signed-off Q3 revenue and churn figures to slides 4–7 and send the deck to R. Sen.', priority: 'Highest', dueOn: 5 },
     attachments: [{ filename: 'board-deck-q3.pptx', mime: PPTX, size: 482113 }],
   },
   {
@@ -81,7 +110,7 @@ export const TEMPLATES: Template[] = [
     body: 'Hello,\n\nThe CSV export of the March report has failed again this morning, third time this week. Our auditors need the file by Thursday. Can someone on your side look at it today?\n\nMaya',
     oneLine: 'Client’s March CSV export keeps failing; auditors need it by Thursday.',
     short: 'Maya at Contoso reports the March report export failed for the third time this week. Their auditors need the file by Thursday, so she asks for someone to investigate today.',
-    action: { type: 'create_jira_issue', title: 'Fix failing CSV export for Contoso March report', description: 'Contoso’s March report CSV export fails repeatedly; auditors need it by Thursday.', priority: 'High', dueInDays: 2 },
+    action: { type: 'create_jira_issue', title: 'Fix failing CSV export for Contoso March report', description: 'Contoso’s March report CSV export fails repeatedly; auditors need it by Thursday.', priority: 'High', dueOn: 4 },
   },
   {
     type: 'Task', urgency: 'Medium', sentiment: 'Neutral', from: 2,
@@ -113,7 +142,7 @@ export const TEMPLATES: Template[] = [
     body: 'Hi both,\n\nCould we review the new onboarding screens on Thursday at 11:00? 45 minutes should do. Please bring your notes on the sign-up step.\n\nPriya',
     oneLine: 'Design review of the onboarding flow on Thursday, 11:00–11:45.',
     short: 'Priya invites you to review the new onboarding screens on Thursday at 11:00 for 45 minutes. Bring notes on the sign-up step.',
-    action: { type: 'add_calendar_event', title: 'Onboarding flow design review', description: 'Review the new onboarding screens; bring notes on the sign-up step.', startInHours: 50, minutes: 45 },
+    action: { type: 'add_calendar_event', title: 'Onboarding flow design review', description: 'Review the new onboarding screens; bring notes on the sign-up step.', startAt: { day: 4, hour: 11 }, minutes: 45 },
   },
   {
     type: 'Meeting', urgency: 'Low', sentiment: 'Neutral', from: 10,
@@ -121,7 +150,7 @@ export const TEMPLATES: Template[] = [
     body: 'You have been invited to Weekly sync.\nWhen: Monday 10:00–10:30\nWhere: Room 4B / video link in the invite\n\nThis is an automated message.',
     oneLine: 'Invitation to the 30-minute weekly sync on Monday at 10:00.',
     short: 'Calendar invitation for the weekly sync, Monday 10:00–10:30 in room 4B or by video.',
-    action: { type: 'add_calendar_event', title: 'Weekly sync', description: 'Room 4B or video.', startInHours: 70, minutes: 30 },
+    action: { type: 'add_calendar_event', title: 'Weekly sync', description: 'Room 4B or video.', startAt: { day: 1, hour: 10 }, minutes: 30 },
   },
   {
     type: 'Meeting', urgency: 'High', sentiment: 'Neutral', from: 7,
@@ -129,7 +158,7 @@ export const TEMPLATES: Template[] = [
     body: 'Hi,\n\nCould we do a 20-minute call this afternoon about the renewal terms? 3 pm works for me.\n\nBest,\nMaya',
     oneLine: 'Client wants a 20-minute renewal call this afternoon at 3 pm.',
     short: 'Maya proposes a 20-minute call at 3 pm today to discuss the renewal terms.',
-    action: { type: 'add_calendar_event', title: 'Contoso renewal call', description: 'Discuss renewal terms with Maya.', startInHours: 5, minutes: 20 },
+    action: { type: 'add_calendar_event', title: 'Contoso renewal call', description: 'Discuss renewal terms with Maya.', startAt: { day: 'same', hour: 15 }, minutes: 20 },
   },
   {
     type: 'Approval', urgency: 'High', sentiment: 'Positive', from: 0,
@@ -137,7 +166,7 @@ export const TEMPLATES: Template[] = [
     body: 'Hi,\n\nI’ve raised the travel request for the Pune client visit (12–13 Nov). Could you approve it in the portal before Wednesday so we can book?\n\nThanks,\nR. Sen',
     oneLine: 'Approve the travel request for the Pune client visit on 12–13 Nov before Wednesday.',
     short: 'R. Sen asks you to approve the travel request for the Pune client visit on 12–13 November. Bookings close on Wednesday.',
-    action: { type: 'add_board_card', title: 'Approve Pune travel request', description: 'Approve the 12–13 Nov travel request in the portal before Wednesday.', dueInDays: 1 },
+    action: { type: 'add_board_card', title: 'Approve Pune travel request', description: 'Approve the 12–13 Nov travel request in the portal before Wednesday.', dueOn: 3 },
   },
   {
     type: 'Approval', urgency: 'Medium', sentiment: 'Neutral', from: 6,
@@ -153,7 +182,7 @@ export const TEMPLATES: Template[] = [
     body: 'Hi,\n\nDraft release notes for 2.14 are in the shared folder. OK to publish them on Friday?\n\nKenji',
     oneLine: 'Kenji asks for sign-off to publish the 2.14 release notes on Friday.',
     short: 'Kenji has drafted the 2.14 release notes and asks whether he can publish them on Friday.',
-    action: { type: 'add_board_card', title: 'Sign off 2.14 release notes', description: 'Draft in the shared folder.', dueInDays: 3 },
+    action: { type: 'add_board_card', title: 'Sign off 2.14 release notes', description: 'Draft in the shared folder.', dueOn: 5 },
   },
   {
     type: 'Credentials', urgency: 'Medium', sentiment: 'Neutral', from: 5,

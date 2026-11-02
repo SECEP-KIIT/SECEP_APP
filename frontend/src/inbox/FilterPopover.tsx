@@ -27,7 +27,14 @@ export function FilterPopover({ filters, onChange }: { filters: ColumnFilters; o
         </button>
       </Popover.Trigger>
       <Popover.Portal>
-        <Popover.Content className="menu filter-popover" side="bottom" align="end" sideOffset={6} collisionPadding={12}>
+        <Popover.Content className="menu filter-popover" side="bottom" align="end" sideOffset={6} collisionPadding={12} aria-label="Filters">
+          {/* F8: Clear all sits at the top, reachable without scrolling the popover. */}
+          <div className="filter-head">
+            <span className="filter-head-title">{count > 0 ? `Filters · ${count} active` : 'Filters'}</span>
+            <button type="button" className="text-button" disabled={count === 0} onClick={() => onChange(NO_FILTERS)}>
+              Clear all
+            </button>
+          </div>
           <Group title="Type">
             {TYPES.map((t) => (
               <Check key={t} filters={filters} onChange={onChange} patch={{ group: 'type', value: t }}>
@@ -78,11 +85,6 @@ export function FilterPopover({ filters, onChange }: { filters: ColumnFilters; o
               />
             </label>
           </fieldset>
-          <div className="filter-foot">
-            <button type="button" className="text-button" disabled={count === 0} onClick={() => onChange(NO_FILTERS)}>
-              Clear all
-            </button>
-          </div>
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>

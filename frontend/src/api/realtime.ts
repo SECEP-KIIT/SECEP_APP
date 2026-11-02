@@ -50,12 +50,21 @@ function publishArrivals() {
   for (const l of arrivalListeners) l()
 }
 function addArrival(email: EmailListItem) {
+  arrivalItems.delete(email.id) // re-signalled: it moves to the end with its new time
   arrivalItems.set(email.id, { email, at: Date.now() })
   for (const id of arrivalItems.keys()) {
     if (arrivalItems.size <= ARRIVALS_MAX) break
     arrivalItems.delete(id)
   }
   publishArrivals()
+}
+
+/**
+ * Counts an email the caller's own change made newly visible to a list that is on screen (e.g. restored from
+ * Handled while an inbox column shows). Same signal as a real arrival: it is never inserted, only counted by the pill.
+ */
+export function signalArrival(email: EmailListItem) {
+  addArrival(listFields(email) as EmailListItem)
 }
 
 // ── Cache patching ─────────────────────────────────────────────────────────────────────────────────────────────

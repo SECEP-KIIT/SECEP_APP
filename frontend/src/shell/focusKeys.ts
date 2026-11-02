@@ -16,8 +16,15 @@ export function isTypingTarget(target: EventTarget | null) {
 }
 
 export function focusKeyAction(e: KeyLike, focused: boolean): 'toggle' | 'exit' | null {
-  if (e.ctrlKey || e.metaKey || e.altKey || isTypingTarget(e.target)) return null
+  // F9: inside an open dialog (drawer, legend) or a popover, keys belong to that layer. So Esc closes the layer
+  // first, and only a later Esc, with nothing open, leaves Focus mode.
+  if (e.ctrlKey || e.metaKey || e.altKey || isTypingTarget(e.target) || inLayer(e.target)) return null
   if (e.key === 'f' || e.key === 'F') return 'toggle'
   if (e.key === 'Escape' && focused) return 'exit'
   return null
+}
+
+function inLayer(target: EventTarget | null) {
+  const el = target as { closest?: (selector: string) => unknown } | null
+  return !!el?.closest?.('dialog[open], [data-radix-popper-content-wrapper]')
 }

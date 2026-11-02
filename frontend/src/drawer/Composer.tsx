@@ -26,8 +26,9 @@ interface Props {
 /**
  * The ⇧J / Shift+click mini composer (FR-ORC-012, item 10), prefilled from the decoder's proposal. Fields follow the
  * enrich.v1 payload (§6.4): title, description, priority and due date for Jira; start, end and attendees for a
- * calendar event. Assignee and the primary project's Jira project and epic are not in the payload shape, so they are
- * not shown (proposals §11). The server validates everything again (FR-ORC-002).
+ * calendar event. The issue is always assigned to the user (proposals §12.2), shown read-only, with nothing on the wire.
+ * The primary project's Jira project and epic come with task 10 (FR-ORC-012 partly met until then). The server
+ * validates everything again (FR-ORC-002).
  */
 export function Composer({ type, initial, submitLabel, busy, errors, onSubmit, onCancel }: Props) {
   const [p, setP] = useState(initial)
@@ -64,6 +65,7 @@ export function Composer({ type, initial, submitLabel, busy, errors, onSubmit, o
           </Field>
         </div>
       )}
+      {type === 'create_jira_issue' && <p className="composer-note">Assignee: you</p>}
       {type === 'add_calendar_event' && (
         <>
           <div className="composer-row">

@@ -39,6 +39,14 @@ describe('focus mode keys (FR-UI-004)', () => {
     expect(isTypingTarget({ tagName: 'DIV', isContentEditable: true } as unknown as EventTarget)).toBe(true)
     expect(isTypingTarget({ tagName: 'BUTTON' } as unknown as EventTarget)).toBe(false)
   })
+
+  it('leaves Esc and F to an open dialog or popover first (F9)', () => {
+    const inside = (selector: string | null) => ({ tagName: 'BUTTON', closest: (s: string) => (selector && s.includes(selector) ? {} : null) })
+    expect(focusKeyAction(key('Escape', { target: inside('dialog[open]') }), true)).toBeNull()
+    expect(focusKeyAction(key('Escape', { target: inside('[data-radix-popper-content-wrapper]') }), true)).toBeNull()
+    expect(focusKeyAction(key('f', { target: inside('dialog[open]') }), false)).toBeNull()
+    expect(focusKeyAction(key('Escape', { target: inside(null) }), true)).toBe('exit')
+  })
 })
 
 describe('nav gating (sidebar and tab bar share it)', () => {

@@ -637,9 +637,18 @@ button.tag:hover {
   color: var(--ink-muted);
   font-size: 0.75rem;
 }
-.filter-foot {
+.filter-head {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--line);
+}
+.filter-head-title {
+  color: var(--ink-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
 /* ── Legend (`?`) ─────────────────────────────────────────────────────────────────────────────────────────── */
@@ -727,14 +736,54 @@ html[data-motion='off'] .card[data-fresh]::after {
   .column {
     max-width: none;
   }
-  /* F6: tools take their own row under the title; sort and density show icon + a short select. */
-  .col-tools {
-    flex-basis: 100%;
-    margin-left: 0;
+  /* F7: the tools stay on the title row as icons only. Sort and density keep their native select, invisible over
+     the icon (still focusable and announced); a dot marks a non-default choice, and the filter shows its count. */
+  .col-select {
+    width: 30px;
+    padding: 0;
+    justify-content: center;
   }
   .col-select select {
-    max-width: 8.5em;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    max-width: none;
+    opacity: 0;
+    cursor: pointer;
   }
+  .col-select:focus-within {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+  .col-select[data-set] .col-tool-dot {
+    display: block;
+  }
+  /* Quick chips: one row that scrolls sideways instead of wrapping. */
+  .quick-chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+  .quick-chips::-webkit-scrollbar {
+    display: none;
+  }
+  .quick-chip {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+}
+/* A non-default sort or density on the phone's icon-only toolbar: a dot on the icon (a shape, not colour alone). */
+.col-tool-dot {
+  display: none;
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid var(--card-bg);
+  border-radius: 50%;
+  background: var(--accent);
 }
 
 /* ── Card layer 2: quick actions (FR-UI-011, item 3) ─────────────────────────────────────────────────────────

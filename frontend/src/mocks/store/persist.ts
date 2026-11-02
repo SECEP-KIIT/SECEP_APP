@@ -10,7 +10,7 @@
 import type { Db, SettingsRow } from './types'
 
 export const STORAGE_KEY = 'secep.mock'
-export const SCHEMA_VERSION = 2 // 2: handled state; correction ids are UUIDs
+export const SCHEMA_VERSION = 3 // 2: handled state; correction ids are UUIDs. 3: link samples, wall-clock action times
 
 type PersistedSettings = Omit<SettingsRow, 'jira' | 'llm'> & {
   jira: Omit<SettingsRow['jira'], 'token'> & { token_set: boolean }

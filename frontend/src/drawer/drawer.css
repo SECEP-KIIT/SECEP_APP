@@ -4,6 +4,8 @@
   inset: 8px 8px 8px auto;
   width: min(560px, calc(100vw - 16px));
   height: auto;
+  /* The UA caps a modal dialog at 100% - 2em - 6px; without max-width the phone layout wasn't full screen (F10). */
+  max-width: none;
   max-height: none;
   margin: 0;
   padding: 0;
@@ -36,12 +38,22 @@ html[data-motion='off'] .drawer::backdrop {
     animation: fade-in 100ms ease-out;
   }
 }
-@media (max-width: 639px) {
+/* F10: full screen on phones (up to and including 640 px). */
+@media (max-width: 640px) {
   .drawer {
     inset: 0;
-    width: 100vw;
+    width: 100%;
+    border: 0;
     border-radius: 0;
   }
+}
+
+.link-ready {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+  font-size: 0.8125rem;
 }
 
 .drawer-inner {

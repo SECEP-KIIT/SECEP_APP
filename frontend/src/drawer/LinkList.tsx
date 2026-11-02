@@ -28,7 +28,19 @@ const VERDICT = {
   malicious: { label: 'Malicious', Icon: ShieldX },
 } as const
 
-type State = { kind: 'idle' } | { kind: 'checking' } | { kind: 'error'; message: string } | { kind: 'result'; go: Exclude<GoResponse, { action: 'open' }> }
+type State =
+  | { kind: 'idle' }
+  | { kind: 'checking' }
+  | { kind: 'ready'; url: string }
+  | { kind: 'error'; message: string }
+  | { kind: 'result'; go: Exclude<GoResponse, { action: 'open' }> }
+
+/**
+ * Whether the click that started the check still allows opening a tab (proposals §11.2). A slow check can outlast
+ * the browser's transient activation (about 5 s), and with noopener window.open returns null either way, so a block
+ * can't be detected afterwards. Browsers without the API are assumed active.
+ */
+const canStillOpen = () => (navigator as Navigator & { userActivation?: { isActive: boolean } }).userActivation?.isActive ?? true
 
 /**
  * Links & security (FR-SEC-004): the only clickable links are LinkView entries, and every click goes through the
@@ -57,7 +69,8 @@ function LinkRow({ link }: { link: LinkView }) {
     try {
       const res = await followLink(link.go_url)
       if (res.action === 'open') {
-        setState(safeOpen(res.url) ? { kind: 'idle' } : { kind: 'error', message: 'This link can’t be opened safely.' })
+        if (!canStillOpen()) setState({ kind: 'ready', url: res.url })
+        else setState(safeOpen(res.url) ? { kind: 'idle' } : { kind: 'error', message: 'This link can’t be opened safely.' })
       } else {
         setState({ kind: 'result', go: res })
       }
@@ -91,6 +104,18 @@ function LinkRow({ link }: { link: LinkView }) {
         </button>
       </div>
 
+      {state.kind === 'ready' && (
+        <p className="link-ready" role="status">
+          <ShieldCheck size={14} aria-hidden="true" /> Checked: clean.
+          <button
+            type="button"
+            className="text-button"
+            onClick={() => setState(safeOpen(state.url) ? { kind: 'idle' } : { kind: 'error', message: 'This link can’t be opened safely.' })}
+          >
+            Open it now
+          </button>
+        </p>
+      )}
       {state.kind === 'error' && (
         <p className="action-error" role="alert">
           {state.message}

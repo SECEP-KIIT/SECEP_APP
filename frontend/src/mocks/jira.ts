@@ -38,8 +38,11 @@ function attempt(): string {
   }
 }
 
-/** POST /rest/api/3/issue, with retries. Resolves to the new issue key. */
-export async function createIssue(): Promise<string> {
+/**
+ * POST /rest/api/3/issue, with retries. Resolves to the new issue key. The issue is assigned to the caller (proposals
+ * §12.2, FR-ORC-012): M6 sets the assignee to the caller's linked Jira account; nothing about it goes on the wire.
+ */
+export async function createIssue(_issue: { assignee: string }): Promise<string> {
   for (let n = 1; ; n++) {
     try {
       await wait(400) // round trip to Jira

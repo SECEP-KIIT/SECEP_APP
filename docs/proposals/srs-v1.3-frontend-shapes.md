@@ -195,7 +195,7 @@ These were decided by the user after task 6. The mock and the frontend implement
 - **Time zone for "today" and for converting a calendar `start` to a date:** the mock uses the browser's local time zone. M6 needs the user's zone (e.g. `ui_prefs.time_zone`); still open.
 - **Unknown `view` values** also get `422 invalid_parameter`. Other malformed parameters (e.g. `type=Spam`) keep their `400 bad_request`; say if those should move to 422 too.
 
-**Still open (not blocking; nothing invented for it):** how a read row gets created. Opening an email (implicit), or `PATCH /emails/:id { read }` as §1 suggested? The mock creates none yet, so the Unread chip works on the seeded read state, and opening the drawer doesn't mark anything read. `EmailListItem.read` is still not on the wire.
+**Resolved in §12.3** (was open): how a read row gets created. Opening an email (implicit), or `PATCH /emails/:id { read }` as §1 suggested? The mock creates none yet, so the Unread chip works on the seeded read state, and opening the drawer doesn't mark anything read. `EmailListItem.read` is still not on the wire.
 
 ## 11. Found while building the drawer and actions (task 7, 2 Nov 2026)
 
@@ -204,3 +204,16 @@ These were decided by the user after task 6. The mock and the frontend implement
    - **Nothing is invented:** there is no assignee control and no read-only "Assignee: you" text.
    - **Suggested for v1.3:** either M6 always assigns to the user's linked Jira account (then nothing is needed on the wire beyond saying so), or the payload gains `assignee: "me" | null` and `jira_project_key` / `jira_epic`, filled from the email's primary project (§4, task 10).
 2. **Popup blocking on link open.** The client opens a link only after the `/links/:checkId/go` round trip. Browsers allow `window.open` for a short time after the click (Chrome's transient activation is about 5 s), so it normally works; with a very slow check it could be blocked. No shape change; a browser check is listed in the task 7 worklog.
+
+## 12. Decisions after the task 6–7 browser pass (2 Nov 2026)
+
+1. **§10 approved,** with one condition: `PATCH /emails/:id { handled }` is **owner-only and per-user scoped**. It changes only the caller's own `email_states` row, and only for an email the caller can read (else 404, as for every other email route). For v1.3, consider merging handled and read into one per-user state endpoint.
+2. **§11.1 / FR-ORC-012 composer prefill: partially met.**
+   - **Assignee = the current user, now.** M6 assigns the issue to the caller's linked Jira account (§11.1's first option), so nothing new is needed on the wire. The composer shows a read-only "Assignee: you" line, and the mock's simulated Jira records the caller as assignee.
+   - **The Jira project and epic prefill is deferred to task 10,** when projects carry their Jira config. The interim (omit the missing fields) stands. FR-ORC-012's remainder is tracked under task 10.
+3. **Read-marking (was open in §10): PROPOSED.**
+   - **Opening an email marks it read for the current user:** the client sends an explicit `PATCH /emails/:id { read: true }` when the drawer opens. It's per recipient, like handled (an `email_reads` row, §1).
+   - **There is also a manual toggle:** Mark unread / Mark read (`{ read: false | true }`).
+   - **On the wire:** `EmailListItem.read: boolean` (and on `EmailDetail`), computed for the caller.
+   - **Same owner-only rule as handled.** The change goes out to the user's other tabs as `email.triaged`, like other `PATCH /emails/:id` changes.
+   - **The Unread chip** (`view=unread`) now reflects live changes. An email read while the Unread chip is on leaves that list, the same way handled leaves the inbox.

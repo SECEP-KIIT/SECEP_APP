@@ -3,7 +3,8 @@
 import type { ActionStatus, BoardColumn, Person, TriageView } from '../../api/types'
 import { buildNotification } from '../notifications'
 import { chance, int, pick, rng, round, uid, type Rng } from './random'
-import { SENDERS, TEMPLATES, type Sender, type Template } from './templates'
+import { localDate } from './serialize'
+import { LINK_SAMPLES, SENDERS, TEMPLATES, type ActionSpec, type Sender, type Template } from './templates'
 import type { ActionRow, Db, EmailRow, UserRow } from './types'
 
 export const SEED = 20261104
@@ -141,6 +142,8 @@ export function addEmail(db: Db, { template: t, user, receivedAt, r, history = f
       // Arrivals are scored by M5 a moment later (email.flagged); until then the link is pending.
       verdict: arriving ? 'pending' : link.verdict,
       signals: link.signals ?? [], final_url: chain[chain.length - 1], chain,
+      ...(link.clickVerdict && { click_verdict: link.clickVerdict }),
+      ...(link.clickDelayMs && { click_delay_ms: link.clickDelayMs }),
     })
   }
   if (!arriving) row.security_flag = securityFlagOf(db, id)
@@ -183,11 +186,34 @@ export function scoreLinks(db: Db, email: EmailRow, t: Template) {
   email.security_flag = securityFlagOf(db, email.id)
 }
 
+/** A local wall-clock time on the received day, or on the next given weekday on or after it. */
+function wallClock(received: number, day: 'same' | number, hour: number, minute = 0) {
+  const d = new Date(received)
+  if (day !== 'same') d.setDate(d.getDate() + ((day - d.getDay() + 7) % 7))
+  d.setHours(hour, minute, 0, 0)
+  return d.getTime()
+}
+
+/** The meeting start the summary names (ActionSpec.startAt), never before the email arrived. */
+function startOf(spec: ActionSpec, received: number): number | null {
+  if (!spec.startAt) return null
+  const { day, hour, minute } = spec.startAt
+  const t = wallClock(received, day, hour, minute)
+  return t > received ? t : t + (day === 'same' ? 1 : 7) * DAY
+}
+
+/** The due date the summary names, as a local date. */
+function dueOf(spec: ActionSpec, received: number): string | null {
+  if (spec.dueOn !== undefined) return localDate(iso(wallClock(received, spec.dueOn, 12)))
+  if (spec.dueInDays !== undefined) return localDate(iso(received + spec.dueInDays * DAY))
+  return null
+}
+
 /** The decoder's proposal for an email (enrich.v1 action shape), optionally already executed. */
 export function actionFor(db: Db, email: EmailRow, t: Template, user: UserRow, r: Rng, history: boolean): [string, ActionRow] {
   const spec = t.action!
   const received = Date.parse(email.received_at)
-  const start = spec.startInHours !== undefined ? received + spec.startInHours * HOUR : null
+  const start = startOf(spec, received)
   const created = iso(received + 4000)
   const roll = history ? r() : 0
   const status: ActionStatus = roll < 0.45 ? 'proposed' : roll < 0.85 ? 'done' : 'rejected'
@@ -206,7 +232,7 @@ export function actionFor(db: Db, email: EmailRow, t: Template, user: UserRow, r
       title: spec.title,
       description: spec.description,
       priority: spec.priority ?? null,
-      due_date: spec.dueInDays !== undefined ? iso(received + spec.dueInDays * DAY).slice(0, 10) : null,
+      due_date: dueOf(spec, received),
       start: start ? iso(start) : null,
       end: start ? iso(start + (spec.minutes ?? 30) * 60_000) : null,
       attendees: start ? [email.from.address, user.email] : null,
@@ -273,6 +299,8 @@ export function createDb(now: number, seed = SEED): Db {
   }
 
   const demo = db.users[0]
+  // Every click-time link outcome in one recent, unread email (LINK_SAMPLES).
+  addEmail(db, { template: LINK_SAMPLES, user: demo, receivedAt: now - 3 * HOUR, r })
   db.projects = [
     { id: uid(NS.project, 1), user_id: demo.id, name: 'Q3 board meeting', colour: '#3b5bdb', icon: '📊', description: 'Deck and numbers for the Q3 board meeting.', deadline: iso(now + 3 * DAY), jira_project_key: 'ATL', jira_epic: 'ATL-100', archived_at: null, created_at: iso(now - 12 * DAY), progress: { done: 2, total: 5 } },
     { id: uid(NS.project, 2), user_id: demo.id, name: 'Pune client visit', colour: '#e8590c', icon: '✈️', description: null, deadline: iso(now + 9 * DAY), jira_project_key: null, jira_epic: null, archived_at: null, created_at: iso(now - 5 * DAY), progress: { done: 1, total: 3 } },
