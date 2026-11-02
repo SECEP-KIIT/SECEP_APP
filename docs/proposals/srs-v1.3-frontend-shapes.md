@@ -166,3 +166,33 @@ Task 6 builds only what §6.4.1 / §6.5 fully define. The items below have no wi
 14. **`correction_id` type.** `PATCH /emails/:id/labels` returns `correction_id`. `corrections.id` is a `bigserial`, but §6.4.1 says IDs are UUID strings; the mock sends a number. Same conflict as `notifications.id` (§3); resolve both the same way.
 15. **Unknown `sort` values.** The mock answers `400 bad_request` for a value outside `smart|newest|oldest|due|urgency|sender|confidence`, following the §6.4.1 "malformed query" row. The SRS doesn't say; confirm.
 16. **Pinned first.** FR-UI-023 says pinned cards stay on top; the mock applies this under every sort, including the Must `newest`.
+
+## 10. Decisions on §9 (2 Nov 2026), resolved for the mock (PROPOSED, pending v1.3)
+
+These were decided by the user after task 6. The mock and the frontend implement them. They stay PROPOSED until SRS v1.3 adopts them.
+
+1. **Quick chips (§9.1): `GET /emails?view=unread|due_today|needs_reply|overdue`**, comma-separated and **AND-combined** (an email must satisfy every listed view), and AND-combined with the other parameters.
+   - `unread`: no read row for the current user (`email_reads`, §1).
+   - `due_today` / `overdue`: use the derived `due_date` (item 2). `due_today` = `due_date` is today; `overdue` = `due_date` before today, **excluding handled** emails.
+   - `needs_reply`: **NEEDS TEAM SIGN-OFF.** FR-UI-021 is a Must with no SRS definition. The mock implements this demo predicate:
+     - the thread's latest message is inbound (not from the user);
+     - the type is Task, Approval or Meeting;
+     - the email has no accepted action (status `accepted`, `executing` or `done`).
+2. **Email due date (§9.2): `EmailListItem.due_date: string (YYYY-MM-DD) | null`, the same on `EmailDetail`.** Derived server-side: the earliest of
+   - every non-null action `payload.due_date`, and
+   - the date of every non-null calendar `payload.start`;
+   - else `null`.
+
+   The source of truth stays in `actions`.
+3. **"Done" (§9.13): per-recipient handled state.** M6 table: `email_states(email_id, user_id, handled_at)`; the mock keeps a per-user map. **Reversible.** Handled emails are excluded from the default inbox and surfaced through a view. The field is named **handled**, never "done", so it can't be confused with `action.status = "done"`.
+4. **Unknown `sort` (§9.15): `422 invalid_parameter`.** This is a new error code for the §6.4.1 table.
+5. **`correction_id` (§9.14): a string (UUID).**
+
+**How the mock reads these** (choices made while implementing, flagged for review; none changes the decisions above):
+- **Wire field for handled:** `EmailListItem.handled: boolean` (a boolean like `pinned`; `handled_at` stays server-side). Set with `PATCH /emails/:id { handled: true | false }`; §6.5 already lists `PATCH /emails/:id` with `{pinned, snoozed_until}`. The response is the updated `EmailDetail` ("mutations return the updated resource").
+- **Surfacing handled:** `view=handled` lists only handled emails. Without it, `GET /emails` omits handled emails. So `view=handled,overdue` is always empty, as overdue excludes handled.
+- **Rejected actions don't count towards `due_date`:** a declined proposal isn't a commitment. Confirm.
+- **Time zone for "today" and for converting a calendar `start` to a date:** the mock uses the browser's local time zone. M6 needs the user's zone (e.g. `ui_prefs.time_zone`); still open.
+- **Unknown `view` values** also get `422 invalid_parameter`. Other malformed parameters (e.g. `type=Spam`) keep their `400 bad_request`; say if those should move to 422 too.
+
+**Still open (not blocking; nothing invented for it):** how a read row gets created. Opening an email (implicit), or `PATCH /emails/:id { read }` as §1 suggested? The mock creates none yet, so the Unread chip works on the seeded read state, and opening the drawer doesn't mark anything read. `EmailListItem.read` is still not on the wire.

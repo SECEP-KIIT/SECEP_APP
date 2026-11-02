@@ -25,6 +25,28 @@ export function toLink(c: UrlCheckRow): LinkView {
 const ROLES = new Map<string, RoleCategory>(SENDERS.flatMap((s) => (s.role ? [[s.address, s.role] as const] : [])))
 const sender = (p: { address: string; name: string | null }): SenderPerson => ({ ...p, role_category: ROLES.get(p.address.toLowerCase()) ?? null })
 
+/** Local calendar date of an ISO time (the mock runs in the browser; M6 needs the user's zone, proposals §10). */
+export const localDate = (iso: string) => {
+  const d = new Date(iso)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+/**
+ * PROPOSED due_date (proposals §10.2): the earliest action due_date or calendar start date, else null. Rejected
+ * proposals don't count (§10, flagged). The source of truth stays in the actions.
+ */
+export function dueDateOf(actions: ActionRow[]): string | null {
+  const dates = actions
+    .filter((a) => a.status !== 'rejected')
+    .flatMap((a) => {
+      const p = a.payload as { due_date?: string | null; start?: string | null }
+      return [p.due_date ?? null, p.start ? localDate(p.start) : null]
+    })
+    .filter((d): d is string => d !== null)
+    .sort()
+  return dates[0] ?? null
+}
+
 export function toListItem(db: Db, e: EmailRow): EmailListItem {
   const thread = e.thread_id ? db.threads.get(e.thread_id) : undefined
   const actions = [...db.actions.values()].filter((a) => a.email_id === e.id)
@@ -50,6 +72,8 @@ export function toListItem(db: Db, e: EmailRow): EmailListItem {
     jira_key: jira?.external_ref ?? null,
     pinned: e.pinned,
     snoozed_until: e.snoozed_until,
+    due_date: dueDateOf(actions),
+    handled: db.handled.get(e.user_id)?.has(e.id) ?? false,
     projects: [],
     tags: [],
   }

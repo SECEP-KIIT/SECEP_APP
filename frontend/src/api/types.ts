@@ -103,6 +103,13 @@ export interface EmailListItem {
   jira_key: string | null
   pinned: boolean
   snoozed_until: string | null
+  /**
+   * PROPOSED (pending SRS v1.3, proposals §10.2): YYYY-MM-DD, derived server-side from the email's actions (earliest
+   * due_date or calendar start date). The source of truth stays in actions. null = no due date.
+   */
+  due_date: string | null
+  /** PROPOSED (proposals §10.3): handled by the current user (per recipient). Reversible; hidden from the default inbox. */
+  handled: boolean
   // Should features; element shapes are not in the SRS yet, so nothing can be put in them until it is.
   projects: never[]
   tags: never[]
@@ -142,6 +149,16 @@ export interface Page<T> {
   next_cursor: string | null
 }
 
+/** GET /emails `view` values (PROPOSED, proposals §10.1/§10.3), AND-combined. */
+export type EmailView = 'unread' | 'due_today' | 'needs_reply' | 'overdue' | 'handled'
+
+/** PATCH /emails/:id request (§6.5 v1.1: pinned, snoozed_until; handled is PROPOSED, §10.3). Response: EmailDetail. */
+export interface EmailPatch {
+  pinned?: boolean
+  snoozed_until?: string | null
+  handled?: boolean
+}
+
 /** PATCH /emails/:id/labels request (§6.4.1). scope defaults to email; similar is S (FR-ML-014). */
 export interface LabelCorrection {
   field: 'email_type' | 'urgency' | 'sentiment'
@@ -150,10 +167,10 @@ export interface LabelCorrection {
 }
 
 /** PATCH /emails/:id/labels response (§6.4.1). correction_id: corrections.id is a bigserial but §6.4.1 says IDs are
- * UUID strings; the mock sends a number. Unused by the UI; flagged in proposals §9. */
+ * UUID strings. Decided (proposals §10.5): a UUID string. */
 export interface LabelCorrectionResponse {
   triage: TriageView
-  correction_id: string | number
+  correction_id: string
   rule_id: string | null
 }
 
@@ -171,6 +188,8 @@ export type ErrorCode =
   | 'conflict'
   | 'validation_failed'
   | 'action_invalid'
+  /** PROPOSED (proposals §10.4): 422 for an unknown sort or view value. */
+  | 'invalid_parameter'
   | 'rate_limited'
   | 'upstream_error'
   | 'unavailable'

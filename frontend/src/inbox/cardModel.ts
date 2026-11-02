@@ -1,8 +1,8 @@
 // Pure card and column logic (decisions items 3, 4, 6). No React here, so all of it is unit-tested.
-// Everything is derived from §6.4.1 EmailListItem fields only. Parts of items 4 and 6 that need fields the SRS
-// doesn't define yet (due dates, projects, external sender, notes, custom tags, unread, facets) are not built; see
-// docs/proposals/srs-v1.3-frontend-shapes.md §9.
-import type { EmailListItem, EmailType, RoleCategory, SecurityFlag, SenderPerson, Sentiment, Urgency } from '../api/types'
+// Everything is derived from §6.4.1 EmailListItem fields plus the PROPOSED due_date / handled / view (proposals §10).
+// Parts of items 4 and 6 that still have no shape (projects, external sender, notes, custom tags, facets) are not
+// built; see docs/proposals/srs-v1.3-frontend-shapes.md §9.
+import type { EmailListItem, EmailType, EmailView, RoleCategory, SecurityFlag, SenderPerson, Sentiment, Urgency } from '../api/types'
 
 export const TYPES: EmailType[] = ['Task', 'Info', 'Credentials', 'Meeting', 'Approval']
 export const URGENCIES: Urgency[] = ['Critical', 'High', 'Medium', 'Low']
@@ -36,7 +36,7 @@ export function cardTime(iso: string, now: Date, locale?: string): string {
 
 // ── Tags (item 4, FR-UI-013/014) ───────────────────────────────────────────────────────────────────────────────
 
-export type TagKind = 'security' | 'action' | 'sentiment' | 'attachments' | 'replies' | 'duplicates' | 'masked' | 'snoozed'
+export type TagKind = 'security' | 'due' | 'action' | 'sentiment' | 'attachments' | 'replies' | 'duplicates' | 'masked' | 'snoozed'
 
 export interface CardTag {
   kind: TagKind
@@ -50,6 +50,7 @@ export interface CardTag {
 }
 
 export type FilterPatch =
+  | { group: 'view'; value: EmailView }
   | { group: 'type'; value: EmailType }
   | { group: 'urgency'; value: Urgency }
   | { group: 'sentiment'; value: Sentiment }
@@ -60,7 +61,7 @@ export const MAX_VISIBLE_TAGS = 5
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 
 /**
- * All tags in display priority: security → (due, project: not built) → action status → the rest (item 4).
+ * All tags in display priority: security → due → (project: not built) → action status → the rest (item 4).
  * Sentiment shows only when Negative or Frustrated. Clean mail shows no shield.
  */
 export function cardTags(email: EmailListItem, now: Date): CardTag[] {
@@ -75,6 +76,8 @@ export function cardTags(email: EmailListItem, now: Date): CardTag[] {
       filter: { group: 'flag', value: email.security_flag },
     })
   }
+  const due = dueTag(email.due_date, now)
+  if (due) tags.push(due)
   if (email.jira_key) {
     tags.push({ kind: 'action', text: email.jira_key, label: `Jira issue ${email.jira_key}`, tone: 'ok', filter: null })
   } else if (email.proposed_action_count > 0) {
@@ -103,6 +106,36 @@ export function cardTags(email: EmailListItem, now: Date): CardTag[] {
   return tags
 }
 
+// ── Due dates (FR-UI-013; PROPOSED due_date, proposals §10.2) ──────────────────────────────────────────────
+
+/** Local YYYY-MM-DD for a Date. */
+export const isoDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+/** Whole days from today to a YYYY-MM-DD date (negative = past), in local time. */
+export function daysUntil(date: string, now: Date): number {
+  const [y, m, d] = date.split('-').map(Number)
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  return Math.round((new Date(y, m - 1, d).getTime() - today) / 86_400_000)
+}
+
+/**
+ * One word of context, no icon (item 4): "Overdue", "Due today", "Due tomorrow", "Due Fri", "Due 12 Nov". Coloured by
+ * proximity, and the word always says it too: red under 24 h (overdue or today), orange within 3 days, grey later.
+ * Overdue and today are clickable: they apply the matching quick view.
+ */
+export function dueTag(dueDate: string | null, now: Date, locale?: string): CardTag | null {
+  if (!dueDate) return null
+  const days = daysUntil(dueDate, now)
+  const [y, m, d] = dueDate.split('-').map(Number)
+  const date = new Date(y, m - 1, d)
+  const long = date.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' })
+  if (days < 0) return { kind: 'due', text: 'Overdue', label: `Overdue: was due ${long}`, tone: 'danger', filter: { group: 'view', value: 'overdue' } }
+  if (days === 0) return { kind: 'due', text: 'Due today', label: 'Due today', tone: 'danger', filter: { group: 'view', value: 'due_today' } }
+  const text =
+    days === 1 ? 'Due tomorrow' : days < 7 ? `Due ${date.toLocaleDateString(locale, { weekday: 'short' })}` : `Due ${date.toLocaleDateString(locale, { day: 'numeric', month: 'short' })}`
+  return { kind: 'due', text, label: `Due ${long}`, tone: days <= 3 ? 'warn' : 'muted', filter: null }
+}
+
 /** The first five tags, then a `+N` for the rest (which the popover lists). */
 export function visibleTags(tags: CardTag[]): { shown: CardTag[]; hidden: number } {
   if (tags.length <= MAX_VISIBLE_TAGS) return { shown: tags, hidden: 0 }
@@ -114,6 +147,8 @@ export function visibleTags(tags: CardTag[]): { shown: CardTag[]; hidden: number
 
 /** Only groups with a §6.4.1 GET /emails query parameter. */
 export interface ColumnFilters {
+  /** Quick chips (FR-UI-021; PROPOSED `view`, proposals §10.1), AND-combined. */
+  view: EmailView[]
   type: EmailType[]
   urgency: Urgency[]
   sentiment: Sentiment[]
@@ -124,7 +159,7 @@ export interface ColumnFilters {
   received_before: string | null
 }
 
-export const NO_FILTERS: ColumnFilters = { type: [], urgency: [], sentiment: [], flag: [], sender: null, received_after: null, received_before: null }
+export const NO_FILTERS: ColumnFilters = { view: [], type: [], urgency: [], sentiment: [], flag: [], sender: null, received_after: null, received_before: null }
 
 /** `smart` and `due` are not offered yet (proposals §9). */
 export type SortKey = 'newest' | 'oldest' | 'urgency' | 'sender' | 'confidence'
@@ -153,6 +188,7 @@ export function columnQuery(filters: ColumnFilters, sort: SortKey, focused: bool
   const urgency = effectiveUrgency(filters, focused)
   if (urgency && urgency.length === 0) return null
   const q = new URLSearchParams()
+  if (filters.view.length) q.set('view', filters.view.join(','))
   if (filters.type.length) q.set('type', filters.type.join(','))
   if (urgency) q.set('urgency', urgency.join(','))
   if (filters.sentiment.length) q.set('sentiment', filters.sentiment.join(','))
@@ -169,8 +205,17 @@ export function columnQuery(filters: ColumnFilters, sort: SortKey, focused: bool
  * column's "↑ n new" pill. The list itself always comes from the server. Received dates compare in UTC, as the API's
  * `received_after` / `received_before` do.
  */
-export function matchesColumn(e: EmailListItem, filters: ColumnFilters, focused: boolean): boolean {
+export function matchesColumn(e: EmailListItem, filters: ColumnFilters, focused: boolean, now = new Date()): boolean {
   const urgency = effectiveUrgency(filters, focused)
+  if (e.handled !== filters.view.includes('handled')) return false
+  const today = isoDay(now)
+  for (const v of filters.view) {
+    // An arrival is new: unread, and its thread's latest message is the inbound one, with nothing accepted yet. So
+    // for needs_reply only the type part of the rule can fail.
+    if (v === 'due_today' && e.due_date !== today) return false
+    if (v === 'overdue' && !(e.due_date !== null && e.due_date < today)) return false
+    if (v === 'needs_reply' && !(e.triage && ['Task', 'Approval', 'Meeting'].includes(e.triage.email_type.label))) return false
+  }
   if (filters.type.length && !(e.triage && filters.type.includes(e.triage.email_type.label))) return false
   if (urgency && !(e.triage && urgency.includes(e.triage.urgency.label))) return false
   if (filters.sentiment.length && !(e.triage && filters.sentiment.includes(e.triage.sentiment.label))) return false
@@ -206,7 +251,16 @@ export interface FilterChip {
 const GROUP_LABEL = { type: 'Type', urgency: 'Urgency', sentiment: 'Sentiment', flag: 'Security' } as const
 const FLAG_LABEL: Record<SecurityFlag, string> = { none: 'Clean', suspicious: 'Suspicious', malicious: 'Malicious' }
 
-/** One removable chip per active value (item 6). */
+/** Quick chips (FR-UI-021) plus Handled (proposals §10.3), shown as toggles above the list. */
+export const QUICK_VIEWS: { key: EmailView; label: string; title: string }[] = [
+  { key: 'unread', label: 'Unread', title: 'Only emails you haven\'t read' },
+  { key: 'due_today', label: 'Due today', title: 'Due date is today' },
+  { key: 'needs_reply', label: 'Needs my reply', title: 'Latest message is to you, a Task, Approval or Meeting, nothing accepted yet (demo rule, pending team sign-off)' },
+  { key: 'overdue', label: 'Overdue', title: 'Due date has passed and not handled' },
+  { key: 'handled', label: 'Handled', title: 'Emails you marked as handled (hidden from the inbox otherwise)' },
+]
+
+/** One removable chip per active popover value (item 6). Quick views are toggles of their own, not chips. */
 export function filterChips(filters: ColumnFilters): FilterChip[] {
   const chips: FilterChip[] = []
   for (const group of ['type', 'urgency', 'sentiment', 'flag'] as const) {
@@ -225,6 +279,9 @@ export function filterChips(filters: ColumnFilters): FilterChip[] {
 }
 
 export const activeFilterCount = (filters: ColumnFilters) => filterChips(filters).length
+
+/** Any filter or quick view at all: decides between the "All clear" and "Nothing matches" empty states. */
+export const isFiltered = (filters: ColumnFilters) => filters.view.length > 0 || activeFilterCount(filters) > 0
 
 // ── Header urgency bar (item 3 "smart widget headers") ─────────────────────────────────────────────────────────
 

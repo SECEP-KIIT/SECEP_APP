@@ -8,6 +8,8 @@ import {
   cardTags,
   cardTime,
   columnQuery,
+  dueTag,
+  isFiltered,
   filterChips,
   matchesColumn,
   NO_FILTERS,
@@ -31,6 +33,8 @@ const email = (patch: Partial<EmailListItem> = {}): EmailListItem => ({
   duplicate_count: 0,
   has_masked_secret: false,
   snoozed_until: null,
+  due_date: null,
+  handled: false,
   triage: base.triage && { ...base.triage, sentiment: { ...base.triage.sentiment, label: 'Neutral' } },
   ...patch,
 })
@@ -147,5 +151,41 @@ describe('header urgency split', () => {
       { urgency: 'Critical', count: 1 },
       { urgency: 'Low', count: 2 },
     ])
+  })
+})
+
+describe('quick views and due dates (PROPOSED view / due_date / handled, proposals §10)', () => {
+  const now = new Date(2026, 10, 4, 15, 0) // Wed 4 Nov 2026, local
+  it('due tag: one word of context, coloured by proximity, overdue and today are view filters', () => {
+    expect(dueTag(null, now)).toBeNull()
+    expect(dueTag('2026-11-02', now, 'en-GB')).toMatchObject({ kind: 'due', text: 'Overdue', tone: 'danger', filter: { group: 'view', value: 'overdue' } })
+    expect(dueTag('2026-11-04', now, 'en-GB')).toMatchObject({ text: 'Due today', tone: 'danger', filter: { group: 'view', value: 'due_today' } })
+    expect(dueTag('2026-11-05', now, 'en-GB')).toMatchObject({ text: 'Due tomorrow', tone: 'warn', filter: null })
+    expect(dueTag('2026-11-07', now, 'en-GB')).toMatchObject({ text: 'Due Sat', tone: 'warn' })
+    expect(dueTag('2026-11-09', now, 'en-GB')).toMatchObject({ text: 'Due Mon', tone: 'muted' })
+    expect(dueTag('2026-11-20', now, 'en-GB')).toMatchObject({ text: 'Due 20 Nov', tone: 'muted' })
+  })
+
+  it('the due tag sits right after security in the strip', () => {
+    const tags = cardTags(email({ security_flag: 'suspicious', jira_key: 'A-1', due_date: '2026-11-04' }), NOW)
+    expect(tags.map((t) => t.kind).slice(0, 3)).toEqual(['security', 'due', 'action'])
+  })
+
+  it('view goes first in the query; quick views count as filtered but not as popover chips', () => {
+    const f = { ...NO_FILTERS, view: ['unread' as const, 'overdue' as const], type: ['Task' as const] }
+    expect(columnQuery(f, 'newest', false)).toBe('view=unread%2Coverdue&type=Task')
+    expect(filterChips(f).map((c) => c.key)).toEqual(['type:Task'])
+    expect(isFiltered({ ...NO_FILTERS, view: ['handled'] })).toBe(true)
+    expect(isFiltered(NO_FILTERS)).toBe(false)
+  })
+
+  it('arrival matcher: handled only in the Handled view; due views use due_date', () => {
+    expect(matchesColumn(email({ handled: true }), NO_FILTERS, false, now)).toBe(false)
+    expect(matchesColumn(email({ handled: true }), { ...NO_FILTERS, view: ['handled'] }, false, now)).toBe(true)
+    expect(matchesColumn(email(), { ...NO_FILTERS, view: ['handled'] }, false, now)).toBe(false)
+    expect(matchesColumn(email({ due_date: '2026-11-04' }), { ...NO_FILTERS, view: ['due_today'] }, false, now)).toBe(true)
+    expect(matchesColumn(email({ due_date: '2026-11-03' }), { ...NO_FILTERS, view: ['due_today'] }, false, now)).toBe(false)
+    expect(matchesColumn(email({ due_date: '2026-11-03' }), { ...NO_FILTERS, view: ['overdue'] }, false, now)).toBe(true)
+    expect(matchesColumn(email({ due_date: null }), { ...NO_FILTERS, view: ['overdue'] }, false, now)).toBe(false)
   })
 })

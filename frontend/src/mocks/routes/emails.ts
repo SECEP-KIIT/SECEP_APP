@@ -1,11 +1,12 @@
 // Emails (§6.5, §6.4.1): list with the v1.2 query, detail, label correction (FR-ML-010, FR-ML-013), .ics (FR-ORC-017).
-import type { DecoderActionPayload, EmailType, Sentiment, SecurityFlag, TriageView, Urgency } from '../../api/types'
+import type { DecoderActionPayload, EmailType, EmailView, Sentiment, SecurityFlag, TriageView, Urgency } from '../../api/types'
 import { page } from '../http/cursor'
 import { Fail, own, route } from '../http/route'
-import { csv, isDate, object } from '../http/validate'
+import { csv, isDate, isDateTime, object } from '../http/validate'
 import { changed, db, emailsOf } from '../store/db'
 import { publish } from '../store/events'
-import { toDetail, toListItem } from '../store/serialize'
+import { handledOf } from '../store/generate'
+import { localDate, toDetail, toListItem } from '../store/serialize'
 import type { EmailRow } from '../store/types'
 
 const TYPES: EmailType[] = ['Task', 'Info', 'Credentials', 'Meeting', 'Approval']
@@ -13,6 +14,43 @@ const URGENCIES: Urgency[] = ['Low', 'Medium', 'High', 'Critical']
 const SENTIMENTS: Sentiment[] = ['Positive', 'Neutral', 'Negative', 'Frustrated']
 const FLAGS: SecurityFlag[] = ['none', 'suspicious', 'malicious']
 const LABELS = { email_type: TYPES, urgency: URGENCIES, sentiment: SENTIMENTS } as const
+const VIEWS: EmailView[] = ['unread', 'due_today', 'needs_reply', 'overdue', 'handled']
+const REPLY_TYPES: EmailType[] = ['Task', 'Approval', 'Meeting']
+
+/** `view` (PROPOSED, proposals §10.1): comma-separated, AND-combined. Unknown values: 422 invalid_parameter (§10). */
+function views(url: URL): EmailView[] {
+  const raw = url.searchParams.get('view')
+  if (!raw) return []
+  const list = raw.split(',').map((v) => v.trim()).filter(Boolean)
+  const bad = list.filter((v) => !(VIEWS as string[]).includes(v))
+  if (bad.length) throw new Fail(422, 'invalid_parameter', `Unknown view: ${bad.join(', ')}`, { parameter: 'view', allowed: VIEWS })
+  return list as EmailView[]
+}
+
+/**
+ * One view predicate for one email of `userId`. needs_reply is the demo rule (proposals §10.1, NEEDS TEAM SIGN-OFF):
+ * latest thread message inbound, type Task/Approval/Meeting, no accepted action.
+ */
+function inView(view: EmailView, e: EmailRow, userId: string, today: string): boolean {
+  const item = toListItem(db, e)
+  switch (view) {
+    case 'unread':
+      return !(db.reads.get(userId)?.has(e.id) ?? false)
+    case 'handled':
+      return item.handled
+    case 'due_today':
+      return item.due_date === today
+    case 'overdue':
+      return item.due_date !== null && item.due_date < today && !item.handled
+    case 'needs_reply': {
+      const me = db.users.find((u) => u.id === userId)?.email.toLowerCase()
+      const thread = e.thread_id ? db.threads.get(e.thread_id) : undefined
+      const latest = thread?.messages.at(-1)?.from ?? e.from
+      const accepted = [...db.actions.values()].some((a) => a.email_id === e.id && ['accepted', 'executing', 'done'].includes(a.status))
+      return latest.address.toLowerCase() !== me && !!e.triage && REPLY_TYPES.includes(e.triage.email_type.label) && !accepted
+    }
+  }
+}
 
 function dateParam(url: URL, name: string) {
   const v = url.searchParams.get(name)
@@ -37,6 +75,8 @@ function filtered(user: { id: string }, url: URL) {
   const after = dateParam(url, 'received_after')
   const before = dateParam(url, 'received_before')
   const q = url.searchParams.get('q')?.trim() || null
+  const view = views(url)
+  const today = localDate(new Date().toISOString())
   // The S parameters (project, due, status, pinned, snoozed, tag) are accepted and ignored until built (§6.4.1).
   const order = sorter(url)
 
@@ -53,6 +93,9 @@ function filtered(user: { id: string }, url: URL) {
     .filter((e) => !after || e.received_at.slice(0, 10) >= after)
     .filter((e) => !before || e.received_at.slice(0, 10) <= before)
     .filter((e) => !q || matchesKeywords(e, q))
+    // Handled mail leaves the default inbox and is surfaced with view=handled (proposals §10.3).
+    .filter((e) => view.includes('handled') || !(db.handled.get(user.id)?.has(e.id) ?? false))
+    .filter((e) => view.every((v) => inView(v, e, user.id, today)))
     .sort((a, b) => Number(b.pinned) - Number(a.pinned) || order(a, b)) // pinned stay on top (FR-UI-023)
 }
 
@@ -81,7 +124,9 @@ function sorter(url: URL): (a: EmailRow, b: EmailRow) => number {
     case 'confidence':
       return (a, b) => (a.triage?.email_type.confidence ?? 2) - (b.triage?.email_type.confidence ?? 2) || newest(a, b)
     default:
-      throw new Fail(400, 'bad_request', 'sort must be smart, newest, oldest, due, urgency, sender or confidence')
+      throw new Fail(422, 'invalid_parameter', 'sort must be smart, newest, oldest, due, urgency, sender or confidence', {
+        parameter: 'sort',
+      })
   }
 }
 
@@ -95,6 +140,26 @@ export const emailRoutes = [
   route<{ id: string }>('get', '/emails/:id', 'user', ({ user, params }) =>
     toDetail(db, own(db.emails.get(params.id), user, 'Email')),
   ),
+
+  // PATCH /emails/:id (§6.5 v1.1 {pinned, snoozed_until}; handled PROPOSED, §10.3). Returns the updated EmailDetail.
+  route<{ id: string }>('patch', '/emails/:id', 'user', ({ user, params, body }) => {
+    const email = own(db.emails.get(params.id), user, 'Email')
+    const f = object(body).only(['pinned', 'snoozed_until', 'handled'])
+    if ('pinned' in f.body && typeof f.body.pinned !== 'boolean') f.add('pinned', 'Must be true or false')
+    if ('handled' in f.body && typeof f.body.handled !== 'boolean') f.add('handled', 'Must be true or false')
+    if ('snoozed_until' in f.body && f.body.snoozed_until !== null && !isDateTime(f.body.snoozed_until)) f.add('snoozed_until', 'Must be an ISO date-time or null')
+    f.done()
+    if (typeof f.body.pinned === 'boolean') email.pinned = f.body.pinned
+    if ('snoozed_until' in f.body) email.snoozed_until = f.body.snoozed_until as string | null
+    if (typeof f.body.handled === 'boolean') {
+      const handled = handledOf(db, user.id)
+      if (f.body.handled) handled.set(email.id, handled.get(email.id) ?? new Date().toISOString())
+      else handled.delete(email.id)
+    }
+    changed()
+    publish(user.id, 'email.triaged', { email_id: email.id, email: toListItem(db, email) })
+    return toDetail(db, email)
+  }),
 
   route<{ id: string }>('patch', '/emails/:id/labels', 'user', ({ user, params, body }) => {
     const email = own(db.emails.get(params.id), user, 'Email')
@@ -110,7 +175,7 @@ export const emailRoutes = [
     const triage = email.triage as TriageView
     const value = f.body.value as string
     const correction = {
-      id: (db.corrections.at(-1)?.id ?? 0) + 1,
+      id: crypto.randomUUID(), // a UUID string (proposals §10.5)
       email_id: email.id,
       user_id: user.id,
       field,

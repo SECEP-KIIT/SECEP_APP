@@ -54,9 +54,11 @@ async function login(who: keyof typeof USER = 'demo') {
 const keys = (o: object) => Object.keys(o).sort()
 const sorted = (k: string[]) => [...k].sort()
 const demoEmails = () => [...db.emails.values()].filter((e) => e.user_id === db.users[0].id)
+/** The default inbox leaves handled mail out (proposals §10.3). */
+const inboxEmails = () => demoEmails().filter((e) => !db.handled.get(db.users[0].id)?.has(e.id))
 
 // Key sets copied from SRS §6.4.1.
-const LIST_KEYS = ['id', 'thread_id', 'from', 'to', 'cc', 'recipient_position', 'subject', 'received_at', 'status', 'security_flag', 'duplicate_count', 'attachment_count', 'reply_count', 'has_masked_secret', 'triage', 'summary_one_line', 'proposed_action_count', 'jira_key', 'pinned', 'snoozed_until', 'projects', 'tags']
+const LIST_KEYS = ['id', 'thread_id', 'from', 'to', 'cc', 'recipient_position', 'subject', 'received_at', 'status', 'security_flag', 'duplicate_count', 'attachment_count', 'reply_count', 'has_masked_secret', 'triage', 'summary_one_line', 'proposed_action_count', 'jira_key', 'pinned', 'snoozed_until', 'due_date', 'handled', 'projects', 'tags']
 const DETAIL_KEYS = [...LIST_KEYS, 'body_text', 'summary_short', 'actions', 'links', 'attachments', 'masked_secrets', 'auth_results', 'thread']
 const TRIAGE_KEYS = ['email_type', 'urgency', 'sentiment', 'needs_review', 'model_version', 'processed_at']
 const LINK_KEYS = ['check_id', 'anchor_text', 'host', 'verdict', 'go_url']
@@ -74,7 +76,7 @@ describe('§6.4.1 shapes', () => {
     const token = await login()
     const list = await call('GET', '/emails?limit=50', { token })
     expect(keys(list.json)).toEqual(['items', 'next_cursor'])
-    expect(list.json.items).toHaveLength(50)
+    expect(list.json.items).toHaveLength(inboxEmails().length)
     for (const item of list.json.items) {
       expect(keys(item)).toEqual(sorted(LIST_KEYS))
       if (item.triage) expect(keys(item.triage)).toEqual(sorted(TRIAGE_KEYS))
@@ -159,8 +161,8 @@ describe('GET /emails query (§6.4.1)', () => {
       seen.push(...json.items.map((e: Json) => e.id))
       cursor = json.next_cursor
     }
-    expect(seen).toHaveLength(50)
-    expect(new Set(seen).size).toBe(50)
+    expect(seen).toHaveLength(inboxEmails().length)
+    expect(new Set(seen).size).toBe(inboxEmails().length)
     expect((await call('GET', '/emails?limit=51', { token })).status).toBe(400)
     expect((await call('GET', '/emails?cursor=nope', { token })).status).toBe(400)
   })
@@ -194,7 +196,7 @@ describe('GET /emails query (§6.4.1)', () => {
     for (const e of recent.json.items) expect(e.received_at.slice(0, 10) >= today).toBe(true)
   })
 
-  it('sort: oldest, urgency, sender and confidence order the list; pinned stay on top; unknown sort is 400', async () => {
+  it('sort: oldest, urgency, sender and confidence order the list; pinned stay on top; unknown sort is 422', async () => {
     const token = await login()
     const get = async (sort: string) => (await call('GET', `/emails?limit=50&sort=${sort}`, { token })).json.items as Json[]
     const at = (l: Json[]) => l.map((e) => e.received_at as string)
@@ -211,7 +213,9 @@ describe('GET /emails query (§6.4.1)', () => {
     expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)))
     // smart and due are accepted and served as newest until built (proposals §9).
     expect(at(await get('smart'))).toEqual(at(newest))
-    expect((await call('GET', '/emails?sort=random', { token })).status).toBe(400)
+    const bad = await call('GET', '/emails?sort=random', { token })
+    expect(bad.status).toBe(422)
+    expect(bad.json.error.code).toBe('invalid_parameter') // proposals §10.4
 
     // FR-UI-023: a pinned email stays on top under any sort.
     const last = oldest.at(-1)!
@@ -232,8 +236,79 @@ describe('GET /emails query (§6.4.1)', () => {
     for (const m of d.thread?.messages ?? []) expect(keys(m.from)).toEqual(['address', 'name'])
   })
 
+  it('view (proposals §10.1): unread, due_today, overdue, needs_reply, AND-combined; unknown is 422', async () => {
+    const token = await login()
+    const me = db.users[0]
+    const get = async (q: string) => (await call('GET', `/emails?limit=50&${q}`, { token })).json.items as Json[]
+    const today = new Date()
+    const day = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+
+    const unread = await get('view=unread')
+    expect(unread.length).toBeGreaterThan(0)
+    for (const e of unread) expect(db.reads.get(me.id)!.has(e.id)).toBe(false)
+
+    // Give one email a due date today and one a past date through its actions (the source of truth).
+    const [a, b] = inboxEmails()
+    const dueAction = (email: { id: string }, due: string) =>
+      db.actions.set(`test-${email.id}`, {
+        id: `test-${email.id}`, user_id: me.id, email_id: email.id, type: 'create_jira_issue', origin: 'user', status: 'proposed',
+        payload: { title: 't', description: null, priority: 'High', due_date: due, start: null, end: null, attendees: null },
+        board_column: null, board_position: null, external_ref: null, external_status: null, error: null, created_at: day, updated_at: day,
+      })
+    dueAction(a, day)
+    dueAction(b, '2020-01-01')
+    expect((await get('view=due_today')).map((e) => e.id)).toContain(a.id)
+    const overdue = await get('view=overdue')
+    expect(overdue.map((e) => e.id)).toContain(b.id)
+    for (const e of overdue) expect(e.due_date < day).toBe(true)
+    // AND-combined.
+    for (const e of await get('view=unread,overdue')) expect(db.reads.get(me.id)!.has(e.id) === false && e.due_date < day).toBe(true)
+
+    for (const e of await get('view=needs_reply')) expect(['Task', 'Approval', 'Meeting']).toContain(e.triage.email_type.label)
+
+    const bad = await call('GET', '/emails?view=starred', { token })
+    expect(bad.status).toBe(422)
+    expect(bad.json.error.code).toBe('invalid_parameter')
+  })
+
+  it('due_date: earliest action due_date or calendar start date; rejected actions do not count (proposals §10.2)', async () => {
+    const token = await login()
+    const email = inboxEmails().find((e) => ![...db.actions.values()].some((x) => x.email_id === e.id))!
+    const mk = (id: string, status: 'proposed' | 'rejected', due: string | null, start: string | null) =>
+      db.actions.set(id, {
+        id, user_id: db.users[0].id, email_id: email.id, type: start ? 'add_calendar_event' : 'create_jira_issue', origin: 'user', status,
+        payload: { title: 't', description: null, priority: 'High', due_date: due, start, end: start, attendees: null },
+        board_column: null, board_position: null, external_ref: null, external_status: null, error: null, created_at: '', updated_at: '',
+      })
+    const detail = async () => (await call('GET', `/emails/${email.id}`, { token })).json
+    expect((await detail()).due_date).toBeNull()
+    mk('d1', 'proposed', '2030-05-10', null)
+    mk('d2', 'rejected', '2030-05-01', null)
+    mk('d3', 'proposed', null, '2030-05-08T09:00:00')
+    expect((await detail()).due_date).toBe('2030-05-08')
+  })
+
+  it('PATCH /emails/:id handled (proposals §10.3): reversible, leaves the default inbox, shown by view=handled', async () => {
+    const token = await login()
+    const email = inboxEmails()[0]
+    const res = await call('PATCH', `/emails/${email.id}`, { token, body: { handled: true } })
+    expect(res.status).toBe(200)
+    expect(res.json).toMatchObject({ id: email.id, handled: true, body_text: expect.any(String) })
+    const ids = async (q: string) => ((await call('GET', `/emails?limit=50${q}`, { token })).json.items as Json[]).map((e) => e.id)
+    expect(await ids('')).not.toContain(email.id)
+    expect(await ids('&view=handled')).toContain(email.id)
+    expect((await call('PATCH', `/emails/${email.id}`, { token, body: { handled: false } })).json.handled).toBe(false)
+    expect(await ids('')).toContain(email.id)
+    expect((await call('PATCH', `/emails/${email.id}`, { token, body: { pinned: true } })).json.pinned).toBe(true)
+    expect((await call('PATCH', `/emails/${email.id}`, { token, body: { handled: 'yes' } })).status).toBe(422)
+    expect((await call('PATCH', `/emails/${email.id}`, { token, body: { done: true } })).status).toBe(422)
+    // Per recipient: another user can't touch it.
+    expect((await call('PATCH', `/emails/${email.id}`, { token: await login('sam'), body: { handled: true } })).status).toBe(404)
+  })
+
   it('keyword search runs over masked text only (FR-UI-026)', async () => {
     const token = await login()
+    db.handled.clear() // search the whole mailbox; handled mail is otherwise outside the default inbox
     expect((await call('GET', '/emails?q=VPN%20account', { token })).json.items.length).toBeGreaterThan(0)
     // The fake secret value is never in the searchable text.
     expect((await call('GET', '/emails?q=Lantern-Orbit', { token })).json.items).toHaveLength(0)
@@ -355,6 +430,7 @@ describe('labels (FR-ML-010, FR-ML-013)', () => {
     const { status, json } = await call('PATCH', `/emails/${email.id}/labels`, { token, body: { field: 'urgency', value: 'Critical', scope: 'sender' } })
     expect(status).toBe(200)
     expect(keys(json)).toEqual(['correction_id', 'rule_id', 'triage'])
+    expect(json.correction_id).toMatch(/^[0-9a-f-]{36}$/) // a UUID string (proposals §10.5)
     expect(json.rule_id).toEqual(expect.any(String))
     expect(json.triage.urgency.label).toBe('Critical')
 

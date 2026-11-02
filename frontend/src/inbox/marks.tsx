@@ -53,6 +53,8 @@ export function TagIcon({ tag, size = 13 }: { tag: CardTag; size?: number }) {
   switch (tag.kind) {
     case 'security':
       return tag.filter?.value === 'malicious' ? <ShieldX {...props} /> : <ShieldAlert {...props} />
+    case 'due':
+      return null // dates carry no icon: one word of context (item 4)
     case 'action':
       return tag.tone === 'ok' ? <CircleCheck {...props} /> : <Zap {...props} />
     case 'sentiment':

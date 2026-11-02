@@ -8,6 +8,9 @@ const sample = (kind: CardTag['kind'], label: string, extra: Partial<CardTag> = 
 const TAGS: CardTag[] = [
   sample('security', 'Suspicious links', { tone: 'danger', filter: { group: 'flag', value: 'suspicious' } }),
   sample('security', 'Malicious links (blocked)', { tone: 'danger', filter: { group: 'flag', value: 'malicious' } }),
+  sample('due', 'Overdue, or due within 24 h (red)', { tone: 'danger', text: 'Due today' }),
+  sample('due', 'Due within 3 days (orange)', { tone: 'warn', text: 'Due Fri' }),
+  sample('due', 'Due later (grey)', { tone: 'muted', text: 'Due 12 Nov' }),
   sample('action', 'Proposed actions waiting', { tone: 'warn' }),
   sample('action', 'Sent to Jira (issue key)', { tone: 'ok' }),
   sample('sentiment', 'Negative sentiment', { tone: 'warn', filter: { group: 'sentiment', value: 'Negative' } }),
@@ -66,6 +69,7 @@ export function Legend({ open, onClose }: { open: boolean; onClose: () => void }
               <li key={t.label}>
                 <span className="tag" data-tone={t.tone}>
                   <TagIcon tag={t} />
+                  {t.text}
                 </span>{' '}
                 {t.label}
               </li>
@@ -73,7 +77,7 @@ export function Legend({ open, onClose }: { open: boolean; onClose: () => void }
           </ul>
         </section>
       </div>
-      <p className="legend-hint">Click a type, urgency, security or sentiment mark to filter the column by it.</p>
+      <p className="legend-hint">Click a type, urgency, security, sentiment or Overdue / Due today mark to filter the column by it.</p>
       <form method="dialog">
         <button type="submit" className="text-button">
           Close

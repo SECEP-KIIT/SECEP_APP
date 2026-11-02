@@ -12,7 +12,10 @@ import {
   columnQuery,
   DENSITIES,
   filterChips,
+  isFiltered,
   matchesColumn,
+  QUICK_VIEWS,
+  toggleFilter,
   NO_FILTERS,
   ROW_PITCH,
   SORTS,
@@ -155,6 +158,20 @@ export function Column({ title, onLegend }: Props) {
         </div>
         <UrgencyBar split={split} total={items.length} />
         {focused && <p className="col-note">Focus mode: Critical and High only</p>}
+        <div className="quick-chips" role="group" aria-label="Quick filters">
+          {QUICK_VIEWS.map((v) => (
+            <button
+              key={v.key}
+              type="button"
+              className="quick-chip"
+              aria-pressed={filters.view.includes(v.key)}
+              title={v.title}
+              onClick={() => setFilters((f) => toggleFilter(f, { group: 'view', value: v.key }))}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
         {chips.length > 0 && (
           <ul className="chips" aria-label="Active filters">
             {chips.map((c) => (
@@ -189,7 +206,7 @@ export function Column({ title, onLegend }: Props) {
               </button>
             </div>
           ) : !showSkeleton && items.length === 0 ? (
-            <EmptyState filtered={chips.length > 0 || focused} onClear={() => setFilters(NO_FILTERS)} canClear={chips.length > 0} />
+            <EmptyState filtered={isFiltered(filters) || focused} onClear={() => setFilters(NO_FILTERS)} canClear={isFiltered(filters)} />
           ) : (
             <div
               className="col-rows"

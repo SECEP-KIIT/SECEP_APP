@@ -10,7 +10,7 @@
 import type { Db, SettingsRow } from './types'
 
 export const STORAGE_KEY = 'secep.mock'
-export const SCHEMA_VERSION = 1
+export const SCHEMA_VERSION = 2 // 2: handled state; correction ids are UUIDs
 
 type PersistedSettings = Omit<SettingsRow, 'jira' | 'llm'> & {
   jira: Omit<SettingsRow['jira'], 'token'> & { token_set: boolean }
@@ -23,6 +23,7 @@ export interface Snapshot {
   data: {
     users: Db['users']
     reads: Record<string, string[]>
+    handled: Record<string, [string, string][]>
     actions: ReturnType<Db['actions']['get']>[]
     corrections: Db['corrections']
     labelRules: Db['labelRules']
@@ -44,6 +45,7 @@ export function snapshot(db: Db, seed: number): Snapshot {
     data: {
       users: db.users,
       reads: Object.fromEntries([...db.reads].map(([u, ids]) => [u, [...ids]])),
+      handled: Object.fromEntries([...db.handled].map(([u, m]) => [u, [...m]])),
       actions: [...db.actions.values()],
       corrections: db.corrections,
       labelRules: db.labelRules,
@@ -72,7 +74,7 @@ export function load(storage: Pick<Storage, 'getItem' | 'removeItem'>, seed: num
       snap?.schema === SCHEMA_VERSION &&
       snap.seed === seed &&
       Array.isArray(d?.users) && Array.isArray(d.actions) && Array.isArray(d.arrivals) &&
-      typeof d.reads === 'object' && d.settings?.jira !== undefined
+      typeof d.reads === 'object' && typeof d.handled === 'object' && d.settings?.jira !== undefined
     if (ok) return snap
   } catch {
     // fall through to discard
@@ -87,6 +89,7 @@ export function apply(db: Db, snap: Snapshot) {
   const d = snap.data
   db.users = d.users
   db.reads = new Map(Object.entries(d.reads).map(([u, ids]) => [u, new Set(ids)]))
+  db.handled = new Map(Object.entries(d.handled).map(([u, pairs]) => [u, new Map(pairs.filter(([id]) => db.emails.has(id)))]))
   for (const a of d.actions) if (a && (a.email_id === null || db.emails.has(a.email_id))) db.actions.set(a.id, a)
   db.corrections = d.corrections.filter((c) => db.emails.has(c.email_id))
   for (const c of db.corrections) {

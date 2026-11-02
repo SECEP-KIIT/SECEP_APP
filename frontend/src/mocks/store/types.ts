@@ -93,7 +93,7 @@ export interface ActionRow extends Action {
 }
 
 export interface CorrectionRow {
-  id: number
+  id: string
   email_id: string
   user_id: string
   field: 'email_type' | 'urgency' | 'sentiment'
@@ -172,6 +172,8 @@ export interface Db {
   projects: ProjectRow[]
   /** Read state per user (proposal §1: per recipient, not a column on the email). */
   reads: Map<string, Set<string>>
+  /** Handled state per user: email id → handled_at (proposals §10.3, email_states for M6). */
+  handled: Map<string, Map<string, string>>
   /** Emails delivered by the incoming-mail simulation, so persistence can regenerate them. */
   arrivals: { template: number; received_at: string; user_id: string }[]
 }

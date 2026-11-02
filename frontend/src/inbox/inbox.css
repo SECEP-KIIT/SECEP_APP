@@ -8,6 +8,7 @@
 
 /* ── Column ──────────────────────────────────────────────────────────────────────────────────────────────── */
 .column {
+  min-width: 0;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -23,10 +24,12 @@
   padding: var(--space-3) var(--space-3) var(--space-2);
   border-bottom: 1px solid var(--line);
 }
+/* F6: on a narrow column the tools wrap under the title instead of overflowing it (no horizontal scroll). */
 .col-title-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-1) var(--space-2);
   min-width: 0;
 }
 .col-title {
@@ -43,9 +46,11 @@
 }
 .col-tools {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-1);
   margin-left: auto;
+  min-width: 0;
 }
 .col-tool,
 .col-select {
@@ -68,10 +73,13 @@
   border-color: var(--line);
 }
 .col-select select {
+  max-width: 11em;
+  min-width: 0;
   border: 0;
   background: none;
   color: var(--ink);
   font: inherit;
+  text-overflow: ellipsis;
 }
 .col-tool-count {
   min-width: 16px;
@@ -104,6 +112,37 @@
 .urgency-bar [data-urgency='High'] { background: var(--urg-high); }
 .urgency-bar [data-urgency='Medium'] { background: var(--urg-medium); }
 .urgency-bar [data-urgency='Low'] { background: var(--urg-low); }
+
+/* Quick chips (FR-UI-021): toggles; pressed = filled, plus weight, never colour alone. */
+.quick-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+.quick-chip {
+  height: 26px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--card-bg);
+  color: var(--ink);
+  font-size: 0.75rem;
+}
+.quick-chip:hover {
+  background: var(--tag-muted-bg);
+}
+.quick-chip[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+.quick-chip:focus-visible,
+.chip:focus-visible,
+.col-tool:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
 
 /* Removable filter chips (item 6). No filters, no row. */
 .chips {
@@ -687,5 +726,13 @@ html[data-motion='off'] .card[data-fresh]::after {
 @media (max-width: 639px) {
   .column {
     max-width: none;
+  }
+  /* F6: tools take their own row under the title; sort and density show icon + a short select. */
+  .col-tools {
+    flex-basis: 100%;
+    margin-left: 0;
+  }
+  .col-select select {
+    max-width: 8.5em;
   }
 }

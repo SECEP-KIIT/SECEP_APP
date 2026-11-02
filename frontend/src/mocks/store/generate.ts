@@ -10,6 +10,13 @@ export const SEED = 20261104
 const DAY = 86_400_000
 const HOUR = 3_600_000
 
+/** Per-user handled map (proposals §10.3), created on first use. */
+export function handledOf(db: Db, userId: string) {
+  let m = db.handled.get(userId)
+  if (!m) db.handled.set(userId, (m = new Map()))
+  return m
+}
+
 // Id namespaces, so ids from different tables never collide.
 const NS = { user: 1, email: 2, thread: 3, check: 4, secret: 5, action: 6, model: 7, project: 8, msg: 9, rule: 10 }
 
@@ -229,6 +236,7 @@ export function createDb(now: number, seed = SEED): Db {
     actions: new Map(),
     corrections: [],
     labelRules: [],
+    handled: new Map(),
     models: [
       { id: uid(NS.model, 1), version: 'triage-2026-10-24', status: 'retired', created_at: iso(now - 9 * DAY), promoted_at: iso(now - 9 * DAY),
         metrics: { type_macro_f1: 0.71, urgency_macro_f1: 0.64, sentiment_macro_f1: 0.69, per_class_f1: { Task: 0.76, Info: 0.74, Credentials: 0.83, Meeting: 0.71, Approval: 0.52 }, ece: 0.081 } },
@@ -258,6 +266,9 @@ export function createDb(now: number, seed = SEED): Db {
       const row = addEmail(db, { template, user, receivedAt: t, r, history: true })
       // Older mail is mostly read; recent mail mostly unread.
       if (chance(r, now - t > 2 * DAY ? 0.85 : 0.3)) db.reads.get(user.id)!.add(row.id)
+      // A few older, read emails are already handled, so the Handled view has something in it.
+      // Index-based, not random: drawing from r here would change every email generated after it.
+      if (db.reads.get(user.id)!.has(row.id) && now - t > 5 * DAY && i % 4 === 1) handledOf(db, user.id).set(row.id, iso(t + HOUR))
     })
   }
 
