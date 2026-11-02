@@ -4,8 +4,6 @@ import { ghostSlots, PHONE_COLS, PHONE_ROWS, phoneRowsFor } from './grid'
 import { widgetTitle } from './layoutModel'
 
 const GAP = 12
-/** Four rows only if each gets at least this much (a title bar plus a compact card); otherwise three. */
-const MIN_ROW_FOR_4 = 110
 const LONG_PRESS_MS = 500
 /** A press this close to a widget's edge counts as the gap: with the 12 px gap, a ~44 px touch zone (item 2). */
 const EDGE_ZONE = 16
@@ -24,7 +22,8 @@ interface Props {
 
 /**
  * Phone pages (FR-UI-009): a fixed 2 × 4 slot grid. Row height comes from the available height; on a short screen
- * (e.g. 360 × 480) 3 rows share the screen instead of squeezing in 4, and the 4th row is a snap-scroll away.
+ * (under 600 px tall, e.g. 360 × 480) 3 rows share the screen instead of squeezing in 4, and the 4th row is a
+ * snap-scroll away: the one deliberate exception to FR-UI-009's no-scroll rule (proposals §15.6).
  *
  * Editing: long-press a gap (or Edit) → tap a widget to pick it → ghost outlines, sized to it, show where it fits →
  * tap one to move it there. While editing, a widget's body is a "pick" target, so taps never open cards.
@@ -40,7 +39,7 @@ export function PhonePage({ page, render, editing, selected, onSelect, onMove, o
     if (!el) return
     const measure = () => {
       const h = el.clientHeight
-      const fit = phoneRowsFor(h, GAP, MIN_ROW_FOR_4)
+      const fit = phoneRowsFor(window.innerHeight)
       setRows(fit)
       // The visible rows exactly fill one screen; with 3, the 4th row is one snap-scroll below.
       setRowH(Math.max(1, Math.floor((h - GAP * (fit - 1)) / fit)))

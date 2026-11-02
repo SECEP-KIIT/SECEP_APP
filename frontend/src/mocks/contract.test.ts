@@ -14,6 +14,8 @@ import { subscribe } from './store/events'
 import { createDb } from './store/generate'
 import { load, save, SCHEMA_VERSION, STORAGE_KEY } from './store/persist'
 import { TEMPLATES } from './store/templates'
+import { localDate } from './store/serialize'
+import { addDays } from '../lib/due'
 
 // msw resolves the handlers' relative /api/v1 paths against location, which Node doesn't have.
 vi.stubGlobal('location', new URL('http://localhost/'))
@@ -336,6 +338,25 @@ describe('GET /emails query (§6.4.1)', () => {
     expect((await call('PUT', '/layouts/desktop', { token: sam, body: { pages: start.pages, base_updated_at: null } })).status).toBe(200)
     expect((await call('GET', '/layouts/desktop', { token: await login() })).json.pages[0].name).toBe('Demo only')
     expect((await call('GET', '/layouts/desktop', {})).status).toBe(401)
+  })
+
+  it('GET /emails due and needs_review (proposals §15.1, §15.2): OR within due, AND across groups', async () => {
+    const token = await login()
+    const all = (await call('GET', '/emails?limit=50', { token })).json.items as Json[]
+    const ids = async (q: string) => ((await call('GET', `/emails?limit=50&${q}`, { token })).json.items as Json[]).map((e) => e.id)
+    const today = localDate(new Date().toISOString())
+    const in7 = (d: string | null) => d !== null && d >= today && d <= addDays(today, 6)
+    expect(await ids('due=next_7_days')).toEqual(all.filter((e) => in7(e.due_date as string | null)).map((e) => e.id))
+    expect(await ids('due=none')).toEqual(all.filter((e) => e.due_date === null).map((e) => e.id))
+    const overdueOrToday = all.filter((e) => e.due_date !== null && (e.due_date as string) <= today).map((e) => e.id)
+    expect(await ids('due=overdue,today')).toEqual(overdueOrToday)
+    expect(await ids('due=later')).toEqual(all.filter((e) => e.due_date !== null && (e.due_date as string) > addDays(today, 6)).map((e) => e.id))
+    const review = all.filter((e) => (e.triage as Json | null)?.needs_review === true).map((e) => e.id)
+    expect(review.length).toBeGreaterThan(0)
+    expect(await ids('needs_review=true')).toEqual(review)
+    expect(await ids('needs_review=true&due=none')).toEqual(review.filter((id) => all.find((e) => e.id === id)!.due_date === null))
+    expect((await call('GET', '/emails?due=soon', { token })).status).toBe(400)
+    expect((await call('GET', '/emails?needs_review=yes', { token })).status).toBe(400)
   })
 
   it('keyword search runs over masked text only (FR-UI-026)', async () => {

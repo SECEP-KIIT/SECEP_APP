@@ -1,12 +1,13 @@
 // Emails (§6.5, §6.4.1): list with the v1.2 query, detail, label correction (FR-ML-010, FR-ML-013), .ics (FR-ORC-017).
-import type { DecoderActionPayload, EmailType, EmailView, Sentiment, SecurityFlag, TriageView, Urgency } from '../../api/types'
+import type { DecoderActionPayload, DueBucket, EmailType, EmailView, Sentiment, SecurityFlag, TriageView, Urgency } from '../../api/types'
 import { page } from '../http/cursor'
 import { Fail, own, route } from '../http/route'
 import { csv, isDate, isDateTime, object } from '../http/validate'
 import { changed, db, emailsOf, readsOf } from '../store/db'
 import { publish } from '../store/events'
 import { handledOf } from '../store/generate'
-import { localDate, toDetail, toListItem } from '../store/serialize'
+import { localDate, toDetail, toListItem, dueDateOf } from '../store/serialize'
+import { matchesDue } from '../../lib/due'
 import type { EmailRow } from '../store/types'
 
 const TYPES: EmailType[] = ['Task', 'Info', 'Credentials', 'Meeting', 'Approval']
@@ -15,6 +16,15 @@ const SENTIMENTS: Sentiment[] = ['Positive', 'Neutral', 'Negative', 'Frustrated'
 const FLAGS: SecurityFlag[] = ['none', 'suspicious', 'malicious']
 const LABELS = { email_type: TYPES, urgency: URGENCIES, sentiment: SENTIMENTS } as const
 const VIEWS: EmailView[] = ['unread', 'due_today', 'needs_reply', 'overdue', 'handled']
+const DUE: DueBucket[] = ['overdue', 'today', 'next_7_days', 'later', 'none']
+
+/** `needs_review` (PROPOSED, proposals §15.2): triage.v1's needs_review flag. true or false; anything else is 400. */
+function needsReviewParam(url: URL): boolean | null {
+  const v = url.searchParams.get('needs_review')
+  if (v === null || v === '') return null
+  if (v !== 'true' && v !== 'false') throw new Fail(400, 'bad_request', 'needs_review must be true or false')
+  return v === 'true'
+}
 const REPLY_TYPES: EmailType[] = ['Task', 'Approval', 'Meeting']
 
 /** `view` (PROPOSED, proposals §10.1): comma-separated, AND-combined. Unknown values: 422 invalid_parameter (§10). */
@@ -73,6 +83,8 @@ function parseFilters(url: URL) {
     urgency: csv(url, 'urgency', URGENCIES),
     sentiment: csv(url, 'sentiment', SENTIMENTS),
     flag: csv(url, 'flag', FLAGS),
+    due: csv(url, 'due', DUE),
+    needsReview: needsReviewParam(url),
     sender: url.searchParams.get('sender')?.trim().toLowerCase() || null,
     after: dateParam(url, 'received_after'),
     before: dateParam(url, 'received_before'),
@@ -81,7 +93,7 @@ function parseFilters(url: URL) {
 }
 
 /** The parameters a saved column filter may hold: GET /emails filters only, no sort, cursor, limit or q. */
-export const FILTER_PARAMS = ['type', 'urgency', 'sentiment', 'flag', 'sender', 'received_after', 'received_before', 'view'] as const
+export const FILTER_PARAMS = ['type', 'urgency', 'sentiment', 'flag', 'due', 'needs_review', 'sender', 'received_after', 'received_before', 'view'] as const
 
 /**
  * Checks a widget filter (proposals §13) with the same parser GET /emails uses, so there is one vocabulary.
@@ -100,10 +112,10 @@ export function filterError(filter: string): string | null {
 }
 
 function filtered(user: { id: string }, url: URL) {
-  const { type, urgency, sentiment, flag, sender, after, before, view } = parseFilters(url)
+  const { type, urgency, sentiment, flag, due, needsReview, sender, after, before, view } = parseFilters(url)
   const q = url.searchParams.get('q')?.trim() || null
   const today = localDate(new Date().toISOString())
-  // The S parameters (project, due, status, pinned, snoozed, tag) are accepted and ignored until built (§6.4.1).
+  // The other S parameters (project, status, pinned, snoozed, tag) are accepted and ignored until built (§6.4.1).
   const order = sorter(url)
 
   return emailsOf(user.id)
@@ -111,6 +123,9 @@ function filtered(user: { id: string }, url: URL) {
     .filter((e) => !urgency || (e.triage && urgency.includes(e.triage.urgency.label)))
     .filter((e) => !sentiment || (e.triage && sentiment.includes(e.triage.sentiment.label)))
     .filter((e) => !flag || flag.includes(e.security_flag))
+    // `due`: the derived due_date (proposals §10.2) in the user's local date; OR within the group.
+    .filter((e) => !due || matchesDue(dueDateOf([...db.actions.values()].filter((a) => a.email_id === e.id)), due, today))
+    .filter((e) => needsReview === null || (!!e.triage && e.triage.needs_review === needsReview))
     .filter((e) => {
       if (!sender) return true
       const addr = e.from.address.toLowerCase()

@@ -2,7 +2,8 @@
 // Everything is derived from §6.4.1 EmailListItem fields plus the PROPOSED due_date / handled / view (proposals §10).
 // Parts of items 4 and 6 that still have no shape (projects, external sender, notes, custom tags, facets) are not
 // built; see docs/proposals/srs-v1.3-frontend-shapes.md §9.
-import type { EmailListItem, EmailType, EmailView, RoleCategory, SecurityFlag, SenderPerson, Sentiment, Urgency } from '../api/types'
+import type { DueBucket, EmailListItem, EmailType, EmailView, RoleCategory, SecurityFlag, SenderPerson, Sentiment, Urgency } from '../api/types'
+import { DUE_BUCKETS, matchesDue } from '../lib/due'
 
 export const TYPES: EmailType[] = ['Task', 'Info', 'Credentials', 'Meeting', 'Approval']
 export const URGENCIES: Urgency[] = ['Critical', 'High', 'Medium', 'Low']
@@ -55,6 +56,7 @@ export type FilterPatch =
   | { group: 'urgency'; value: Urgency }
   | { group: 'sentiment'; value: Sentiment }
   | { group: 'flag'; value: SecurityFlag }
+  | { group: 'due'; value: DueBucket }
 
 export const MAX_VISIBLE_TAGS = 5
 
@@ -153,13 +155,19 @@ export interface ColumnFilters {
   urgency: Urgency[]
   sentiment: Sentiment[]
   flag: SecurityFlag[]
+  /** Due buckets (PROPOSED `due`, proposals §15.1), OR within the group. */
+  due: DueBucket[]
+  /** Only emails the classifier flagged for review (PROPOSED `needs_review=true`, proposals §15.2). */
+  needs_review: boolean
   /** Address or domain. */
   sender: string | null
   received_after: string | null
   received_before: string | null
 }
 
-export const NO_FILTERS: ColumnFilters = { view: [], type: [], urgency: [], sentiment: [], flag: [], sender: null, received_after: null, received_before: null }
+export const NO_FILTERS: ColumnFilters = {
+  view: [], type: [], urgency: [], sentiment: [], flag: [], due: [], needs_review: false, sender: null, received_after: null, received_before: null,
+}
 
 /** What a column remembers: a saved filter, sort and density (FR-UI-006). A dashboard widget stores it. */
 export interface ColumnState {
@@ -201,6 +209,8 @@ export function columnQuery(filters: ColumnFilters, sort: SortKey, focused: bool
   if (urgency) q.set('urgency', urgency.join(','))
   if (filters.sentiment.length) q.set('sentiment', filters.sentiment.join(','))
   if (filters.flag.length) q.set('flag', filters.flag.join(','))
+  if (filters.due.length) q.set('due', filters.due.join(','))
+  if (filters.needs_review) q.set('needs_review', 'true')
   if (filters.sender?.trim()) q.set('sender', filters.sender.trim())
   if (filters.received_after) q.set('received_after', filters.received_after)
   if (filters.received_before) q.set('received_before', filters.received_before)
@@ -220,6 +230,8 @@ export function filterQuery(filters: ColumnFilters): string {
   add('urgency', filters.urgency)
   add('sentiment', filters.sentiment)
   add('flag', filters.flag)
+  add('due', filters.due)
+  if (filters.needs_review) add('needs_review', ['true'])
   if (filters.sender?.trim()) add('sender', [filters.sender.trim()])
   if (filters.received_after) add('received_after', [filters.received_after])
   if (filters.received_before) add('received_before', [filters.received_before])
@@ -246,6 +258,8 @@ export function parseColumnQuery(query: string): { filters: ColumnFilters; sort:
       urgency: list('urgency', URGENCIES),
       sentiment: list('sentiment', SENTIMENTS),
       flag: list('flag', ['none', ...FLAGS] as SecurityFlag[]),
+      due: list('due', DUE_BUCKETS.map((b) => b.key)),
+      needs_review: p.get('needs_review') === 'true',
       sender: text('sender'),
       received_after: text('received_after'),
       received_before: text('received_before'),
@@ -275,6 +289,8 @@ export function matchesColumn(e: EmailListItem, filters: ColumnFilters, focused:
   if (urgency && !(e.triage && urgency.includes(e.triage.urgency.label))) return false
   if (filters.sentiment.length && !(e.triage && filters.sentiment.includes(e.triage.sentiment.label))) return false
   if (filters.flag.length && !filters.flag.includes(e.security_flag)) return false
+  if (!matchesDue(e.due_date, filters.due, today)) return false
+  if (filters.needs_review && !e.triage?.needs_review) return false
   const sender = filters.sender?.trim().toLowerCase()
   if (sender) {
     const addr = e.from.address.toLowerCase()
@@ -303,7 +319,8 @@ export interface FilterChip {
   remove: (f: ColumnFilters) => ColumnFilters
 }
 
-const GROUP_LABEL = { type: 'Type', urgency: 'Urgency', sentiment: 'Sentiment', flag: 'Security' } as const
+const GROUP_LABEL = { type: 'Type', urgency: 'Urgency', sentiment: 'Sentiment', flag: 'Security', due: 'Due' } as const
+const DUE_LABEL = Object.fromEntries(DUE_BUCKETS.map((b) => [b.key, b.label])) as Record<DueBucket, string>
 const FLAG_LABEL: Record<SecurityFlag, string> = { none: 'Clean', suspicious: 'Suspicious', malicious: 'Malicious' }
 
 /** Quick chips (FR-UI-021) plus Handled (proposals §10.3), shown as toggles above the list. */
@@ -318,15 +335,17 @@ export const QUICK_VIEWS: { key: EmailView; label: string; title: string }[] = [
 /** One removable chip per active popover value (item 6). Quick views are toggles of their own, not chips. */
 export function filterChips(filters: ColumnFilters): FilterChip[] {
   const chips: FilterChip[] = []
-  for (const group of ['type', 'urgency', 'sentiment', 'flag'] as const) {
+  for (const group of ['type', 'urgency', 'due', 'sentiment', 'flag'] as const) {
     for (const value of filters[group] as string[]) {
+      const shown = group === 'flag' ? FLAG_LABEL[value as SecurityFlag] : group === 'due' ? DUE_LABEL[value as DueBucket] : value
       chips.push({
         key: `${group}:${value}`,
-        label: `${GROUP_LABEL[group]}: ${group === 'flag' ? FLAG_LABEL[value as SecurityFlag] : value}`,
+        label: `${GROUP_LABEL[group]}: ${shown}`,
         remove: (f) => ({ ...f, [group]: (f[group] as string[]).filter((v) => v !== value) }),
       })
     }
   }
+  if (filters.needs_review) chips.push({ key: 'needs_review', label: 'Needs review', remove: (f) => ({ ...f, needs_review: false }) })
   if (filters.sender?.trim()) chips.push({ key: 'sender', label: `From: ${filters.sender.trim()}`, remove: (f) => ({ ...f, sender: null }) })
   if (filters.received_after) chips.push({ key: 'after', label: `After ${filters.received_after}`, remove: (f) => ({ ...f, received_after: null }) })
   if (filters.received_before) chips.push({ key: 'before', label: `Before ${filters.received_before}`, remove: (f) => ({ ...f, received_before: null }) })

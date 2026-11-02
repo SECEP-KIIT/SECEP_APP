@@ -62,5 +62,5 @@
    - 3 rows visible, the 4th reachable by one snap-scroll;
    - the large widget shows its title plus at least one card;
    - nothing overlaps the tab bar.
-8. **360 × 740:** 4 rows, no scroll.
+8. **360 × 600 and 360 × 740:** 4 rows, no scroll. Below 600 px tall: 3 rows plus a scroll (task 8c, proposals §15.6).
 9. **Phone and desktop layouts stay separate:** edit on the phone, then open on desktop; the desktop layout is unchanged.

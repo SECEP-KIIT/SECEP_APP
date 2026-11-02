@@ -163,6 +163,12 @@ export interface Page<T> {
   next_cursor: string | null
 }
 
+/**
+ * GET /emails `due` values (PROPOSED, proposals §15.1), OR-combined like the other filter groups. Buckets of the
+ * derived due_date in the user's time zone; next_7_days is a rolling 7 days starting today.
+ */
+export type DueBucket = 'overdue' | 'today' | 'next_7_days' | 'later' | 'none'
+
 /** GET /emails `view` values (PROPOSED, proposals §10.1/§10.3), AND-combined. */
 export type EmailView = 'unread' | 'due_today' | 'needs_reply' | 'overdue' | 'handled'
 

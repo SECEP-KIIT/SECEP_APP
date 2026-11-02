@@ -55,10 +55,14 @@ export function freeSlots(taken: Box[]): { x: number; y: number }[] {
   return out
 }
 
-/** Phone rows per screen: 4 when each row gets at least `minRow` px, else 3 (a short screen such as 360 × 480). */
-export function phoneRowsFor(availableHeight: number, gap: number, minRow: number): 3 | 4 {
-  return (availableHeight - 3 * gap) / 4 >= minRow ? 4 : 3
-}
+/**
+ * Below this screen height a phone shows 3 slot rows at a time and the 4th scrolls into view: a deliberate
+ * exception to FR-UI-009's no-scroll rule (proposals §15.6), so short screens don't cram four rows.
+ */
+export const SHORT_PHONE_MAX_H = 600
+
+/** Phone rows per screen from the screen (viewport) height: 3 below SHORT_PHONE_MAX_H, else all 4. */
+export const phoneRowsFor = (screenHeight: number): 3 | 4 => (screenHeight < SHORT_PHONE_MAX_H ? 3 : 4)
 
 /**
  * Where a picked phone widget could move (FR-UI-009 ghost outlines, sized to the widget): every top-left at which it

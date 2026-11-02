@@ -13,7 +13,7 @@ const emails = [...db.emails.values()].filter((e) => e.user_id === demo.id)
 const notifications = db.notifications.filter((n) => n.user_id === demo.id)
 import { focusKeyAction, isTypingTarget } from './focusKeys'
 import { glanceLine, lockNotificationText } from './lockText'
-import { NAV, visibleNav } from './nav'
+import { moreNav, NAV, phoneTabs, visibleNav } from './nav'
 import { resolvePrefs } from './prefs'
 
 const key = (k: string, extra: Partial<{ ctrlKey: boolean; metaKey: boolean; altKey: boolean; target: unknown }> = {}) => ({
@@ -57,6 +57,11 @@ describe('nav gating (sidebar and tab bar share it)', () => {
   })
   it('shows only ungated items before /me arrives', () => {
     expect(visibleNav(undefined).map((i) => i.label)).toEqual(['Home', 'Inbox', 'Board', 'Calendar'])
+  })
+  it('phone tabs are Home, Inbox, Board, Security; Calendar and the rest go under More (proposals §15.3)', () => {
+    expect(phoneTabs(me).map((i) => i.label)).toEqual(['Home', 'Inbox', 'Board', 'Security'])
+    expect(moreNav(me).map((i) => i.label)).toEqual(['Calendar', 'Metrics'])
+    expect(phoneTabs(user).map((i) => i.label)).toEqual(['Home', 'Inbox', 'Board']) // no security.review
   })
 })
 

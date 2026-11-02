@@ -84,7 +84,8 @@ Built on the decided §13 shape (proposals §13a). Frontend and mock only. Phone
 1. **First visit to `/`:**
    - Three starter pages (Today, Triage, Planning) and "Starter layout" in the bar.
    - Today shows Critical + High, Due today and Overdue side by side; each list matches its title.
-   - Triage's Needs review lists low-confidence mail first.
+   - Triage's Needs review lists only needs-review mail, least confident first (`needs_review=true`, task 8c).
+   - Planning shows Due this week (`due=next_7_days`), then Needs my reply (task 8c).
 2. **Pages:**
    - Hovering the dots shows every page name as a pill, with no layout shift.
    - Clicking a dot, Ctrl+←/→ and (if the browser allows) Ctrl+2 change pages.

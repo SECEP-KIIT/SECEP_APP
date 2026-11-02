@@ -6,6 +6,7 @@ import { layoutOptions, putLayout, queryClient } from '../api/queries'
 import type { Layout, LayoutPage, Widget } from '../api/types'
 import { filterQuery, NO_FILTERS, parseColumnQuery } from '../inbox/cardModel'
 import { deviceClassOf } from '../lib/breakpoints'
+import { addDays, inDueBucket, matchesDue } from '../lib/due'
 import { control } from '../mocks/control'
 import { handlers } from '../mocks/handlers'
 import { filterError } from '../mocks/routes/emails'
@@ -71,11 +72,12 @@ describe('grid geometry', () => {
     expect(ghostSlots([big, { id: 'd', x: 0, y: 2, w: 2, h: 2 }], big)).toEqual([]) // nowhere to go
   })
 
-  it('short phone screens show 3 rows instead of cramming 4 (360 × 480)', () => {
-    // 360 × 480: 480 minus the topbar (56), tab bar (~58), padding (16), page bar (28 + 8) and dots (24 + 8) ≈ 282.
-    expect(phoneRowsFor(282, 12, 110)).toBe(3)
-    // 360 × 740 ≈ 542: four rows of about 126 px.
-    expect(phoneRowsFor(542, 12, 110)).toBe(4)
+  it('short phone screens (< 600 px tall) show 3 rows instead of cramming 4', () => {
+    // The scroll fallback applies only below 600 px of screen height (proposals §15.6).
+    expect(phoneRowsFor(480)).toBe(3)
+    expect(phoneRowsFor(599)).toBe(3)
+    expect(phoneRowsFor(600)).toBe(4)
+    expect(phoneRowsFor(740)).toBe(4)
   })
 })
 
@@ -117,6 +119,29 @@ describe('layout edits', () => {
     expect(parseColumnQuery(filterQuery(filters)).filters).toEqual(filters)
     expect(fullViewHref({ filter: 'view=overdue', sort: 'urgency' })).toBe('/inbox?view=overdue&sort=urgency')
     for (const p of COLUMN_PRESETS) expect(filterError(p.filter), p.key).toBeNull()
+    const more = { ...NO_FILTERS, due: ['overdue' as const, 'next_7_days' as const], needs_review: true }
+    expect(filterQuery(more)).toBe('due=overdue,next_7_days&needs_review=true')
+    expect(parseColumnQuery(filterQuery(more)).filters).toEqual(more)
+    expect(filterError('due=next_7_days&needs_review=true')).toBeNull()
+    expect(filterError('due=soon')).not.toBeNull()
+  })
+})
+
+describe('due buckets (proposals §15.1)', () => {
+  it('next_7_days is a rolling 7 days from today; later is after it; none is no due date', () => {
+    const today = '2026-11-02'
+    expect(addDays(today, 6)).toBe('2026-11-08')
+    expect(addDays('2026-12-28', 6)).toBe('2027-01-03')
+    expect(inDueBucket('2026-11-01', 'overdue', today)).toBe(true)
+    expect(inDueBucket(today, 'today', today)).toBe(true)
+    expect(inDueBucket(today, 'next_7_days', today)).toBe(true)
+    expect(inDueBucket('2026-11-08', 'next_7_days', today)).toBe(true)
+    expect(inDueBucket('2026-11-09', 'next_7_days', today)).toBe(false)
+    expect(inDueBucket('2026-11-09', 'later', today)).toBe(true)
+    expect(inDueBucket(null, 'none', today)).toBe(true)
+    expect(inDueBucket(null, 'overdue', today)).toBe(false)
+    expect(matchesDue('2026-11-01', [], today)).toBe(true)
+    expect(matchesDue('2026-11-01', ['today', 'overdue'], today)).toBe(true)
   })
 })
 
@@ -167,7 +192,8 @@ describe('layouts API (proposals §13)', () => {
       }
     }
     expect((await get('desktop')).pages[0].widgets.map((w) => w.title)).toEqual(['Critical + High', 'Due today', 'Overdue'])
-    expect((await get('desktop')).pages[1].widgets.map((w) => [w.title, w.sort])).toContainEqual(['Needs review', 'confidence'])
+    expect((await get('desktop')).pages[1].widgets.map((w) => [w.title, w.filter, w.sort])).toContainEqual(['Needs review', 'needs_review=true', 'confidence'])
+    expect((await get('desktop')).pages[2].widgets.map((w) => [w.title, w.filter])).toEqual([['Due this week', 'due=next_7_days'], ['Needs my reply', 'view=needs_reply']])
     // Tablet uses the 12-column grid, not phone slots.
     expect((await get('tablet')).pages[0].widgets[0]).toMatchObject({ w: 6, h: 12 })
     expect((await get('phone')).pages[0].widgets[0]).toMatchObject({ w: 2, h: 2 })

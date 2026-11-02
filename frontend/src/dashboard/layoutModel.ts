@@ -20,7 +20,7 @@ export const SWATCHES: { key: Swatch; label: string }[] = [
 ]
 
 /** Emoji offered in the icon picker. Any single emoji is valid on the wire. */
-export const ICONS = ['📥', '📬', '🔥', '📅', '⏰', '↩️', '🧐', '🛡️', '⭐', '📌', '💼', '📊', '✈️', '🧭', '💬', '✅', '🧾', '🔔', '🏷️', '📎', '🗂️', '⚡', '🌙', '☀️']
+export const ICONS = ['📥', '📬', '🔥', '📅', '🗓️', '⏰', '↩️', '🧐', '🛡️', '⭐', '📌', '💼', '📊', '✈️', '🧭', '💬', '✅', '🧾', '🔔', '🏷️', '📎', '🗂️', '⚡', '🌙']
 
 const DEFAULT_TITLE: Record<WidgetType, string> = {
   inbox_column: 'Inbox',
@@ -61,7 +61,8 @@ export const COLUMN_PRESETS: WidgetPreset[] = [
   { key: 'due', title: 'Due today', icon: '📅', colour: 'amber', filter: 'view=due_today', sort: 'newest' },
   { key: 'overdue', title: 'Overdue', icon: '⏰', colour: 'orange', filter: 'view=overdue', sort: 'newest' },
   { key: 'reply', title: 'Needs my reply', icon: '↩️', colour: 'teal', filter: 'view=needs_reply', sort: 'newest' },
-  { key: 'review', title: 'Needs review', icon: '🧐', colour: 'violet', filter: '', sort: 'confidence' },
+  { key: 'week', title: 'Due this week', icon: '🗓️', colour: 'amber', filter: 'due=next_7_days', sort: 'newest' },
+  { key: 'review', title: 'Needs review', icon: '🧐', colour: 'violet', filter: 'needs_review=true', sort: 'confidence' },
   { key: 'security', title: 'Security-flagged', icon: '🛡️', colour: 'slate', filter: 'flag=suspicious,malicious', sort: 'newest' },
   { key: 'handled', title: 'Handled', icon: '✅', colour: 'green', filter: 'view=handled', sort: 'newest' },
 ]

@@ -308,3 +308,23 @@ interface EmailFilter {
    - If it should list only needs-review mail, it needs a parameter, e.g. `view=needs_review` (`triage.needs_review = true`). Confirm.
 3. **Home in the navigation.** The sidebar and tab bar gained "Home" (`/`) first, otherwise the dashboard is unreachable. FR-UI-002's list doesn't name it. On phones it takes a tab slot, so Security moves under More (it shows only with `security.review` anyway). Confirm.
 4. **Ctrl+1…9:** some browsers keep these keys for switching tabs and never deliver them to the page. Ctrl+←/→, the dots and swipe always work.
+
+## 15. Decisions on §14 (2 Nov 2026), implemented in the mock and the client (PROPOSED for v1.3)
+
+1. **`GET /emails?due=overdue|today|next_7_days|later|none`** (resolves §14.1). It is comma-separated, OR within the group and AND across groups, like `type` and `flag`. It reads the derived `due_date` (§10.2) against the user's local date (§10: the mock uses the browser zone; M6 needs `ui_prefs.time_zone`).
+   - `overdue`: `due_date` < today.
+   - `today`: `due_date` = today.
+   - `next_7_days`: a **rolling** 7 days starting today (today … today + 6), so it includes today.
+   - `later`: after those 7 days.
+   - `none`: no due date.
+   - An unknown value gets `400 bad_request`, like the other filter groups.
+   - **The filter popover has a Due group now** (FR-UI-021).
+   - `view=due_today` and `view=overdue` stay for the quick chips.
+   - **Planning starter:** "Due this week" = `due=next_7_days`, then "Needs my reply".
+   - The `due` value fills the reserved S parameter of the same name in §6.4.1.
+2. **`GET /emails?needs_review=true|false`** (resolves §14.2): the triage.v1 `needs_review` flag; any other value is `400 bad_request`. The Triage starter's "Needs review" column is `needs_review=true`, `sort=confidence`. The popover has it as a "Review" group checkbox, and it shows as a removable chip.
+3. **Home in the navigation** (resolves §14.3). It stays first in the sidebar. **This is a change to FR-UI-002 for v1.3:** "The sidebar shall list Home, Inbox, Board, Calendar, Security and Metrics …".
+   - The **phone tab bar** is Home, Inbox, Board, Security, More. Security shows only with `security.review`, as in the sidebar. Calendar sits under More until its full view (task 14).
+4. **Known browser limitation, for v1.3** (resolves §14.4): Ctrl+1…9 (FR-UI-007) can be reserved by the browser for tab switching and never reach the page. Ctrl+←/→, the dots and swipe always work. No change.
+5. **Over-limit layout saves:** a `PUT /layouts/:deviceClass` above the caps (9 pages, 24 widgets per page) gets `422 validation_failed` with the standard error body (`details.fields`). The server never trims silently. The client refuses the edit before saving ("A dashboard holds up to 9 pages", "This page is full"), so it never sends one.
+6. **Short phone screens: a deliberate exception to FR-UI-009's no-scroll rule.** With a screen (viewport) height **below 600 px**, a phone page shows 3 slot rows at a time and the 4th row is a snap-scroll away, rather than cramming 4 rows. At 600 px and taller, all 4 rows fill one screen with no vertical scroll. The layout data is the same 2 × 4 grid either way.

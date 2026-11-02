@@ -1,18 +1,16 @@
 import { Settings, UserCog } from 'lucide-react'
 import { NavLink } from 'react-router'
 import { useMe, useProjects } from '../api/queries'
-import { isAdmin, visibleNav } from '../shell/nav'
+import { isAdmin, moreNav } from '../shell/nav'
 
-// Phone "More" tab: whatever doesn't fit in the four primary tabs, with the same gating as the sidebar.
+// Phone "More" tab: whatever isn't a phone tab (nav.ts phoneTabs), with the same gating as the sidebar.
 export function Component() {
   const { data: me } = useMe()
   const { data: projects } = useProjects()
 
   return (
     <ul className="more-list">
-      {visibleNav(me)
-        .slice(4)
-        .map(({ to, label, icon: Icon }) => (
+      {moreNav(me).map(({ to, label, icon: Icon }) => (
           <li key={to}>
             <NavLink to={to} className="more-link">
               <Icon aria-hidden="true" size={20} /> {label}

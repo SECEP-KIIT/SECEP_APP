@@ -2,6 +2,7 @@ import * as Popover from '@radix-ui/react-popover'
 import { ListFilter } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
 import type { SecurityFlag } from '../api/types'
+import { DUE_BUCKETS } from '../lib/due'
 import { activeFilterCount, FLAGS, NO_FILTERS, SENTIMENTS, TYPES, URGENCIES, toggleFilter, type ColumnFilters, type FilterPatch } from './cardModel'
 import { TypeIcon, UrgencyMark } from './marks'
 
@@ -9,8 +10,8 @@ const FLAG_LABEL: Record<SecurityFlag, string> = { none: 'Clean', suspicious: 'S
 
 /**
  * Column filter popover (FR-UI-021, item 6): OR within a group, AND across groups, applied as you click. Only the
- * groups with a §6.4.1 query parameter are offered. Project, Due, Status and Has attachments/notes, the quick chips
- * and the live counts (FR-UI-022) wait for their wire shapes (proposals §9).
+ * groups with a GET /emails query parameter are offered: Due and Needs review are PROPOSED (proposals §15.1, §15.2).
+ * Project, Status and Has attachments/notes and the live counts (FR-UI-022) wait for their wire shapes (proposals §9).
  */
 export function FilterPopover({ filters, onChange }: { filters: ColumnFilters; onChange: (f: ColumnFilters) => void }) {
   const count = activeFilterCount(filters)
@@ -48,6 +49,20 @@ export function FilterPopover({ filters, onChange }: { filters: ColumnFilters; o
                 <UrgencyMark urgency={u} /> {u}
               </Check>
             ))}
+          </Group>
+          {/* FR-UI-021 Due group (PROPOSED `due`, proposals §15.1): OR within the group. */}
+          <Group title="Due">
+            {DUE_BUCKETS.map((b) => (
+              <Check key={b.key} filters={filters} onChange={onChange} patch={{ group: 'due', value: b.key }}>
+                {b.label}
+              </Check>
+            ))}
+          </Group>
+          <Group title="Review">
+            <label className="filter-option">
+              <input type="checkbox" checked={filters.needs_review} onChange={() => onChange({ ...filters, needs_review: !filters.needs_review })} />
+              Needs review
+            </label>
           </Group>
           <Group title="Security">
             {FLAGS.map((f) => (

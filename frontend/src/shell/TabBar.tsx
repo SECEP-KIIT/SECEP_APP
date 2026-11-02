@@ -1,10 +1,10 @@
 import { Ellipsis } from 'lucide-react'
 import { NavLink } from 'react-router'
 import { useGlance, useMe } from '../api/queries'
-import { visibleNav } from './nav'
+import { phoneTabs } from './nav'
 
 // Phones (FR-UI-001): the sidebar becomes a bottom tab bar, with the same gating as the sidebar (nav.ts).
-// Four primary tabs; the rest (Metrics, Admin, Settings, projects) sit under More.
+// Home, Inbox, Board, Security (proposals §15.3); the rest (Calendar, Metrics, Admin, Settings, projects) sit under More.
 export function TabBar() {
   const { data: me } = useMe()
   const { data: glance } = useGlance()
@@ -12,9 +12,7 @@ export function TabBar() {
 
   return (
     <nav className="tabbar" aria-label="Main">
-      {visibleNav(me)
-        .slice(0, 4)
-        .map(({ to, label, icon: Icon }) => (
+      {phoneTabs(me).map(({ to, label, icon: Icon }) => (
           <NavLink key={to} to={to} end={to === '/'} className="tab">
             <span className="nav-icon">
               <Icon aria-hidden="true" size={22} />

@@ -28,16 +28,17 @@ export const STARTERS: { name: string; widgets: StarterWidget[] }[] = [
     name: 'Triage',
     widgets: [
       column('Unread', '📬', 'blue', 'view=unread', 'newest', 'large'),
-      // No needs_review filter exists in GET /emails; least-confident first puts those emails on top (§13, flagged).
-      column('Needs review', '🧐', 'violet', '', 'confidence', 'medium'),
+      // needs_review=true (proposals §15.2), least-confident first.
+      column('Needs review', '🧐', 'violet', 'needs_review=true', 'confidence', 'medium'),
       column('Security-flagged', '🛡️', 'slate', 'flag=suspicious,malicious', 'newest', 'medium'),
     ],
   },
   {
     name: 'Planning',
     widgets: [
-      // "Due this week" is decided but has no GET /emails parameter yet (proposals §14); added once it does.
-      column('Needs my reply', '↩️', 'teal', 'view=needs_reply', 'newest', 'large'),
+      // due=next_7_days: a rolling 7 days from today (proposals §15.1).
+      column('Due this week', '🗓️', 'amber', 'due=next_7_days', 'newest', 'large'),
+      column('Needs my reply', '↩️', 'teal', 'view=needs_reply', 'newest', 'medium'),
     ],
   },
 ]
