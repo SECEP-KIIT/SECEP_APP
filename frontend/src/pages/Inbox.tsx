@@ -1,20 +1,27 @@
-import { useEmails } from '../api/queries'
+import { useEffect, useState } from 'react'
+import { Column } from '../inbox/Column'
+import { Legend } from '../inbox/Legend'
+import { isTypingTarget } from '../shell/focusKeys'
 
-// THROWAWAY (task 3): a plain list that proves the MSW → api() → TanStack Query chain works in `npm run dev`.
-// Deleted in task 6, when the real inbox (cards, filters, virtual list) replaces it.
+// The Inbox full view: one column widget (FR-UI-006). The tiling dashboard (task 8) puts several on a page.
 export function Component() {
-  const { data, isPending, error } = useEmails()
+  const [legend, setLegend] = useState(false)
 
-  if (isPending) return <p>Loading…</p>
-  if (error) return <p role="alert">Couldn’t load the inbox: {error.message}</p>
+  // `?` shows the card legend (FR-UI-014). Never while typing or with a modifier (Shift is how `?` is typed).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.key !== '?' || e.ctrlKey || e.metaKey || e.altKey || isTypingTarget(e.target)) return
+      e.preventDefault()
+      setLegend(true)
+    }
+    addEventListener('keydown', onKey)
+    return () => removeEventListener('keydown', onKey)
+  }, [])
 
   return (
-    <ul>
-      {data.items.map((e) => (
-        <li key={e.id}>
-          {e.from.name ?? e.from.address} · {e.subject ?? '(no subject)'} · {e.triage?.urgency.label ?? 'not triaged'}
-        </li>
-      ))}
-    </ul>
+    <div className="inbox-page">
+      <Column title="Inbox" onLegend={() => setLegend(true)} />
+      <Legend open={legend} onClose={() => setLegend(false)} />
+    </div>
   )
 }

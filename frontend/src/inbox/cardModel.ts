@@ -1,0 +1,249 @@
+// Pure card and column logic (decisions items 3, 4, 6). No React here, so all of it is unit-tested.
+// Everything is derived from §6.4.1 EmailListItem fields only. Parts of items 4 and 6 that need fields the SRS
+// doesn't define yet (due dates, projects, external sender, notes, custom tags, unread, facets) are not built; see
+// docs/proposals/srs-v1.3-frontend-shapes.md §9.
+import type { EmailListItem, EmailType, RoleCategory, SecurityFlag, SenderPerson, Sentiment, Urgency } from '../api/types'
+
+export const TYPES: EmailType[] = ['Task', 'Info', 'Credentials', 'Meeting', 'Approval']
+export const URGENCIES: Urgency[] = ['Critical', 'High', 'Medium', 'Low']
+export const SENTIMENTS: Sentiment[] = ['Positive', 'Neutral', 'Negative', 'Frustrated']
+/** `none` is the default for clean mail, so the Security group offers only the two flags. */
+export const FLAGS: Exclude<SecurityFlag, 'none'>[] = ['suspicious', 'malicious']
+
+// ── Sender ──────────────────────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The sender's role (FR-UI-011). PROPOSED wire field `from.role_category` (pending SRS v1.3, proposals §8.5), read
+ * tolerantly: an API without it simply shows no role. Person itself is unchanged.
+ */
+export function senderRole(email: EmailListItem): RoleCategory | null {
+  return (email.from as Partial<SenderPerson>).role_category ?? null
+}
+
+export const senderName = (email: EmailListItem) => email.from.name ?? email.from.address
+
+// ── Time ────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** Today → 09:12, the last 6 days → Mon, older → 3 Nov (local time). */
+export function cardTime(iso: string, now: Date, locale?: string): string {
+  const d = new Date(iso)
+  const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
+  const days = Math.round((day(now) - day(d)) / 86_400_000)
+  if (days <= 0) return d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })
+  if (days < 7) return d.toLocaleDateString(locale, { weekday: 'short' })
+  return d.toLocaleDateString(locale, { day: 'numeric', month: 'short' })
+}
+
+// ── Tags (item 4, FR-UI-013/014) ───────────────────────────────────────────────────────────────────────────────
+
+export type TagKind = 'security' | 'action' | 'sentiment' | 'attachments' | 'replies' | 'duplicates' | 'masked' | 'snoozed'
+
+export interface CardTag {
+  kind: TagKind
+  /** Short visible text next to the icon (may be empty: the icon alone, with `label` for tooltip and screen reader). */
+  text: string
+  /** Full description: tooltip, aria-label and the all-tags popover. */
+  label: string
+  tone: 'danger' | 'warn' | 'ok' | 'muted'
+  /** Clicking the tag applies this filter to the column. Only tags with a §6.5 query parameter have one. */
+  filter: FilterPatch | null
+}
+
+export type FilterPatch =
+  | { group: 'type'; value: EmailType }
+  | { group: 'urgency'; value: Urgency }
+  | { group: 'sentiment'; value: Sentiment }
+  | { group: 'flag'; value: SecurityFlag }
+
+export const MAX_VISIBLE_TAGS = 5
+
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
+
+/**
+ * All tags in display priority: security → (due, project: not built) → action status → the rest (item 4).
+ * Sentiment shows only when Negative or Frustrated. Clean mail shows no shield.
+ */
+export function cardTags(email: EmailListItem, now: Date): CardTag[] {
+  const tags: CardTag[] = []
+  if (email.security_flag !== 'none') {
+    const malicious = email.security_flag === 'malicious'
+    tags.push({
+      kind: 'security',
+      text: malicious ? 'Malicious' : 'Suspicious',
+      label: malicious ? 'Malicious links: blocked' : 'Suspicious links: check before opening',
+      tone: 'danger',
+      filter: { group: 'flag', value: email.security_flag },
+    })
+  }
+  if (email.jira_key) {
+    tags.push({ kind: 'action', text: email.jira_key, label: `Jira issue ${email.jira_key}`, tone: 'ok', filter: null })
+  } else if (email.proposed_action_count > 0) {
+    const n = email.proposed_action_count
+    tags.push({ kind: 'action', text: String(n), label: `${plural(n, 'proposed action')}`, tone: 'warn', filter: null })
+  }
+  const sentiment = email.triage?.sentiment.label
+  if (sentiment === 'Negative' || sentiment === 'Frustrated') {
+    tags.push({ kind: 'sentiment', text: '', label: `Sentiment: ${sentiment}`, tone: 'warn', filter: { group: 'sentiment', value: sentiment } })
+  }
+  if (email.attachment_count > 0) {
+    tags.push({ kind: 'attachments', text: String(email.attachment_count), label: plural(email.attachment_count, 'attachment'), tone: 'muted', filter: null })
+  }
+  if (email.reply_count > 0) {
+    tags.push({ kind: 'replies', text: String(email.reply_count), label: plural(email.reply_count, 'reply', 'replies'), tone: 'muted', filter: null })
+  }
+  if (email.duplicate_count > 0) {
+    tags.push({ kind: 'duplicates', text: `×${email.duplicate_count}`, label: `${plural(email.duplicate_count, 'duplicate')} merged`, tone: 'muted', filter: null })
+  }
+  if (email.has_masked_secret) {
+    tags.push({ kind: 'masked', text: '', label: 'Contains a masked secret', tone: 'muted', filter: null })
+  }
+  if (email.snoozed_until && Date.parse(email.snoozed_until) > now.getTime()) {
+    tags.push({ kind: 'snoozed', text: '', label: `Snoozed until ${new Date(email.snoozed_until).toLocaleString()}`, tone: 'muted', filter: null })
+  }
+  return tags
+}
+
+/** The first five tags, then a `+N` for the rest (which the popover lists). */
+export function visibleTags(tags: CardTag[]): { shown: CardTag[]; hidden: number } {
+  if (tags.length <= MAX_VISIBLE_TAGS) return { shown: tags, hidden: 0 }
+  // Keep the strip at five items in total: four tags plus the +N.
+  return { shown: tags.slice(0, MAX_VISIBLE_TAGS - 1), hidden: tags.length - (MAX_VISIBLE_TAGS - 1) }
+}
+
+// ── Column filters and sort (item 6, FR-UI-021/023) ────────────────────────────────────────────────────────────
+
+/** Only groups with a §6.4.1 GET /emails query parameter. */
+export interface ColumnFilters {
+  type: EmailType[]
+  urgency: Urgency[]
+  sentiment: Sentiment[]
+  flag: SecurityFlag[]
+  /** Address or domain. */
+  sender: string | null
+  received_after: string | null
+  received_before: string | null
+}
+
+export const NO_FILTERS: ColumnFilters = { type: [], urgency: [], sentiment: [], flag: [], sender: null, received_after: null, received_before: null }
+
+/** `smart` and `due` are not offered yet (proposals §9). */
+export type SortKey = 'newest' | 'oldest' | 'urgency' | 'sender' | 'confidence'
+export const SORTS: { key: SortKey; label: string }[] = [
+  { key: 'newest', label: 'Newest' },
+  { key: 'oldest', label: 'Oldest' },
+  { key: 'urgency', label: 'Urgency' },
+  { key: 'sender', label: 'Sender' },
+  { key: 'confidence', label: 'Least confident first' },
+]
+
+export const FOCUS_URGENCIES: Urgency[] = ['Critical', 'High']
+
+/** The urgency set actually requested: in Focus mode, only Critical and High (FR-UI-004). Empty = none can match. */
+export function effectiveUrgency(filters: ColumnFilters, focused: boolean): Urgency[] | null {
+  if (!focused) return filters.urgency.length ? filters.urgency : null
+  return filters.urgency.length ? filters.urgency.filter((u) => FOCUS_URGENCIES.includes(u)) : FOCUS_URGENCIES
+}
+
+/**
+ * GET /emails query string (§6.4.1): comma-separated values, OR within a parameter, AND across. Keys in a fixed
+ * order so the same column always maps to the same cache key. null = the column can't match anything (Focus mode
+ * with only Medium/Low selected): don't fetch.
+ */
+export function columnQuery(filters: ColumnFilters, sort: SortKey, focused: boolean): string | null {
+  const urgency = effectiveUrgency(filters, focused)
+  if (urgency && urgency.length === 0) return null
+  const q = new URLSearchParams()
+  if (filters.type.length) q.set('type', filters.type.join(','))
+  if (urgency) q.set('urgency', urgency.join(','))
+  if (filters.sentiment.length) q.set('sentiment', filters.sentiment.join(','))
+  if (filters.flag.length) q.set('flag', filters.flag.join(','))
+  if (filters.sender?.trim()) q.set('sender', filters.sender.trim())
+  if (filters.received_after) q.set('received_after', filters.received_after)
+  if (filters.received_before) q.set('received_before', filters.received_before)
+  if (sort !== 'newest') q.set('sort', sort)
+  return q.toString()
+}
+
+/**
+ * Client-side mirror of the server's filter semantics, used ONLY to decide whether an arrival counts towards this
+ * column's "↑ n new" pill. The list itself always comes from the server. Received dates compare in UTC, as the API's
+ * `received_after` / `received_before` do.
+ */
+export function matchesColumn(e: EmailListItem, filters: ColumnFilters, focused: boolean): boolean {
+  const urgency = effectiveUrgency(filters, focused)
+  if (filters.type.length && !(e.triage && filters.type.includes(e.triage.email_type.label))) return false
+  if (urgency && !(e.triage && urgency.includes(e.triage.urgency.label))) return false
+  if (filters.sentiment.length && !(e.triage && filters.sentiment.includes(e.triage.sentiment.label))) return false
+  if (filters.flag.length && !filters.flag.includes(e.security_flag)) return false
+  const sender = filters.sender?.trim().toLowerCase()
+  if (sender) {
+    const addr = e.from.address.toLowerCase()
+    if (addr !== sender && !addr.endsWith(`@${sender.replace(/^@/, '')}`)) return false
+  }
+  const day = e.received_at.slice(0, 10)
+  if (filters.received_after && day < filters.received_after) return false
+  if (filters.received_before && day > filters.received_before) return false
+  return true
+}
+
+export function toggleFilter(filters: ColumnFilters, patch: FilterPatch): ColumnFilters {
+  const list = filters[patch.group] as string[]
+  const next = list.includes(patch.value) ? list.filter((v) => v !== patch.value) : [...list, patch.value]
+  return { ...filters, [patch.group]: next }
+}
+
+/** Adds (never removes) a filter: a click on a tag narrows the column to it. */
+export function addFilter(filters: ColumnFilters, patch: FilterPatch): ColumnFilters {
+  return (filters[patch.group] as string[]).includes(patch.value) ? filters : toggleFilter(filters, patch)
+}
+
+export interface FilterChip {
+  key: string
+  label: string
+  remove: (f: ColumnFilters) => ColumnFilters
+}
+
+const GROUP_LABEL = { type: 'Type', urgency: 'Urgency', sentiment: 'Sentiment', flag: 'Security' } as const
+const FLAG_LABEL: Record<SecurityFlag, string> = { none: 'Clean', suspicious: 'Suspicious', malicious: 'Malicious' }
+
+/** One removable chip per active value (item 6). */
+export function filterChips(filters: ColumnFilters): FilterChip[] {
+  const chips: FilterChip[] = []
+  for (const group of ['type', 'urgency', 'sentiment', 'flag'] as const) {
+    for (const value of filters[group] as string[]) {
+      chips.push({
+        key: `${group}:${value}`,
+        label: `${GROUP_LABEL[group]}: ${group === 'flag' ? FLAG_LABEL[value as SecurityFlag] : value}`,
+        remove: (f) => ({ ...f, [group]: (f[group] as string[]).filter((v) => v !== value) }),
+      })
+    }
+  }
+  if (filters.sender?.trim()) chips.push({ key: 'sender', label: `From: ${filters.sender.trim()}`, remove: (f) => ({ ...f, sender: null }) })
+  if (filters.received_after) chips.push({ key: 'after', label: `After ${filters.received_after}`, remove: (f) => ({ ...f, received_after: null }) })
+  if (filters.received_before) chips.push({ key: 'before', label: `Before ${filters.received_before}`, remove: (f) => ({ ...f, received_before: null }) })
+  return chips
+}
+
+export const activeFilterCount = (filters: ColumnFilters) => filterChips(filters).length
+
+// ── Header urgency bar (item 3 "smart widget headers") ─────────────────────────────────────────────────────────
+
+/** Urgency split of the LOADED cards (the list API has no totals; proposals §9). Untriaged cards are not counted. */
+export function urgencySplit(items: EmailListItem[]): { urgency: Urgency; count: number }[] {
+  return URGENCIES.map((urgency) => ({ urgency, count: items.filter((e) => e.triage?.urgency.label === urgency).length })).filter((s) => s.count > 0)
+}
+
+// ── Density (FR-UI-015) ─────────────────────────────────────────────────────────────────────────────────────────
+
+export type Density = 'compact' | 'comfortable' | 'spacious'
+export const DENSITIES: { key: Density; label: string }[] = [
+  { key: 'compact', label: 'Compact' },
+  { key: 'comfortable', label: 'Comfortable' },
+  { key: 'spacious', label: 'Spacious' },
+]
+
+/**
+ * Row pitch in px (card height + 8 px gap). Fixed per density, so a card never changes height on hover or on a live
+ * update (NFR-PERF-011), and the virtual list knows every row's size up front. Must match inbox.css.
+ */
+export const ROW_PITCH: Record<Density, number> = { compact: 84, comfortable: 112, spacious: 132 }

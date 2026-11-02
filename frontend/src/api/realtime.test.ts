@@ -1,4 +1,4 @@
-import { QueryClient } from '@tanstack/react-query'
+import { QueryClient, type InfiniteData } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createDb } from '../mocks/store/generate'
 import { toAction, toDetail, toListItem } from '../mocks/store/serialize'
@@ -32,7 +32,7 @@ describe('realtime cache policy (task 5 refinement 1)', () => {
     applyEvent(qc, 'email.triaged', { email_id: fresh.id, email: fresh })
     expect(list()).toHaveLength(items.length)
     expect(list().some((e) => e.id === fresh.id)).toBe(false)
-    expect(arrivals.get()).toEqual(['brand-new-id'])
+    expect(arrivals.get().map((a) => a.email.id)).toEqual(['brand-new-id'])
   })
 
   it('email.enriched and email.flagged patch in place; detail-only fields stay out of lists', () => {
@@ -61,5 +61,25 @@ describe('realtime cache policy (task 5 refinement 1)', () => {
     const after = qc.getQueryData<Page<typeof updated>>(['actions', {}])!.items
     expect(after.map((a) => a.id)).toEqual(actions.map((a) => a.id))
     expect(after[1].external_ref).toBe('ATL-999')
+  })
+
+  it('column widgets (infinite pages) are patched in place too; arrivals keep their card and get patched', () => {
+    const key = ['emails', 'list', '']
+    const pages = { pages: [{ items: items.slice(0, 2), next_cursor: 'c' }, { items: items.slice(2), next_cursor: null }], pageParams: [null, 'c'] }
+    qc.setQueryData<InfiniteData<Page<EmailListItem>>>(key, pages)
+    const target = items[3]
+    applyEvent(qc, 'email.flagged', { email_id: target.id, security_flag: 'malicious', links: [] })
+    const after = qc.getQueryData<InfiniteData<Page<EmailListItem>>>(key)!
+    expect(after.pages.flatMap((p) => p.items).map((e) => e.id)).toEqual(items.map((e) => e.id))
+    expect(after.pages[1].items[1].security_flag).toBe('malicious')
+    expect(after.pageParams).toEqual([null, 'c'])
+
+    const fresh = { ...items[0], id: 'arrival-1', summary_one_line: null }
+    applyEvent(qc, 'email.triaged', { email_id: fresh.id, email: fresh })
+    applyEvent(qc, 'email.enriched', { email_id: fresh.id, status: 'enriched', summary_one_line: 'Now summarised', summary_short: 's', actions: [] })
+    expect(arrivals.get()).toHaveLength(1)
+    expect(arrivals.get()[0].email.summary_one_line).toBe('Now summarised')
+    expect(arrivals.get()[0].email).not.toHaveProperty('summary_short')
+    expect(qc.getQueryData<InfiniteData<Page<EmailListItem>>>(key)!.pages.flatMap((p) => p.items)).toHaveLength(items.length)
   })
 })

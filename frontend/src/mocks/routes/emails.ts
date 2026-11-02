@@ -37,8 +37,8 @@ function filtered(user: { id: string }, url: URL) {
   const after = dateParam(url, 'received_after')
   const before = dateParam(url, 'received_before')
   const q = url.searchParams.get('q')?.trim() || null
-  // `sort` other than newest and the S parameters (project, due, status, pinned, snoozed, tag) are accepted and
-  // ignored until built (§6.4.1).
+  // The S parameters (project, due, status, pinned, snoozed, tag) are accepted and ignored until built (§6.4.1).
+  const order = sorter(url)
 
   return emailsOf(user.id)
     .filter((e) => !type || (e.triage && type.includes(e.triage.email_type.label)))
@@ -53,7 +53,36 @@ function filtered(user: { id: string }, url: URL) {
     .filter((e) => !after || e.received_at.slice(0, 10) >= after)
     .filter((e) => !before || e.received_at.slice(0, 10) <= before)
     .filter((e) => !q || matchesKeywords(e, q))
-    .sort((a, b) => b.received_at.localeCompare(a.received_at)) // newest first (FR-ORC-008)
+    .sort((a, b) => Number(b.pinned) - Number(a.pinned) || order(a, b)) // pinned stay on top (FR-UI-023)
+}
+
+const newest = (a: EmailRow, b: EmailRow) => b.received_at.localeCompare(a.received_at)
+const RANK: Record<Urgency, number> = { Critical: 0, High: 1, Medium: 2, Low: 3 }
+const senderKey = (e: EmailRow) => (e.from.name ?? e.from.address).toLowerCase()
+
+/**
+ * `sort` (§6.5 v1.1 list; newest is the default and the only Must sort, FR-ORC-008). Ties fall back to newest.
+ * `smart` and `due` are accepted and served as newest until built: Smart's weights and per-card explanation and the
+ * email due date have no shape yet (proposals §9). Untriaged emails sort last for urgency and confidence.
+ */
+function sorter(url: URL): (a: EmailRow, b: EmailRow) => number {
+  const sort = url.searchParams.get('sort') || 'newest'
+  switch (sort) {
+    case 'newest':
+    case 'smart':
+    case 'due':
+      return newest
+    case 'oldest':
+      return (a, b) => -newest(a, b)
+    case 'urgency':
+      return (a, b) => (a.triage ? RANK[a.triage.urgency.label] : 9) - (b.triage ? RANK[b.triage.urgency.label] : 9) || newest(a, b)
+    case 'sender':
+      return (a, b) => senderKey(a).localeCompare(senderKey(b)) || newest(a, b)
+    case 'confidence':
+      return (a, b) => (a.triage?.email_type.confidence ?? 2) - (b.triage?.email_type.confidence ?? 2) || newest(a, b)
+    default:
+      throw new Fail(400, 'bad_request', 'sort must be smart, newest, oldest, due, urgency, sender or confidence')
+  }
 }
 
 /** RFC 5545 text escaping, so email-derived text can't inject calendar properties. */

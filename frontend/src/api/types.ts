@@ -142,6 +142,21 @@ export interface Page<T> {
   next_cursor: string | null
 }
 
+/** PATCH /emails/:id/labels request (§6.4.1). scope defaults to email; similar is S (FR-ML-014). */
+export interface LabelCorrection {
+  field: 'email_type' | 'urgency' | 'sentiment'
+  value: string
+  scope?: 'email' | 'sender' | 'similar'
+}
+
+/** PATCH /emails/:id/labels response (§6.4.1). correction_id: corrections.id is a bigserial but §6.4.1 says IDs are
+ * UUID strings; the mock sends a number. Unused by the UI; flagged in proposals §9. */
+export interface LabelCorrectionResponse {
+  triage: TriageView
+  correction_id: string | number
+  rule_id: string | null
+}
+
 export interface RefreshResponse {
   access_token: string
   expires_in: number

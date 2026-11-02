@@ -131,3 +131,38 @@ The frontend mirrors `skip_lock`, `idle_minutes` and `motion` in `localStorage` 
 6. **Model `metrics` shape (§7.2 above): stays PROPOSED.** Not demo-critical; to be reviewed before task 10.
 
 **Persistence scope, confirmed:** besides prefs, read state, actions, projects and layouts, the mock also persists label corrections and rules, admin users and settings (without secrets), models and the audit log. All of it sits under the same schema-version guard (discard and reseed on mismatch). Secret values and tokens are never persisted. The dev panel keeps a manual "Reset store" button.
+
+## 9. Found while building cards and the column widget (task 6, 2 Nov 2026), **parked for review**
+
+Task 6 builds only what §6.4.1 / §6.5 fully define. The items below have no wire shape or no defined meaning, so they are **not built**, and the unattended run stopped after task 6 instead of continuing to task 7 (halt-don't-invent rule). Each entry names what the UI needs and a suggested shape. The suggestions are proposals only; nothing below is mocked or typed yet.
+
+**Blocking a Must requirement**
+
+1. **Quick chips (FR-UI-021, M): Unread · Due today · Needs my reply · Overdue.** None of the four can be expressed with the §6.4.1 `GET /emails` query.
+   - *Unread:* needs read state on the wire (§1 suggests `EmailListItem.read: boolean`, computed per caller from `email_reads`) **and** a query parameter, e.g. `read=false`.
+   - *Due today / Overdue:* need an email due date (item 2) and values for the S parameter `due`, which §6.5 names without values. Suggested: `due=overdue|today|week|none`, in the user's time zone (which also needs a source: `ui_prefs.time_zone`, or `tz=` on the request).
+   - *Needs my reply:* no definition anywhere. One option: `recipient_position = "to"`, the latest thread message is not from me, and the type is Task, Approval or Meeting. Needs a decision, then a parameter (e.g. `is=needs_reply`, matching the FR-UI-025 `is:` operator).
+2. **Email due date (FR-UI-013, M: "due dates as one word of context coloured by proximity").** `EmailListItem` has no due field. The only due dates are in proposed action payloads (`DecoderActionPayload.due_date`), which the list item doesn't carry. Suggested: `EmailListItem.due_at: string | null`, the earliest `due_date` among the email's open actions (with a `due_time` where known). This also feeds the Due filter group, `sort=due` and Smart sort.
+
+**Should requirements**
+
+3. **Projects on cards and the Project filter (FR-UI-017, FR-UI-021).** §4 suggests `EmailListItem.projects[]` = `{ id, name, colour, is_primary }`, with `project=<id>,<id>` as the query value. **Confirm** this before the split dot and chip are built (task 10).
+4. **Status filter group (FR-UI-021).** "Status" is undefined: the email pipeline status (`ingested … enrich_failed`), the action status, or pinned/snoozed/read? The S parameter `status` has no values.
+5. **Has attachments / notes (FR-UI-021).** No parameter. Suggested: `has=attachments,notes`, mirroring the FR-UI-025 `has:` operator.
+6. **Every tag as a filter (FR-UI-014).** Only type, urgency, security and sentiment have parameters, so only those are clickable now. Attachments, replies, duplicates, masked secret, Jira and snoozed need e.g. `has=attachments,replies,duplicates,secret,jira`, plus values for the S parameter `snoozed` (e.g. `snoozed=true|false`).
+7. **Facet counts (FR-UI-022) — `GET /emails/facets` has no shape.** Suggested: the same query as `GET /emails`; the response counts each group's options with that group's own selection left out, e.g. `{ "type": { "Task": 12, … }, "urgency": { … }, "sentiment": { … }, "flag": { … }, "total": 48 }`.
+8. **Column count and urgency bar (item 3 "count plus a thin bar split by urgency").** `Page` has no total. The header shows the loaded count ("25+") and the urgency split of the loaded cards, which is honest but partial. The facets `total` and `urgency` counts (7) would make it exact.
+9. **Smart sort (FR-UI-023).** The weights ("urgency, due proximity, unread and sender seniority, decaying with age") and the per-card explanation (ⓘ) have no shape. Suggested: when `sort=smart`, each item carries `rank_reasons: string[]` (e.g. `["Critical", "Due today", "From an Executive"]`). The mock accepts `smart` and `due` and serves them as newest; the UI doesn't offer them yet.
+10. **External sender tag ↗ (FR-UI-014).** "External" depends on `tenants.domains`, which the client never sees. Suggested: `EmailListItem.from_external: boolean`, computed by M6.
+11. **`⚡ Jira` vs a count (item 4).** The list item has `proposed_action_count` but not the action types, so the card shows `⚡ 2` ("2 proposed actions"), not `⚡ Jira`. Suggested: `proposed_action_types: ActionType[]`. Optional; the drawer (task 7) lists the actions anyway.
+12. **Note tag 📝 and custom tags (FR-UI-014).** Need `EmailListItem.note_count` (or `has_note`) and the `tags[]` element shape (`{ id, name, colour }`). Both come with notes and tags (task 12).
+
+**Needed by task 7 (found early)**
+
+13. **The "Done" quick action (item 3 layer 2: Jira · Calendar · Done · ⋯).** What "Done" means for an *email* is undefined. Options: reject all of the email's open proposals; or mark the email handled, which needs a new field. Needs a decision before task 7 builds the quick actions.
+
+**Smaller notes**
+
+14. **`correction_id` type.** `PATCH /emails/:id/labels` returns `correction_id`. `corrections.id` is a `bigserial`, but §6.4.1 says IDs are UUID strings; the mock sends a number. Same conflict as `notifications.id` (§3); resolve both the same way.
+15. **Unknown `sort` values.** The mock answers `400 bad_request` for a value outside `smart|newest|oldest|due|urgency|sender|confidence`, following the §6.4.1 "malformed query" row. The SRS doesn't say; confirm.
+16. **Pinned first.** FR-UI-023 says pinned cards stay on top; the mock applies this under every sort, including the Must `newest`.

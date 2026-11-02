@@ -5,8 +5,8 @@
 // - An event for an email/action the cache already holds patches it IN PLACE. No reordering and no height change
 //   under the cursor (NFR-PERF-011).
 // - An email the cache doesn't hold (a real arrival) is NOT inserted into any visible list. It is only recorded in
-//   `arrivals` below; the "↑ n new" pill and scroll preservation are the inbox's policy (task 6, FR-UI-024).
-import type { QueryClient } from '@tanstack/react-query'
+//   `arrivals` below; the "↑ n new" pill and scroll preservation are the column widget's policy (FR-UI-024).
+import type { InfiniteData, QueryClient } from '@tanstack/react-query'
 import type { Socket } from 'socket.io-client'
 import { currentAccessToken, refreshForSocket } from './client'
 import type { Action, AppNotification, EmailDetail, EmailListItem, LinkView, Page, SecurityFlag } from './types'
@@ -20,43 +20,74 @@ interface Events {
   'notification.new': { notification: AppNotification }
 }
 
-// ── New-arrival signal (read by the inbox in task 6) ──────────────────────────────────────────────────────────
-const arrivalIds = new Set<string>()
+// ── New-arrival signal (read by the column widgets' "↑ n new" pill, FR-UI-024) ─────────────────────────────────
+// Each arrival keeps its card, so every column can count only the arrivals that match its own filters. A column
+// stops counting an arrival once the arrival is in its loaded pages (after the pill resets it to page 1).
+const ARRIVALS_MAX = 200
+/** An email that arrived over the socket, with the time it arrived here (the pill's baseline compares to it). */
+export interface Arrival {
+  email: EmailListItem
+  at: number
+}
+const arrivalItems = new Map<string, Arrival>()
 const arrivalListeners = new Set<() => void>()
-let arrivalsSnapshot: readonly string[] = []
+let arrivalsSnapshot: readonly Arrival[] = []
 
 export const arrivals = {
   subscribe(listener: () => void) {
     arrivalListeners.add(listener)
-    return () => arrivalListeners.delete(listener)
+    return () => void arrivalListeners.delete(listener)
   },
-  /** Ids of emails that arrived and aren't in any loaded list yet, oldest first. Stable between changes. */
+  /** Emails that arrived after their lists were loaded, oldest first. Stable between changes. */
   get: () => arrivalsSnapshot,
   clear() {
-    arrivalIds.clear()
+    arrivalItems.clear()
     publishArrivals()
   },
 }
 function publishArrivals() {
-  arrivalsSnapshot = [...arrivalIds]
+  arrivalsSnapshot = [...arrivalItems.values()]
   for (const l of arrivalListeners) l()
+}
+function addArrival(email: EmailListItem) {
+  arrivalItems.set(email.id, { email, at: Date.now() })
+  for (const id of arrivalItems.keys()) {
+    if (arrivalItems.size <= ARRIVALS_MAX) break
+    arrivalItems.delete(id)
+  }
+  publishArrivals()
 }
 
 // ── Cache patching ─────────────────────────────────────────────────────────────────────────────────────────────
-function patchEmail(qc: QueryClient, id: string, patch: Partial<EmailDetail>): boolean {
+// Email lists are cached either as one Page (plain queries) or as InfiniteData of Pages (the column widgets).
+type ListData = Page<EmailListItem> | InfiniteData<Page<EmailListItem>, unknown>
+const pagesOf = (data: ListData): Page<EmailListItem>[] => ('pages' in data ? data.pages : [data])
+
+function patchPage(page: Page<EmailListItem>, id: string, patch: Partial<EmailListItem>): Page<EmailListItem> {
+  return page.items.some((e) => e.id === id) ? { ...page, items: page.items.map((e) => (e.id === id ? { ...e, ...patch } : e)) } : page
+}
+
+/**
+ * Patches an email IN PLACE wherever it is cached: list pages, the open detail, and a pending arrival. Never adds or
+ * reorders. Returns whether any list or detail held it. Exported for mutations that get the new state back.
+ */
+export function patchEmailCache(qc: QueryClient, id: string, patch: Partial<EmailDetail>): boolean {
   let found = false
-  for (const [key, data] of qc.getQueriesData<Page<EmailListItem>>({ queryKey: ['emails'] })) {
-    if (!data?.items.some((e) => e.id === id)) continue
+  const item = listFields(patch)
+  for (const [key, data] of qc.getQueriesData<ListData>({ queryKey: ['emails'] })) {
+    if (!data || !pagesOf(data).some((p) => p.items.some((e) => e.id === id))) continue
     found = true
-    qc.setQueryData<Page<EmailListItem>>(key, {
-      ...data,
-      items: data.items.map((e) => (e.id === id ? { ...e, ...listFields(patch) } : e)),
-    })
+    qc.setQueryData<ListData>(key, 'pages' in data ? { ...data, pages: data.pages.map((p) => patchPage(p, id, item)) } : patchPage(data, id, item))
   }
   const detail = qc.getQueryData<EmailDetail>(['email', id])
   if (detail) {
     found = true
     qc.setQueryData<EmailDetail>(['email', id], { ...detail, ...patch })
+  }
+  const arrival = arrivalItems.get(id)
+  if (arrival) {
+    arrivalItems.set(id, { ...arrival, email: { ...arrival.email, ...item } })
+    publishArrivals()
   }
   return found
 }
@@ -93,15 +124,12 @@ function handle<E extends keyof Events>(qc: QueryClient, event: E, payload: Even
     case 'email.triaged': {
       const { email_id, email } = payload as Events['email.triaged']
       // Known email (e.g. relabelled): in place. Unknown: signal only.
-      if (!patchEmail(qc, email_id, email)) {
-        arrivalIds.add(email_id)
-        publishArrivals()
-      }
+      if (!patchEmailCache(qc, email_id, email) && !arrivalItems.has(email_id)) addArrival(email)
       break
     }
     case 'email.enriched': {
       const p = payload as Events['email.enriched']
-      patchEmail(qc, p.email_id, {
+      patchEmailCache(qc, p.email_id, {
         status: p.status,
         summary_one_line: p.summary_one_line,
         summary_short: p.summary_short,
@@ -112,7 +140,7 @@ function handle<E extends keyof Events>(qc: QueryClient, event: E, payload: Even
     }
     case 'email.flagged': {
       const p = payload as Events['email.flagged']
-      patchEmail(qc, p.email_id, { security_flag: p.security_flag, links: p.links })
+      patchEmailCache(qc, p.email_id, { security_flag: p.security_flag, links: p.links })
       break
     }
     case 'action.updated':

@@ -1,18 +1,20 @@
 // Email templates for the generated mailbox. All names and domains are fictional (.example). Bodies are already
 // "sanitized and masked", as M2 would store them: secrets appear only as [MASKED:<type>] tokens (FR-SEC-006).
-import type { EmailType, JiraPriority, Sentiment, Urgency } from '../../api/types'
+import type { EmailType, JiraPriority, RoleCategory, Sentiment, Urgency } from '../../api/types'
 
 export interface Sender {
   name: string
   address: string
+  /** PROPOSED from.role_category (proposals §8.5): what M6 would know from the tenant directory. Unset = unknown. */
+  role?: RoleCategory
 }
 
 export const SENDERS: Sender[] = [
-  { name: 'R. Sen', address: 'r.sen@northwind.example' },
-  { name: 'Priya Nair', address: 'priya.nair@northwind.example' },
-  { name: 'Arjun Mehta', address: 'arjun.mehta@northwind.example' },
-  { name: 'Lena Fischer', address: 'lena.fischer@northwind.example' },
-  { name: 'Kenji Ito', address: 'kenji.ito@northwind.example' },
+  { name: 'R. Sen', address: 'r.sen@northwind.example', role: 'Executive' },
+  { name: 'Priya Nair', address: 'priya.nair@northwind.example', role: 'Manager' },
+  { name: 'Arjun Mehta', address: 'arjun.mehta@northwind.example', role: 'Engineer' },
+  { name: 'Lena Fischer', address: 'lena.fischer@northwind.example', role: 'Analyst' },
+  { name: 'Kenji Ito', address: 'kenji.ito@northwind.example', role: 'Consultant' },
   { name: 'IT Helpdesk', address: 'it-helpdesk@northwind.example' },
   { name: 'Finance Ops', address: 'finance-ops@northwind.example' },
   { name: 'Maya Brooks', address: 'maya@contoso-client.example' },

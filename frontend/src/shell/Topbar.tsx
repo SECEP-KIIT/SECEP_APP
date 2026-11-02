@@ -2,26 +2,10 @@ import { useQueryClient, type QueryCache } from '@tanstack/react-query'
 import { Bell, Plus, Search } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useMatches } from 'react-router'
+import { useMinuteClock } from './useMinuteClock'
 
 const timeFmt = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' })
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent)
-
-// Re-renders once a minute, on the minute, rather than polling every second.
-function useMinuteClock() {
-  const [now, setNow] = useState(() => new Date())
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>
-    const schedule = () => {
-      timer = setTimeout(() => {
-        setNow(new Date())
-        schedule()
-      }, 60_000 - (Date.now() % 60_000))
-    }
-    schedule()
-    return () => clearTimeout(timer)
-  }, [])
-  return now
-}
 
 const latestUpdate = (cache: QueryCache) => Math.max(0, ...cache.getAll().map((q) => q.state.dataUpdatedAt))
 

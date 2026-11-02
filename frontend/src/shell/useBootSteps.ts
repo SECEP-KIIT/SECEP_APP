@@ -1,5 +1,6 @@
+import { useInfiniteQuery } from '@tanstack/react-query'
 import { useEffect } from 'react'
-import { queryClient, useEmails, useMe } from '../api/queries'
+import { DEFAULT_COLUMN_QUERY, emailListOptions, queryClient, useMe } from '../api/queries'
 import { connectRealtime } from '../api/realtime'
 import { lock } from '../boot/lock'
 
@@ -9,8 +10,8 @@ import { lock } from '../boot/lock'
  */
 export function useBootSteps() {
   const me = useMe()
-  // /emails is a boot step on every route, so fetch it here; the inbox reuses the same cache entry.
-  const emails = useEmails()
+  // /emails is a boot step on every route, so fetch it here; the default inbox column reuses the same cache entry.
+  const emails = useInfiniteQuery(emailListOptions(DEFAULT_COLUMN_QUERY))
 
   useEffect(() => {
     // The shell renders only after the router has loaded the matched route chunks: the app JS is in.

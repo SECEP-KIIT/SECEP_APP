@@ -1,6 +1,7 @@
 // The ONLY place wire shapes are built (SRS §6.4.1). Rows → responses. Fields not listed in §6.4.1 never leave
 // here: raw URLs, secret values, user_id, ml_text and other internals. The contract tests pin the key sets.
-import type { Action, EmailDetail, EmailListItem, LinkView, Me, Project } from '../../api/types'
+import type { Action, EmailDetail, EmailListItem, LinkView, Me, Project, RoleCategory, SenderPerson } from '../../api/types'
+import { SENDERS } from './templates'
 import type { ActionRow, Db, EmailRow, ModelRow, ProjectRow, SettingsRow, UrlCheckRow, UserRow } from './types'
 
 export function toAction(a: ActionRow): Action {
@@ -19,6 +20,11 @@ export function toLink(c: UrlCheckRow): LinkView {
   }
 }
 
+// PROPOSED (pending SRS v1.3, proposals §8.5): the sender's role, as M6 would look it up in the tenant directory.
+// Only EmailListItem.from carries it; to, cc and thread messages stay plain Person (§6.4.1).
+const ROLES = new Map<string, RoleCategory>(SENDERS.flatMap((s) => (s.role ? [[s.address, s.role] as const] : [])))
+const sender = (p: { address: string; name: string | null }): SenderPerson => ({ ...p, role_category: ROLES.get(p.address.toLowerCase()) ?? null })
+
 export function toListItem(db: Db, e: EmailRow): EmailListItem {
   const thread = e.thread_id ? db.threads.get(e.thread_id) : undefined
   const actions = [...db.actions.values()].filter((a) => a.email_id === e.id)
@@ -26,7 +32,7 @@ export function toListItem(db: Db, e: EmailRow): EmailListItem {
   return {
     id: e.id,
     thread_id: e.thread_id,
-    from: { ...e.from },
+    from: sender(e.from),
     to: e.to.map((p) => ({ ...p })),
     cc: e.cc.map((p) => ({ ...p })),
     recipient_position: e.recipient_position,

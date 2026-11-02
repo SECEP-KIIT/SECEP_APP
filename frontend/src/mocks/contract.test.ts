@@ -194,6 +194,44 @@ describe('GET /emails query (§6.4.1)', () => {
     for (const e of recent.json.items) expect(e.received_at.slice(0, 10) >= today).toBe(true)
   })
 
+  it('sort: oldest, urgency, sender and confidence order the list; pinned stay on top; unknown sort is 400', async () => {
+    const token = await login()
+    const get = async (sort: string) => (await call('GET', `/emails?limit=50&sort=${sort}`, { token })).json.items as Json[]
+    const at = (l: Json[]) => l.map((e) => e.received_at as string)
+    const newest = await get('newest')
+    expect(at(newest)).toEqual([...at(newest)].sort().reverse())
+    const oldest = await get('oldest')
+    expect(at(oldest)).toEqual([...at(oldest)].sort())
+    const rank: Record<string, number> = { Critical: 0, High: 1, Medium: 2, Low: 3 }
+    const urgency = (await get('urgency')).filter((e) => e.triage).map((e) => rank[e.triage.urgency.label])
+    expect(urgency).toEqual([...urgency].sort((a, b) => a - b))
+    const conf = (await get('confidence')).filter((e) => e.triage).map((e) => e.triage.email_type.confidence as number)
+    expect(conf).toEqual([...conf].sort((a, b) => a - b))
+    const names = (await get('sender')).map((e) => ((e.from.name ?? e.from.address) as string).toLowerCase())
+    expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)))
+    // smart and due are accepted and served as newest until built (proposals §9).
+    expect(at(await get('smart'))).toEqual(at(newest))
+    expect((await call('GET', '/emails?sort=random', { token })).status).toBe(400)
+
+    // FR-UI-023: a pinned email stays on top under any sort.
+    const last = oldest.at(-1)!
+    db.emails.get(last.id as string)!.pinned = true
+    expect((await get('oldest'))[0].id).toBe(last.id)
+  })
+
+  it('from carries the PROPOSED role_category (proposals §8.5); to, cc and thread stay plain Person', async () => {
+    const token = await login()
+    const { json } = await call('GET', '/emails?limit=50', { token })
+    for (const e of json.items) {
+      expect(keys(e.from)).toEqual(['address', 'name', 'role_category'])
+      for (const p of [...e.to, ...e.cc]) expect(keys(p)).toEqual(['address', 'name'])
+    }
+    expect(json.items.some((e: Json) => e.from.role_category === 'Executive')).toBe(true)
+    expect(json.items.some((e: Json) => e.from.role_category === null)).toBe(true)
+    const d = (await call('GET', `/emails/${json.items[0].id}`, { token })).json
+    for (const m of d.thread?.messages ?? []) expect(keys(m.from)).toEqual(['address', 'name'])
+  })
+
   it('keyword search runs over masked text only (FR-UI-026)', async () => {
     const token = await login()
     expect((await call('GET', '/emails?q=VPN%20account', { token })).json.items.length).toBeGreaterThan(0)

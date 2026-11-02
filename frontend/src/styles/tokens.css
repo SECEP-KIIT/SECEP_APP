@@ -80,6 +80,29 @@
   --bar-ink-muted: var(--ink-muted);
   --bar-hover: rgb(30 34 48 / 0.06);
   --bar-active: rgb(255 255 255 / 0.75);
+  /* Cards and column widgets (items 3, 4, 6): 1 px borders and a faint tint instead of shadows. */
+  --tile-radius: 10px;
+  --line: rgb(30 34 48 / 0.12);
+  --line-strong: rgb(30 34 48 / 0.5); /* 3.15 on card-bg, 3.09 on col-bg: form control and dotted-chip edges */
+  --col-bg: #f2f4fa;
+  --card-bg: #ffffff;
+  --accent: #3b5bdb;           /* 5.67 on card-bg; white text on it 5.67 */
+  --fresh-tint: rgb(59 91 219 / 0.14);
+  /* Urgency marks (non-text, measured on card-bg; each urgency also has its own shape) */
+  --urg-critical: #c92a2a;     /* 5.46 */
+  --urg-high: #e8590c;         /* 3.58 */
+  --urg-medium: #b7791f;       /* 3.64 */
+  --urg-low: #868e96;          /* 3.32 */
+  /* Tags: dark same-hue text on a pastel fill */
+  --tag-danger-bg: #fdecea;  --tag-danger-fg: #a61b10;  /* 6.59 */
+  --tag-warn-bg: #fff1dc;    --tag-warn-fg: #7c430c;    /* 7.08 */
+  --tag-ok-bg: #e4f3e8;      --tag-ok-fg: #1b5e33;      /* 6.78 */
+  --tag-muted-bg: #eef0f5;   --tag-muted-fg: var(--ink-muted); /* 6.98 */
+  --skel: #e7eaf2;
+  --skel-shine: rgb(255 255 255 / 0.75);
+  --hover-intent: 150ms;       /* item 3 */
+  --dur-menu: 120ms;           /* item 9: menus and popovers */
+  --dur-fresh: 2s;             /* item 9: accent tint on cards brought in by the new pill */
   --critical: #d9480f; /* the Critical dot also differs by shape (presence), never colour alone */
   --glow: #ff7a3d;
 }
