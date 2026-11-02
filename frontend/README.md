@@ -27,3 +27,17 @@ The dev server proxies `/api` (including the Socket.io WebSocket at `/api/socket
 `http://localhost:4000`, so the app uses same-origin paths just as it does in production behind Caddy.
 Until a backend route exists, MSW mocks return the §6.4.1 shapes: copy `.env.example` to `.env.local`
 (`VITE_MOCK=1`) and restart `npm run dev`. Mocks are dev-only; production builds contain no MSW code or worker.
+
+## Boot path (lock screen as the loader)
+`index.html` holds the static lock screen and wallpaper (`src/boot/lock.css`) and loads exactly one script,
+`src/boot/boot.ts`. That script fills the clock and wallpaper, then dynamically imports the app (`src/main.tsx`).
+A build plugin (`preloadAppChunk` in `vite.config.ts`) adds `modulepreload` links, so the app chunk downloads in
+parallel. The lock controller `src/boot/lock.ts` must exist as **one** module instance, shared by boot and app.
+
+After `npm run build`, check:
+```bash
+grep -l "secep.boot" dist/assets/*.js                    # exactly one file: the boot entry chunk
+grep -o '<script[^>]*>' dist/index.html | grep -v src=    # nothing: no inline scripts (CSP, NFR-SEC-008)
+grep -rlE 'msw|mockServiceWorker|VITE_MOCK' dist          # nothing: mocks are dev-only
+```
+Targets: boot JS + lock CSS ≈ 5 KB gzipped; initial JS ≤ 200 KB gzipped (NFR-PERF-010).

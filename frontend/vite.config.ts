@@ -20,9 +20,34 @@ function mswWorkerDevOnly(): Plugin {
   }
 }
 
+// The app is dynamically imported by the tiny boot entry (src/boot/boot.ts), so the lock screen can run first.
+// Without help, the browser would only discover the app chunk after boot.ts executes. This adds modulepreload links
+// for the app chunk and its static imports, so they download in parallel with boot.ts.
+function preloadAppChunk(): Plugin {
+  return {
+    name: 'preload-app-chunk',
+    apply: 'build',
+    transformIndexHtml: {
+      order: 'post',
+      handler(_html, ctx) {
+        const chunks = Object.values(ctx.bundle ?? {}).filter((c) => c.type === 'chunk')
+        const app = chunks.find((c) => c.facadeModuleId?.replaceAll('\\', '/').endsWith('/src/main.tsx'))
+        if (!app) throw new Error('preload-app-chunk: app chunk (src/main.tsx) not found')
+        // Skip entry chunks: index.html already loads boot.ts with a <script>.
+        const entries = new Set(chunks.filter((c) => c.isEntry).map((c) => c.fileName))
+        return [app.fileName, ...app.imports.filter((f) => !entries.has(f))].map((file) => ({
+          tag: 'link',
+          attrs: { rel: 'modulepreload', crossorigin: true, href: `/${file}` },
+          injectTo: 'head' as const,
+        }))
+      },
+    },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), mswWorkerDevOnly()],
+  plugins: [react(), mswWorkerDevOnly(), preloadAppChunk()],
   server: {
     // Same origin as production, where Caddy routes /api to the API (SRS §6.2), so the refresh
     // cookie works in dev. ws: true carries Socket.io, which runs on /api/socket.io (namespace /ws).

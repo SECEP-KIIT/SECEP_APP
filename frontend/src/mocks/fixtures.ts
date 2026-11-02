@@ -1,7 +1,8 @@
 // The five §7.2 demo emails as GET /emails/:id would return them (SRS §6.4.1). Secrets are already masked and URLs
 // already reduced to LinkView, as the server does it (FR-SEC-004, FR-SEC-006). Typed as EmailDetail so an extra or
 // missing field is a compile error; fixtures.test.ts checks the exact key sets at runtime too.
-import type { EmailDetail, EmailListItem, Me, Person, TriageView } from '../api/types'
+import type { AppNotification, EmailDetail, EmailListItem, Me, Person, Project, TriageView } from '../api/types'
+import { buildNotification } from './notifications'
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
 
@@ -292,3 +293,17 @@ export function toListItem(email: EmailDetail): EmailListItem {
   } = email
   return item
 }
+
+// PROPOSED shapes (pending SRS v1.3), see api/types.ts.
+
+export const projects: Project[] = [
+  { id: id(501), name: 'Q3 board meeting', colour: '#3b5bdb', icon: '📊', description: 'Deck and numbers for the Q3 board meeting.', deadline: '2026-11-07T11:30:00Z', jira_project_key: 'ATL', jira_epic: 'ATL-100', archived_at: null, created_at: '2026-10-20T08:00:00Z', progress: { done: 2, total: 5 } },
+  { id: id(502), name: 'Pune client visit', colour: '#e8590c', icon: '✈️', description: null, deadline: '2026-11-12T03:30:00Z', jira_project_key: null, jira_epic: null, archived_at: null, created_at: '2026-10-28T08:00:00Z', progress: { done: 1, total: 3 } },
+  { id: id(503), name: 'Onboarding redesign', colour: '#2b8a3e', icon: '🧭', description: 'New sign-up and first-run screens.', deadline: null, jira_project_key: 'ONB', jira_epic: null, archived_at: null, created_at: '2026-10-01T08:00:00Z', progress: { done: 4, total: 4 } },
+]
+
+export const notifications: AppNotification[] = [
+  buildNotification(3, { kind: 'new_email', email: toListItem(emails[0]) }, { type: 'email', id: emails[0].id }, '2026-11-04T09:12:40Z'),
+  buildNotification(2, { kind: 'meeting', title: 'Onboarding flow design review', minutes: 15 }, null, '2026-11-04T09:00:00Z'),
+  buildNotification(1, { kind: 'jira_status', key: 'ATL-141', status: 'Done', title: 'Collect Q3 churn figures' }, null, '2026-11-04T08:30:00Z'),
+]

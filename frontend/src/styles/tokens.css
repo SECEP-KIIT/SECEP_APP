@@ -65,12 +65,51 @@
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --dur-press: 100ms;
   --dur-settle: 300ms;
+  --dur-peek: 180ms;
+  --dur-fade: 100ms;
+
+  /* Floating sheet and frosted bars (FR-UI-001, FR-UI-005). Bar colours follow the wallpaper tone (html[data-tone]). */
+  --sheet-inset: 8px;
+  --sheet-radius: 12px;
+  --sidebar-w: 220px;
+  --sidebar-collapsed-w: 64px;
+  --topbar-h: 56px;
+  --bar-fill: rgb(250 251 255 / 0.62);
+  --bar-fill-unsettled: rgb(250 251 255 / 0.9); /* no blur yet while the sheet is moving */
+  --bar-ink: var(--ink);
+  --bar-ink-muted: var(--ink-muted);
+  --bar-hover: rgb(30 34 48 / 0.06);
+  --bar-active: rgb(255 255 255 / 0.75);
+  --critical: #d9480f; /* the Critical dot also differs by shape (presence), never colour alone */
+  --glow: #ff7a3d;
 }
 
+html[data-tone='dark'] {
+  --bar-fill: rgb(22 26 40 / 0.55);
+  --bar-fill-unsettled: rgb(22 26 40 / 0.88);
+  --bar-ink: #f4f6fb;
+  --bar-ink-muted: #c3c9da;
+  --bar-hover: rgb(255 255 255 / 0.08);
+  --bar-active: rgb(255 255 255 / 0.16);
+}
+
+/* Motion preference (FR-UI-032): html[data-motion] is set by the lock controller from ui_prefs + OS, with the most
+   reduction winning unless the user chose Full. Before it is set, follow the OS. */
+html[data-motion='reduced'],
+html[data-motion='off'] {
+  --dur-press: 0ms;
+  --dur-settle: 0ms;
+  --dur-peek: var(--dur-fade);
+}
+html[data-motion='off'] {
+  --dur-peek: 0ms;
+  --dur-fade: 0ms;
+}
 @media (prefers-reduced-motion: reduce) {
-  :root {
+  html:not([data-motion]) {
     --dur-press: 0ms;
     --dur-settle: 0ms;
+    --dur-peek: var(--dur-fade);
   }
 }
 

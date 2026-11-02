@@ -163,3 +163,74 @@ export type ErrorCode =
 export interface ApiErrorBody {
   error: { code: ErrorCode; message: string; details: unknown; request_id: string }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+// PROPOSED (pending SRS v1.3). The SRS names these routes (§6.5) or columns (§6.6) but defines no wire shape yet.
+// Derived from §6.6 where possible; see docs/proposals/srs-v1.3-frontend-shapes.md. Change them only alongside
+// that document, so M6 builds the same thing.
+// ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** users.ui_prefs keys named in the §6.6 comment, typed here; sidebar_collapsed is new. All optional on the wire. */
+export interface UiPrefs {
+  /** Unset = follow the OS (FR-UI-032). */
+  motion?: 'full' | 'reduced' | 'off'
+  skip_lock?: boolean
+  /** null = idle return off (FR-WP-004). */
+  idle_minutes?: number | null
+  glance_subjects?: boolean
+  sidebar_collapsed?: boolean
+}
+
+/** PATCH /me/preferences: request is a partial UiPrefs; response is the full stored object. */
+export interface PreferencesResponse {
+  ui_prefs: UiPrefs
+}
+
+/** GET /me/glance: lock-screen glance line (FR-WP-001) and sidebar count badges (FR-UI-002). */
+export interface Glance {
+  counts: {
+    inbox_unread: number
+    critical_unread: number
+    board_todo: number
+    due_today: number
+    overdue: number
+    /** null without security.review. */
+    security_flags: number | null
+  }
+  /** title is null unless ui_prefs.glance_subjects is on (lock-screen privacy). */
+  next_event: { title: string | null; start: string } | null
+  /** Subjects of unread Critical mail; null unless ui_prefs.glance_subjects is on. */
+  subjects: string[] | null
+}
+
+export type NotificationKind = 'reminder' | 'digest' | 'meeting' | 'new_email' | 'jira_status'
+
+/**
+ * GET /notifications item. The §6.6 payload jsonb is split into title / body / target. `title` never contains a
+ * sender or subject (it's what the lock screen shows by default); `body` carries those details.
+ * id: notifications.id is a bigserial, sent as a string (§6.4.1 says IDs are UUID strings: flagged).
+ */
+export interface AppNotification {
+  id: string
+  kind: NotificationKind
+  title: string
+  body: string | null
+  target: { type: 'email' | 'card' | 'event'; id: string } | null
+  read_at: string | null
+  created_at: string
+}
+
+/** GET /projects item: §6.6 projects columns minus tenant_id, owner_user_id and centroid, plus derived progress. */
+export interface Project {
+  id: string
+  name: string
+  colour: string
+  icon: string | null
+  description: string | null
+  deadline: string | null
+  jira_project_key: string | null
+  jira_epic: string | null
+  archived_at: string | null
+  created_at: string
+  progress: { done: number; total: number }
+}
