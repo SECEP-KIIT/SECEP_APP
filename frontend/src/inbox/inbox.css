@@ -736,3 +736,175 @@ html[data-motion='off'] .card[data-fresh]::after {
     max-width: 8.5em;
   }
 }
+
+/* ── Card layer 2: quick actions (FR-UI-011, item 3) ─────────────────────────────────────────────────────────
+   Overlay the top-right corner (no height change). Pure CSS hover with the 150 ms intent; keyboard focus inside the
+   card shows them at once. Touch has no hover, so on phones a tap opens the drawer instead. */
+.card {
+  cursor: pointer;
+}
+.card-actions {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  z-index: 3;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card-bg);
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity var(--dur-fade) ease-in,
+    visibility 0s linear var(--dur-fade);
+}
+.card:hover .card-actions {
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity var(--dur-fade) ease-out var(--hover-intent),
+    visibility 0s linear var(--hover-intent);
+}
+.card:focus-within .card-actions {
+  opacity: 1;
+  visibility: visible;
+  transition: none;
+}
+@media (hover: none) {
+  .card-actions {
+    display: none;
+  }
+}
+.card-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--ink);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.card-action:hover:not(:disabled) {
+  background: var(--tag-muted-bg);
+}
+.card-action:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+.card-action[aria-busy] {
+  cursor: progress;
+}
+.card-action-icon {
+  padding: 0 6px;
+}
+.card-action-done {
+  color: var(--tag-ok-fg);
+}
+/* Card removal (item 9): fade, then the list closes the gap. */
+.card[data-leaving] {
+  opacity: 0;
+  transition: opacity 120ms ease-in;
+  pointer-events: none;
+}
+
+/* ── Buttons shared by the drawer ─────────────────────────────────────────────────────────────────────── */
+.primary-button,
+.ghost-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.primary-button {
+  border: 0;
+  background: var(--accent);
+  color: #fff;
+}
+.ghost-button {
+  border: 1px solid var(--line-strong);
+  background: var(--card-bg);
+  color: var(--ink);
+}
+.ghost-button:hover:not(:disabled) {
+  background: var(--tag-muted-bg);
+}
+.ghost-button[aria-pressed='true'] {
+  border-color: var(--accent);
+}
+.primary-button:focus-visible,
+.ghost-button:focus-visible,
+.text-button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.text-button-danger {
+  color: var(--tag-danger-fg);
+}
+
+/* ── Toasts (item 9: slide up, 180 ms) ─────────────────────────────────────────────────────────────────── */
+.toaster {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  z-index: 60;
+  display: grid;
+  gap: var(--space-2);
+  width: min(440px, calc(100vw - 32px));
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.toast {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  border-radius: 10px;
+  background: #1e2230;
+  color: #f4f6fb;
+  font-size: 0.8125rem;
+  box-shadow: 0 8px 24px rgb(30 34 48 / 0.25);
+  pointer-events: auto;
+  animation: toast-in 180ms ease-out;
+}
+.toast[data-tone='error'] {
+  background: #7a1c13;
+}
+.toast > span {
+  flex: 1;
+}
+.toast-close {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+html[data-motion='reduced'] .toast {
+  animation: fade-in 100ms ease-out;
+}
+html[data-motion='off'] .toast,
+html[data-motion='off'] .card[data-leaving] {
+  animation: none;
+  transition: none;
+}

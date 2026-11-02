@@ -1,9 +1,10 @@
 import * as Popover from '@radix-ui/react-popover'
-import { useState } from 'react'
+import { useContext, useState } from 'react'
 import { useCorrectLabel } from '../api/queries'
 import type { EmailListItem, EmailType } from '../api/types'
 import { TYPES } from './cardModel'
 import { TypeIcon } from './marks'
+import { PortalContainer } from './portal'
 
 /**
  * Honest AI labels (FR-UI-012): an uncertain type shows as a dotted "Task?" chip; clicking it opens the correction
@@ -14,6 +15,7 @@ export function CorrectionMenu({ email }: { email: EmailListItem & { triage: Non
   const [open, setOpen] = useState(false)
   const correct = useCorrectLabel(email.id)
   const current = email.triage.email_type.label
+  const container = useContext(PortalContainer)
 
   const choose = (value: EmailType) =>
     correct.mutate({ field: 'email_type', value, scope: 'email' }, { onSuccess: () => setOpen(false) })
@@ -38,7 +40,7 @@ export function CorrectionMenu({ email }: { email: EmailListItem & { triage: Non
           <span className="sr-only">Type {current}, uncertain. Correct the type</span>
         </button>
       </Popover.Trigger>
-      <Popover.Portal>
+      <Popover.Portal container={container ?? undefined}>
         <Popover.Content className="menu" side="bottom" align="start" sideOffset={4} onClick={(e) => e.stopPropagation()}>
           <p className="menu-title" id={`correct-${email.id}`}>
             What type is this email?

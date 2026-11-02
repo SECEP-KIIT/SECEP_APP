@@ -1,8 +1,14 @@
-import { QueryClient, infiniteQueryOptions, keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
-import { ApiError, api } from './client'
-import { patchEmailCache } from './realtime'
+import { QueryClient, infiniteQueryOptions, keepPreviousData, queryOptions, useMutation, useQuery, type InfiniteData } from '@tanstack/react-query'
+import { ApiError, api, apiBlob } from './client'
+import { patchActionCache, patchEmailCache } from './realtime'
 import type {
+  Action,
+  ActionType,
   AppNotification,
+  DecoderActionPayload,
+  EmailDetail,
+  EmailPatch,
+  GoResponse,
   EmailListItem,
   Glance,
   LabelCorrection,
@@ -61,6 +67,82 @@ export const emailListOptions = (query: string) =>
 
 /** The default inbox column: no filters, newest first. Fetched during boot (lock-screen step) and reused. */
 export const DEFAULT_COLUMN_QUERY = ''
+
+// ── Email detail and actions (task 7: drawer and quick actions) ───────────────────────────────────────────────
+
+/** GET /emails/:id. Live events patch it in place while the drawer is open. */
+export const emailDetailOptions = (id: string) =>
+  queryOptions({ queryKey: ['email', id], queryFn: ({ signal }) => api<EmailDetail>(`/emails/${id}`, { signal }) })
+
+const json = (body: unknown): RequestInit => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+
+/**
+ * POST /actions/:id/accept (FR-ORC-012). `payload` holds only the edited fields. A 502 upstream_error means the
+ * server marked the action failed after its retries (FR-ORC-006), so the detail is refetched to show that.
+ */
+export function acceptAction(action: Action, payload?: Partial<DecoderActionPayload>) {
+  return api<Action>(`/actions/${action.id}/accept`, json(payload ? { payload } : {})).then(
+    (updated) => {
+      patchActionCache(queryClient, updated)
+      return updated
+    },
+    (err: unknown) => {
+      if (action.email_id) void queryClient.invalidateQueries({ queryKey: ['email', action.email_id] })
+      throw err
+    },
+  )
+}
+
+export const rejectAction = (action: Action) =>
+  api<Action>(`/actions/${action.id}/reject`, { method: 'POST' }).then((updated) => {
+    patchActionCache(queryClient, updated)
+    return updated
+  })
+
+/** POST /emails/:id/actions: a manual action ("Send to Jira" with no proposal), then the caller accepts it. */
+export async function createAction(emailId: string, type: ActionType, payload: Partial<DecoderActionPayload>) {
+  const action = await api<Action>(`/emails/${emailId}/actions`, json({ type, payload }))
+  const detail = queryClient.getQueryData<EmailDetail>(['email', emailId])
+  if (detail && !detail.actions.some((a) => a.id === action.id)) {
+    queryClient.setQueryData<EmailDetail>(['email', emailId], { ...detail, actions: [...detail.actions, action] })
+  }
+  return action
+}
+
+type ListData = InfiniteData<{ items: EmailListItem[]; next_cursor: string | null }, string | null>
+
+/**
+ * PATCH /emails/:id {pinned, handled} (proposals §10.3). The detail is replaced with the response and every list
+ * copy patched in place. When `handled` flips, the email leaves the lists that no longer match it (the default inbox
+ * hides handled mail; the Handled view shows only it): a deliberate removal, not a layout shift (item 9).
+ */
+export async function updateEmail(id: string, patch: EmailPatch) {
+  const detail = await api<EmailDetail>(`/emails/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) })
+  queryClient.setQueryData(['email', id], detail)
+  patchEmailCache(queryClient, id, detail)
+  if (patch.handled !== undefined) {
+    for (const [key, data] of queryClient.getQueriesData<ListData>({ queryKey: ['emails', 'list'] })) {
+      const view = new URLSearchParams(String(key[2] ?? '')).get('view')?.split(',') ?? []
+      if (!data || view.includes('handled') === detail.handled) continue
+      queryClient.setQueryData<ListData>(key, { ...data, pages: data.pages.map((p) => ({ ...p, items: p.items.filter((e) => e.id !== id) })) })
+    }
+  }
+  return detail
+}
+
+/** GET /emails/:id/ics (FR-ORC-017), saved through a temporary object URL; nothing is opened or rendered. */
+export async function downloadIcs(id: string) {
+  const blob = await apiBlob(`/emails/${id}/ics`, { headers: { Accept: 'text/calendar' } })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'meeting.ics'
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(url), 1_000)
+}
+
+/** GET /links/:checkId/go (FR-SEC-004). go_url is the full /api/v1 path; api() adds the base itself. */
+export const followLink = (goUrl: string) => api<GoResponse>(goUrl.replace(/^\/api\/v1/, ''))
 
 /** PATCH /emails/:id/labels (FR-ML-010, FR-UI-012). The new triage is patched into every cached copy, in place. */
 export function useCorrectLabel(emailId: string) {

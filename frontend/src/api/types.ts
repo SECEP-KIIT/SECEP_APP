@@ -133,6 +133,15 @@ export interface EmailDetail extends EmailListItem {
   } | null
 }
 
+/**
+ * GET /links/:checkId/go (§6.4.1, FR-SEC-004): the click-time verdict. The client opens `url` itself only for
+ * "open"; "interstitial" needs explicit confirmation; "blocked" never opens.
+ */
+export type GoResponse =
+  | { action: 'open'; url: string }
+  | { action: 'interstitial'; verdict: 'suspicious'; final_url: string; chain: string[]; signals: string[] }
+  | { action: 'blocked'; verdict: 'malicious'; chain: string[]; signals: string[] }
+
 export interface Me {
   id: string
   email: string

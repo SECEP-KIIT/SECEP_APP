@@ -1,9 +1,11 @@
 import { Pin } from 'lucide-react'
-import { memo, type MouseEvent as ReactMouseEvent } from 'react'
+import { memo, useState, type KeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import type { EmailListItem } from '../api/types'
 import { MaskedText } from '../components/MaskedText'
 import { cardTags, cardTime, senderName, senderRole, visibleTags, type CardTag, type Density, type FilterPatch } from './cardModel'
+import { CardActions } from './CardActions'
 import { CorrectionMenu } from './CorrectionMenu'
+import { useInbox } from './inboxContext'
 import { TagIcon, TypeIcon, UrgencyMark } from './marks'
 
 interface Props {
@@ -21,19 +23,40 @@ interface Props {
  * and labels reserve their space while they load. Subject and summary are plain text with masked-secret chips; no
  * HTML is ever rendered from email content.
  *
- * Layer 2 (hover quick actions) and layer 3 (the side drawer) come with the drawer and actions (task 7).
+ * Layer 2: CardActions (hover or focus). Layer 3: a click, Enter or Space opens the side drawer (Space is the quick
+ * preview, FR-UI-015). Buttons inside the card stop their clicks, so they never also open the drawer.
  */
 export const EmailCard = memo(function EmailCard({ email, now, density, fresh, onFilter }: Props) {
   const triage = email.triage
   const role = senderRole(email)
   const subjectId = `subj-${email.id}`
+  const { open } = useInbox()
+  const [leaving, setLeaving] = useState(false)
   const filter = (patch: FilterPatch) => (e: ReactMouseEvent) => {
     e.stopPropagation()
     onFilter(patch)
   }
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (e.target !== e.currentTarget || e.ctrlKey || e.metaKey || e.altKey) return
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      open(email.id)
+    }
+  }
 
   return (
-    <article className="card" data-density={density} data-fresh={fresh || undefined} aria-labelledby={subjectId} tabIndex={0}>
+    <article
+      className="card"
+      data-density={density}
+      data-fresh={fresh || undefined}
+      data-leaving={leaving || undefined}
+      aria-labelledby={subjectId}
+      aria-describedby="card-hint"
+      tabIndex={0}
+      onClick={() => open(email.id)}
+      onKeyDown={onKeyDown}
+    >
+      <CardActions email={email} onLeave={setLeaving} />
       <div className="card-meta">
         {!triage ? (
           <span className="skel skel-chip" role="img" aria-label="Not classified yet" />

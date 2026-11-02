@@ -98,7 +98,8 @@ function listFields(patch: Partial<EmailDetail>): Partial<EmailListItem> {
   return item
 }
 
-function patchAction(qc: QueryClient, action: Action) {
+/** Replaces an action in place in action lists and in its email's open detail. Exported for mutations. */
+export function patchActionCache(qc: QueryClient, action: Action) {
   for (const [key, data] of qc.getQueriesData<Page<Action>>({ queryKey: ['actions'] })) {
     if (data?.items.some((a) => a.id === action.id)) {
       qc.setQueryData<Page<Action>>(key, { ...data, items: data.items.map((a) => (a.id === action.id ? action : a)) })
@@ -144,7 +145,7 @@ function handle<E extends keyof Events>(qc: QueryClient, event: E, payload: Even
       break
     }
     case 'action.updated':
-      patchAction(qc, (payload as Events['action.updated']).action)
+      patchActionCache(qc, (payload as Events['action.updated']).action)
       break
     case 'notification.new': {
       const { notification } = payload as Events['notification.new']

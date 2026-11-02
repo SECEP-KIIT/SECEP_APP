@@ -1,0 +1,245 @@
+import { CalendarPlus, Download, LayoutList, Pencil, Plus, Zap } from 'lucide-react'
+import { useState } from 'react'
+import { ApiError } from '../api/client'
+import { acceptAction, createAction, downloadIcs, rejectAction } from '../api/queries'
+import type { Action, ActionType, DecoderActionPayload, EmailDetail, JiraPriority, Urgency } from '../api/types'
+import { errorText, useInbox, type OpenOptions } from '../inbox/inboxContext'
+import { Composer } from './Composer'
+
+const TYPE_LABEL: Record<ActionType, string> = { create_jira_issue: 'Jira issue', add_calendar_event: 'Calendar event', add_board_card: 'Board card' }
+const SEND_LABEL: Record<ActionType, string> = { create_jira_issue: 'Send to Jira', add_calendar_event: 'Add to calendar', add_board_card: 'Add to board' }
+/** FR-ORC-004, for prefilling the composer only; the server applies the same mapping when priority is left empty. */
+const PRIORITY_FOR: Record<Urgency, JiraPriority> = { Critical: 'Highest', High: 'High', Medium: 'Medium', Low: 'Low' }
+
+const EMPTY: DecoderActionPayload = { title: null, description: null, priority: null, due_date: null, start: null, end: null, attendees: null }
+
+function TypeGlyph({ type }: { type: ActionType }) {
+  const Icon = type === 'create_jira_issue' ? Zap : type === 'add_calendar_event' ? CalendarPlus : LayoutList
+  return <Icon size={16} aria-hidden="true" />
+}
+
+/** Only the fields that differ from the proposal: "send the proposal as is" plus the user's edits (FR-ORC-012). */
+function diff(from: DecoderActionPayload, to: DecoderActionPayload): Partial<DecoderActionPayload> {
+  const out: Partial<DecoderActionPayload> = {}
+  for (const k of Object.keys(to) as (keyof DecoderActionPayload)[]) {
+    if (JSON.stringify(from[k]) !== JSON.stringify(to[k])) (out as Record<string, unknown>)[k] = to[k]
+  }
+  return out
+}
+
+const fieldErrors = (err: unknown): Record<string, string> =>
+  err instanceof ApiError && (err.code === 'validation_failed' || err.code === 'action_invalid')
+    ? (((err.details as { fields?: Record<string, string> } | null)?.fields) ?? {})
+    : {}
+
+/**
+ * The drawer's Proposed actions section (item 10). Each action shows its state, live: proposed → executing → done
+ * (with the issue key) or failed (with Jira's error and Retry). Nothing executes without the owner's click
+ * (FR-ORC-002). Jira and Calendar are simulated by the mock (fake keys, fake events).
+ */
+export function ActionList({ email, compose }: { email: EmailDetail; compose?: OpenOptions['compose'] }) {
+  const live = email.actions.filter((a) => a.status !== 'rejected')
+  const declined = email.actions.length - live.length
+  const has = (type: ActionType) => live.some((a) => a.type === type)
+  // ⇧-click or "no proposal": edit the existing one of that type, or start a new one.
+  const editFirst = compose ? live.find((a) => a.type === compose && (a.status === 'proposed' || a.status === 'failed'))?.id : undefined
+  const [creating, setCreating] = useState<OpenOptions['compose']>(compose && !editFirst ? compose : undefined)
+  const meeting = email.actions.find((a) => a.type === 'add_calendar_event' && 'start' in a.payload && a.payload.start && a.payload.end)
+  const { toast } = useInbox()
+
+  return (
+    <div className="actions">
+      {live.length === 0 && !creating && <p className="drawer-muted">No proposed actions for this email.</p>}
+      <ul className="action-list">
+        {live.map((a) => (
+          <ActionRow key={a.id} action={a} startEditing={a.id === editFirst} />
+        ))}
+      </ul>
+      {declined > 0 && <p className="drawer-muted">{declined === 1 ? '1 declined proposal' : `${declined} declined proposals`}</p>}
+
+      {creating ? (
+        <NewAction email={email} type={creating} onDone={() => setCreating(undefined)} />
+      ) : (
+        <div className="action-new">
+          {!has('create_jira_issue') && !email.jira_key && (
+            <button type="button" className="ghost-button" onClick={() => setCreating('create_jira_issue')}>
+              <Plus size={14} aria-hidden="true" /> Jira issue
+            </button>
+          )}
+          {!has('add_calendar_event') && (
+            <button type="button" className="ghost-button" onClick={() => setCreating('add_calendar_event')}>
+              <Plus size={14} aria-hidden="true" /> Calendar event
+            </button>
+          )}
+          {email.triage?.email_type.label === 'Meeting' && meeting && (
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={() => downloadIcs(email.id).catch((err: unknown) => toast(errorText(err), 'error'))}
+              title="Download the meeting as an .ics file for any calendar app"
+            >
+              <Download size={14} aria-hidden="true" /> Download .ics
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ActionRow({ action, startEditing }: { action: Action; startEditing: boolean }) {
+  const [editing, setEditing] = useState(startEditing)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<unknown>(null)
+  const p = action.payload as DecoderActionPayload
+  const open = action.status === 'proposed' || action.status === 'failed'
+
+  const run = async (fn: () => Promise<unknown>) => {
+    setBusy(true)
+    setError(null)
+    try {
+      await fn()
+      setEditing(false)
+    } catch (err) {
+      setError(err)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <li className="action" data-status={action.status}>
+      <div className="action-head">
+        <TypeGlyph type={action.type} />
+        <div className="action-text">
+          <p className="action-title">{p.title ?? TYPE_LABEL[action.type]}</p>
+          <p className="action-meta">
+            {TYPE_LABEL[action.type]}
+            {p.priority && ` · ${p.priority} priority`}
+            {p.due_date && ` · due ${new Date(`${p.due_date}T00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`}
+            {p.start && ` · ${new Date(p.start).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`}
+            {action.origin === 'user' && ' · added by you'}
+          </p>
+        </div>
+        <ActionStatus action={action} />
+      </div>
+
+      {action.status === 'failed' && action.error && (
+        <p className="action-error" role="alert">
+          {action.error}
+        </p>
+      )}
+      {error !== null && !editing && (
+        <p className="action-error" role="alert">
+          {errorText(error)}
+        </p>
+      )}
+
+      {editing ? (
+        <Composer
+          type={action.type}
+          initial={{ ...EMPTY, ...p }}
+          submitLabel={SEND_LABEL[action.type]}
+          busy={busy}
+          errors={fieldErrors(error)}
+          onCancel={() => setEditing(false)}
+          onSubmit={(next) => run(() => acceptAction(action, diff({ ...EMPTY, ...p }, next)))}
+        />
+      ) : (
+        open && (
+          <div className="action-buttons">
+            <button type="button" className="primary-button" disabled={busy} aria-busy={busy || undefined} onClick={() => run(() => acceptAction(action))}>
+              {action.status === 'failed' ? 'Retry' : SEND_LABEL[action.type]}
+            </button>
+            <button type="button" className="ghost-button" disabled={busy} onClick={() => setEditing(true)}>
+              <Pencil size={14} aria-hidden="true" /> Edit
+            </button>
+            <button type="button" className="text-button" disabled={busy} onClick={() => run(() => rejectAction(action))}>
+              Decline
+            </button>
+          </div>
+        )
+      )}
+    </li>
+  )
+}
+
+/** Status in words plus a mark, never colour alone. Done Jira issues show their key with a drawn check (item 9). */
+function ActionStatus({ action }: { action: Action }) {
+  switch (action.status) {
+    case 'proposed':
+      return <span className="action-status">Proposed</span>
+    case 'accepted':
+    case 'executing':
+      return (
+        <span className="action-status" data-tone="busy">
+          Sending…
+        </span>
+      )
+    case 'failed':
+      return (
+        <span className="action-status" data-tone="error">
+          Failed
+        </span>
+      )
+    case 'rejected':
+      return <span className="action-status">Declined</span>
+    case 'done':
+      return (
+        <span className="action-status" data-tone="ok">
+          <svg className="check-draw" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+            <path d="M2.5 7.5l3 3 6-7" pathLength="100" />
+          </svg>
+          {action.type === 'create_jira_issue'
+            ? `${action.external_ref}${action.external_status ? ` · ${action.external_status}` : ''}`
+            : action.type === 'add_calendar_event'
+              ? 'In your calendar'
+              : 'On the board'}
+        </span>
+      )
+  }
+}
+
+/** A manual action (POST /emails/:id/actions), then accepted right away, which is what "Send" means to the user. */
+function NewAction({ email, type, onDone }: { email: EmailDetail; type: NonNullable<OpenOptions['compose']>; onDone: () => void }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<unknown>(null)
+  const { toast } = useInbox()
+  const initial: DecoderActionPayload = {
+    ...EMPTY,
+    title: (email.subject ?? '').slice(0, 120) || null,
+    description: email.summary_short,
+    ...(type === 'create_jira_issue'
+      ? { priority: email.triage ? PRIORITY_FOR[email.triage.urgency.label] : null, due_date: email.due_date }
+      : { attendees: [email.from.address] }),
+  }
+
+  const submit = async (payload: DecoderActionPayload) => {
+    setBusy(true)
+    setError(null)
+    try {
+      const created = await createAction(email.id, type, payload)
+      const result = await acceptAction(created)
+      if (result.status === 'failed') toast(`Couldn't send it: ${result.error ?? 'the action failed'}`, 'error')
+      onDone()
+    } catch (err) {
+      setError(err)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="action action-creating">
+      <p className="action-title">
+        <TypeGlyph type={type} /> New {TYPE_LABEL[type].toLowerCase()}
+      </p>
+      {error !== null && Object.keys(fieldErrors(error)).length === 0 && (
+        <p className="action-error" role="alert">
+          {errorText(error)}
+        </p>
+      )}
+      <Composer type={type} initial={initial} submitLabel={SEND_LABEL[type]} busy={busy} errors={fieldErrors(error)} onSubmit={submit} onCancel={onDone} />
+    </div>
+  )
+}

@@ -196,3 +196,11 @@ These were decided by the user after task 6. The mock and the frontend implement
 - **Unknown `view` values** also get `422 invalid_parameter`. Other malformed parameters (e.g. `type=Spam`) keep their `400 bad_request`; say if those should move to 422 too.
 
 **Still open (not blocking; nothing invented for it):** how a read row gets created. Opening an email (implicit), or `PATCH /emails/:id { read }` as §1 suggested? The mock creates none yet, so the Unread chip works on the seeded read state, and opening the drawer doesn't mark anything read. `EmailListItem.read` is still not on the wire.
+
+## 11. Found while building the drawer and actions (task 7, 2 Nov 2026)
+
+1. **Composer assignee, project and epic (FR-ORC-012, M).** FR-ORC-012 says the ⇧J composer is prefilled with "assignee = the user and the primary project's Jira project and epic". The enrich.v1 action payload (§6.4, `DecoderActionPayload`) has no `assignee`, `jira_project_key` or `epic` field, so `POST /actions/:id/accept { payload }` can't carry them, and the mock rejects unknown payload fields.
+   - **What the composer does now:** shows only title, description, priority and due date (plus start, end and attendees for events). The issue goes to the tenant's Jira project from `/admin/settings`.
+   - **Nothing is invented:** there is no assignee control and no read-only "Assignee: you" text.
+   - **Suggested for v1.3:** either M6 always assigns to the user's linked Jira account (then nothing is needed on the wire beyond saying so), or the payload gains `assignee: "me" | null` and `jira_project_key` / `jira_epic`, filled from the email's primary project (§4, task 10).
+2. **Popup blocking on link open.** The client opens a link only after the `/links/:checkId/go` round trip. Browsers allow `window.open` for a short time after the click (Chrome's transient activation is about 5 s), so it normally works; with a very slow check it could be blocked. No shape change; a browser check is listed in the task 7 worklog.

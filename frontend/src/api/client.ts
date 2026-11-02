@@ -68,7 +68,7 @@ export function refreshForSocket(): Promise<string | null> {
 
 function send(path: string, init: RequestInit, token: string | null) {
   const headers = new Headers(init.headers)
-  headers.set('Accept', 'application/json')
+  if (!headers.has('Accept')) headers.set('Accept', 'application/json')
   if (token) headers.set('Authorization', `Bearer ${token}`)
   return fetch(`${BASE}${path}`, { ...init, headers })
 }
@@ -87,6 +87,16 @@ async function errorBody(res: Response): Promise<ApiErrorBody['error'] | null> {
  * loop. `401 reauth_required` (FR-SEC-008) is not a token problem and is never retried.
  */
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const res = await request(path, init)
+  return (res.status === 204 ? undefined : await res.json()) as T
+}
+
+/** Same auth and retry as api(), for non-JSON downloads (e.g. the .ics file). */
+export async function apiBlob(path: string, init: RequestInit = {}): Promise<Blob> {
+  return (await request(path, init)).blob()
+}
+
+async function request(path: string, init: RequestInit): Promise<Response> {
   const sentWith = accessToken
   let res = await send(path, init, sentWith)
 
@@ -101,5 +111,5 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
 
   if (!res.ok) throw new ApiError(res.status, await errorBody(res))
-  return (res.status === 204 ? undefined : await res.json()) as T
+  return res
 }
