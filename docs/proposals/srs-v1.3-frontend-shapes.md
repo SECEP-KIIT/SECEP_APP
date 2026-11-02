@@ -90,3 +90,27 @@ The frontend mirrors `skip_lock`, `idle_minutes` and `motion` in `localStorage` 
 
 - **FR-UI-002 vs §6.7:** item 1 lists Calendar in the sidebar. It's now shown, since Calendar is being built (task 14).
 - **Metrics visibility:** FR-UI-002 doesn't say who sees Metrics. The frontend shows it to admins only, because `GET /admin/metrics` is an admin route.
+
+## 7. Found while building the mock backend (task 5)
+
+1. **`notification.new` payload:** `{ notification: Notification }`, using the item shape from §3. §6.5 names the event; §6.4.1 doesn't define it.
+2. **Model `metrics` (`GET /admin/models`):** §6.4.1 says `metrics` without a shape. Proposed (FR-ML-009/012):
+   `{ type_macro_f1, urgency_macro_f1, sentiment_macro_f1, per_class_f1: { Task, Info, Credentials, Meeting, Approval }, ece }`.
+   Confusion matrices for the model card (§7.2 step 9) can be added in task 15.
+3. **Promotion gates:** `409 conflict` with `details.failed_gates` as human-readable strings, e.g. "Approval F1 drops by 0.050 (limit 0.03)".
+4. **Accept failures (FR-ORC-006):** §6.4.1 says accept returns "`Action` (… or `failed` with `error`)" and lists `502 upstream_error`. The mock does this:
+   - Jira 400/401: `200` with the `Action` in `status: failed` and `error: "Jira 401: …"`.
+   - 429/5xx still failing after retries (honouring Retry-After): `502 upstream_error` with `details { provider: "jira", status, message }`, and the action is marked `failed`.
+   - **Decision needed:** confirm this split.
+5. **Accept on a non-proposed action:**
+   - `done` returns the action unchanged (FR-ORC-005).
+   - `executing` → `409`.
+   - `rejected` → `409`.
+   - `reject` is allowed only from `proposed` or `failed`.
+6. **User cards (`POST /actions`):** created with `status: "done"` and `board_column: "todo"`, because there's nothing to execute. `PATCH /actions/:id` board moves are allowed only for `done` cards (`409` otherwise).
+7. **`GET /links/:checkId/go` for a link still `pending`:** unreachable from the UI (pending links have `check_id: null`). If called anyway: `409 conflict`.
+8. **Personal rules (FR-ML-013):** the corrected email itself gets `source: "user"`. Later emails from that sender get `source: "rule"`, and the rule's `hit_count` goes up. The rule is not applied to mail already received. `scope: "similar"` (FR-ML-014, S) is stored as a plain correction until similarity overrides are built.
+9. **WebSocket payloads:** the §6.5 one-liner (`email.triaged {email_id, triage}`) and the §6.4.1 table (`{email_id, email: EmailListItem}`) disagree. The mock follows §6.4.1, which is marked final. §6.5 should be updated.
+10. **Socket.io transport:** WebSocket only (`transports: ["websocket"]`), with no long-polling fallback. The access token goes in the handshake `auth` payload, never the URL. On `connect_error "unauthenticated"` the client refreshes once and reconnects.
+11. **Reveal re-auth in the mock:** `reauth_url` is `/api/v1/auth/google?reauth=1`, a browser navigation, which MSW's service worker does not intercept. The dev panel offers "Re-sign in" instead. Task 15 decides how the UI performs the Google round trip.
+12. **Card gap for task 6:** FR-UI-011 shows the sender's *role* on every card, but `EmailListItem` has no sender-role field (`role_category` exists only for users). A shape is needed before task 6, e.g. `from.role_category: RoleCategory | null`.

@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
-import { useEmails, useMe } from '../api/queries'
+import { queryClient, useEmails, useMe } from '../api/queries'
+import { connectRealtime } from '../api/realtime'
 import { lock } from '../boot/lock'
 
 /**
@@ -14,9 +15,10 @@ export function useBootSteps() {
   useEffect(() => {
     // The shell renders only after the router has loaded the matched route chunks: the app JS is in.
     lock.step('app')
-    // Not built yet: the layout (task 8) and the socket (task 5) are counted as done until they exist.
+    // Not built yet: the layout (task 8) is counted as done until it exists.
     lock.step('layout')
-    lock.step('socket')
+    // The socket connects once for the app's lifetime (idempotent, so StrictMode's double effect is harmless).
+    connectRealtime(queryClient, () => lock.step('socket'))
   }, [])
 
   useEffect(() => {

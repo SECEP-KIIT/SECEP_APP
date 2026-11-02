@@ -28,6 +28,13 @@ The dev server proxies `/api` (including the Socket.io WebSocket at `/api/socket
 Until a backend route exists, MSW mocks return the §6.4.1 shapes: copy `.env.example` to `.env.local`
 (`VITE_MOCK=1`) and restart `npm run dev`. Mocks are dev-only; production builds contain no MSW code or worker.
 
+The mock (`src/mocks/`) is a stateful backend: a seeded store (~50 emails for the demo user), every Must route from
+§6.5 with access checks and validation, a Socket.IO server on `/api/socket.io` (namespace `/ws`) driven by the real
+`socket.io-client`, and simulated incoming mail. **Ctrl+Shift+D** opens the dev panel: send mail, run the §7.2 demo,
+switch user (admin / user / reviewer), inject Jira failures, change latency, reset. `VITE_MOCK_PERSIST=1` keeps
+what you change across reloads (versioned; fake secrets are never saved). `src/mocks/contract.test.ts` pins the
+§6.4.1 shapes: M6 should pass the same expectations.
+
 ## Boot path (lock screen as the loader)
 `index.html` holds the static lock screen and wallpaper (`src/boot/lock.css`) and loads exactly one script,
 `src/boot/boot.ts`. That script fills the clock and wallpaper, then dynamically imports the app (`src/main.tsx`).

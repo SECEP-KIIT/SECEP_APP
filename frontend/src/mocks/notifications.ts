@@ -4,8 +4,10 @@
 // ui_prefs.glance_subjects is on. Task 13 reuses this builder.
 import type { AppNotification, EmailListItem } from '../api/types'
 
+type EmailFacts = Pick<EmailListItem, 'from' | 'subject' | 'triage'>
+
 export type NotificationSource =
-  | { kind: 'new_email'; email: EmailListItem }
+  | { kind: 'new_email'; email: EmailFacts }
   | { kind: 'meeting'; title: string; minutes: number }
   | { kind: 'reminder'; title: string }
   | { kind: 'jira_status'; key: string; status: string; title: string }

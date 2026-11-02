@@ -52,6 +52,20 @@ function refreshAccessToken(): Promise<string | null> {
   return refreshing
 }
 
+/**
+ * The current access token for the WebSocket handshake (§6.5: token on connect), refreshing it if there is none.
+ * The token is handed to socket.io-client in memory; it never touches storage or a URL.
+ */
+export async function currentAccessToken(): Promise<string | null> {
+  return accessToken ?? (await refreshAccessToken())
+}
+
+/** After the socket is refused with an expired token: get a fresh one, sharing the single-flight refresh. */
+export function refreshForSocket(): Promise<string | null> {
+  accessToken = null
+  return refreshAccessToken()
+}
+
 function send(path: string, init: RequestInit, token: string | null) {
   const headers = new Headers(init.headers)
   headers.set('Accept', 'application/json')

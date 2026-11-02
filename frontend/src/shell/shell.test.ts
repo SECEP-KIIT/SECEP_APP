@@ -1,9 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import type { Glance, Me } from '../api/types'
 import { computeGlance } from '../mocks/glance'
-import { emails, me, notifications } from '../mocks/fixtures'
 import { notificationText } from '../mocks/notifications'
-import { toListItem } from '../mocks/fixtures'
+import { createDb } from '../mocks/store/generate'
+import { toListItem, toMe } from '../mocks/store/serialize'
+import type { DecoderActionPayload } from '../api/types'
+
+const db = createDb(Date.parse('2026-11-04T10:00:00Z'))
+const demo = db.users[0]
+const me = toMe(demo)
+const emails = [...db.emails.values()].filter((e) => e.user_id === demo.id)
+const notifications = db.notifications.filter((n) => n.user_id === demo.id)
 import { focusKeyAction, isTypingTarget } from './focusKeys'
 import { glanceLine, lockNotificationText } from './lockText'
 import { NAV, visibleNav } from './nav'
@@ -52,43 +59,46 @@ describe('resolvePrefs', () => {
   })
 })
 
-// Lock-screen privacy (FR-WP-001): a passer-by sees counts, never senders, subjects or item titles, unless the user
-// opted in with glance_subjects.
+// Lock-screen privacy (FR-WP-001): a passer-by sees counts, never senders, subjects, item titles or issue keys,
+// unless the user opted in with glance_subjects.
 describe('lock-screen privacy', () => {
-  const sensitive = [
-    ...emails.flatMap((e) => [e.subject ?? '', e.from.name ?? '', e.from.address]),
-    'Onboarding flow design review',
-    'Collect Q3 churn figures',
-    'ATL-141',
-  ].filter(Boolean)
+  const titles = [...db.actions.values()].map((a) => (a.payload as DecoderActionPayload).title ?? '')
+  const sensitive = [...emails.flatMap((e) => [e.subject ?? '', e.from.name ?? '', e.from.address]), ...titles, 'ATL-'].filter(Boolean)
+  const critical = emails.find((e) => e.triage?.urgency.label === 'Critical')!
 
-  it('notification titles never carry a sender, subject or item title', () => {
+  it('notification titles never carry a sender, subject, item title or issue key', () => {
+    expect(notifications.length).toBeGreaterThan(0)
     for (const n of notifications) for (const s of sensitive) expect(n.title).not.toContain(s)
-    const critical = notificationText({ kind: 'new_email', email: toListItem(emails[0]) })
-    expect(critical.title).toBe('New Critical email')
-    expect(critical.body).toContain('R. Sen')
+    const text = notificationText({ kind: 'new_email', email: toListItem(db, critical) })
+    expect(text.title).toBe('New Critical email')
+    expect(text.body).toContain(critical.from.name!)
+    const jira = notificationText({ kind: 'jira_status', key: 'ATL-141', status: 'Done', title: 'Collect Q3 churn figures' })
+    expect(jira.title).toBe('Jira issue updated')
+    expect(jira.body).toContain('ATL-141')
   })
 
   it('the lock shows notification bodies only with glance_subjects', () => {
     expect(lockNotificationText(notifications[0], false).body).toBeNull()
-    expect(lockNotificationText(notifications[0], true).body).toContain('R. Sen')
+    expect(lockNotificationText(notifications[0], true).body).toBe(notifications[0].body)
   })
 
   it('glance hides event titles and subjects unless opted in', () => {
-    const now = new Date('2026-11-04T10:00:00Z')
-    const off = computeGlance(emails, new Set(), {}, true, now)
+    const now = new Date(Date.parse('2026-11-04T10:00:00Z') - 3 * 86_400_000)
+    const off = computeGlance(db, { ...demo, ui_prefs: {} }, now)
+    expect(off.next_event).not.toBeNull()
     expect(off.next_event?.title).toBeNull()
     expect(off.subjects).toBeNull()
     const line = glanceLine(off, now)
     for (const s of sensitive) expect(line).not.toContain(s)
 
-    const on = computeGlance(emails, new Set(), { glance_subjects: true }, true, now)
-    expect(on.next_event?.title).toBe('Onboarding flow design review')
-    expect(on.subjects).toContain(emails[0].subject)
+    const on = computeGlance(db, { ...demo, ui_prefs: { glance_subjects: true } }, now)
+    expect(on.next_event?.title).toBeTruthy()
+    expect(on.subjects).not.toBeNull()
   })
 
   it('security_flags count is withheld without security.review', () => {
-    expect(computeGlance(emails, new Set(), {}, false, new Date()).counts.security_flags).toBeNull()
+    expect(computeGlance(db, { ...demo, permissions: [] }, new Date()).counts.security_flags).toBeNull()
+    expect(computeGlance(db, demo, new Date()).counts.security_flags).toBeGreaterThan(0)
   })
 
   it('formats the glance line from counts', () => {

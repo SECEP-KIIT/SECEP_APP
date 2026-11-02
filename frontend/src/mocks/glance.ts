@@ -1,21 +1,17 @@
 // GET /me/glance, computed the way M6 would (server role; PROPOSED shape, pending SRS v1.3).
-// Read state is mock-internal here, not a wire field. See the read_at note in docs/proposals/srs-v1.3-frontend-shapes.md.
-import type { DecoderActionPayload, EmailDetail, Glance, UiPrefs } from '../api/types'
+import type { DecoderActionPayload, Glance } from '../api/types'
+import type { Db, UserRow } from './store/types'
 
 const day = (iso: string) => iso.slice(0, 10)
 
-export function computeGlance(
-  emails: EmailDetail[],
-  readIds: ReadonlySet<string>,
-  prefs: UiPrefs,
-  canReviewSecurity: boolean,
-  now: Date,
-): Glance {
-  const unread = emails.filter((e) => !readIds.has(e.id))
+export function computeGlance(db: Db, user: UserRow, now: Date): Glance {
+  const read = db.reads.get(user.id) ?? new Set<string>()
+  const mine = [...db.emails.values()].filter((e) => e.user_id === user.id)
+  const unread = mine.filter((e) => !read.has(e.id))
   const criticalUnread = unread.filter((e) => e.triage?.urgency.label === 'Critical')
-  const actions = emails.flatMap((e) => e.actions).filter((a) => a.status !== 'rejected')
+  const actions = [...db.actions.values()].filter((a) => a.user_id === user.id && a.status !== 'rejected')
   const dueDates = actions
-    .filter((a) => a.status !== 'done')
+    .filter((a) => a.status !== 'done' || a.board_column !== 'done')
     .map((a) => (a.payload as DecoderActionPayload).due_date)
     .filter((d): d is string => !!d)
   const today = day(now.toISOString())
@@ -26,7 +22,7 @@ export function computeGlance(
     .sort((a, b) => Date.parse(a.start!) - Date.parse(b.start!))[0]
 
   // Lock-screen privacy (FR-WP-001): titles and subjects only when the user opted in.
-  const details = prefs.glance_subjects === true
+  const details = user.ui_prefs.glance_subjects === true
 
   return {
     counts: {
@@ -35,7 +31,9 @@ export function computeGlance(
       board_todo: actions.filter((a) => a.board_column === 'todo').length,
       due_today: dueDates.filter((d) => d === today).length,
       overdue: dueDates.filter((d) => d < today).length,
-      security_flags: canReviewSecurity ? emails.filter((e) => e.security_flag !== 'none').length : null,
+      security_flags: user.permissions.includes('security.review')
+        ? [...db.emails.values()].filter((e) => e.security_flag !== 'none').length
+        : null,
     },
     next_event: next ? { title: details ? next.title : null, start: next.start! } : null,
     subjects: details ? criticalUnread.map((e) => e.subject ?? '(no subject)') : null,

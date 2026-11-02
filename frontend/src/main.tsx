@@ -9,12 +9,10 @@ import App from './App.tsx'
 async function enableMocking() {
   if (!import.meta.env.DEV || import.meta.env.VITE_MOCK !== '1') return
   const { worker } = await import('./mocks/browser')
-  await worker.start({
-    // Warn about API calls with no mock; let everything else (Vite assets, HMR) through silently.
-    onUnhandledRequest: (req, print) => {
-      if (new URL(req.url).pathname.startsWith('/api/')) print.warning()
-    },
-  })
+  // Unmatched /api/v1 paths get a 404 from the mock's own catch-all; everything else (Vite assets, HMR) passes.
+  await worker.start({ onUnhandledRequest: 'bypass' })
+  // Mock controls (Ctrl+Shift+D), dev only like the mocks themselves.
+  void import('./mocks/devpanel/mount')
 }
 
 enableMocking().then(() => {
