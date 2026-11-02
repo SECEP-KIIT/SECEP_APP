@@ -234,3 +234,12 @@ export interface Project {
   created_at: string
   progress: { done: number; total: number }
 }
+
+/**
+ * PROPOSED (pending SRS v1.3, proposals doc §8.5): the sender with their role category, for the role on every card
+ * (FR-UI-011). Not part of the final §6.4.1 Person; EmailListItem.from stays `Person` until v1.3 adopts this.
+ * null = role unknown.
+ */
+export interface SenderPerson extends Person {
+  role_category: RoleCategory | null
+}

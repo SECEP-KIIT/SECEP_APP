@@ -114,3 +114,20 @@ The frontend mirrors `skip_lock`, `idle_minutes` and `motion` in `localStorage` 
 10. **Socket.io transport:** WebSocket only (`transports: ["websocket"]`), with no long-polling fallback. The access token goes in the handshake `auth` payload, never the URL. On `connect_error "unauthenticated"` the client refreshes once and reconnects.
 11. **Reveal re-auth in the mock:** `reauth_url` is `/api/v1/auth/google?reauth=1`, a browser navigation, which MSW's service worker does not intercept. The dev panel offers "Re-sign in" instead. Task 15 decides how the UI performs the Google round trip.
 12. **Card gap for task 6:** FR-UI-011 shows the sender's *role* on every card, but `EmailListItem` has no sender-role field (`role_category` exists only for users). A shape is needed before task 6, e.g. `from.role_category: RoleCategory | null`.
+
+## 8. Decisions after task 5 (2 Nov 2026)
+
+**Deviations accepted**
+1. **Hand-rolled Socket.IO mock** (`frontend/src/mocks/socketio.ts`) instead of `@mswjs/socket.io-binding`. The binding hardcodes the default namespace `/`, so a connect to `/ws` never completes. It also never sends engine.io pings, so socket.io-client drops the connection every ~30 s. The app still uses the real socket.io-client; a test connects it to the mock end to end.
+2. **socket.io-client is imported lazily** (`frontend/src/api/realtime.ts`). engine.io-client captures `globalThis.WebSocket` when its module is first evaluated, so a static import would load before MSW patches `WebSocket` and bypass the mock. As a side effect, socket.io-client (12.9 KB gz) moves out of the app chunk. M6 must keep the client config: WebSocket transport, path `/api/socket.io`, namespace `/ws`, token in the handshake `auth`.
+
+**Decisions**
+3. **Failed accept (FR-ORC-006): confirmed.**
+   - Jira 400/401 → `200` with the action at `status: "failed"` and Jira's message in `error`.
+   - Persistent 429/5xx (after retries honouring Retry-After) → `502 upstream_error`, `details { provider: "jira", status, message }`.
+   - To be written into §6.4.1 in v1.3 (replaces the "decision needed" in §7.4 above).
+4. **`email.triaged` payload: §6.4.1 is final.** The §6.5 WebSocket one-liner (`email.triaged {email_id, triage}`, and the matching lines for the other events) **must be reconciled to §6.4.1 in v1.3**.
+5. **`from.role_category`: PROPOSED only.** `EmailListItem.from` (a `Person`) gets `role_category: RoleCategory | null`, using the 7-role enum from §6.6 (`Executive, Manager, Engineer, Analyst, Consultant, Client-facing, Other`). `null` means the sender's role is unknown. It is needed for FR-UI-011 (sender role on every card). It is **not** folded into the final §6.4.1 `Person` shape until v1.3 adopts it. Typed as `SenderPerson` in the PROPOSED section of `frontend/src/api/types.ts`.
+6. **Model `metrics` shape (§7.2 above): stays PROPOSED.** Not demo-critical; to be reviewed before task 10.
+
+**Persistence scope, confirmed:** besides prefs, read state, actions, projects and layouts, the mock also persists label corrections and rules, admin users and settings (without secrets), models and the audit log. All of it sits under the same schema-version guard (discard and reseed on mismatch). Secret values and tokens are never persisted. The dev panel keeps a manual "Reset store" button.
