@@ -1,6 +1,9 @@
 // Dev-only control panel for the mock backend (Ctrl+Shift+D). Never in production builds: it is reachable only
 // through the dynamic import in main.tsx behind `import.meta.env.DEV && VITE_MOCK === '1'`.
 import { useEffect, useState, type CSSProperties } from 'react'
+import { api } from '../../api/client'
+import { queryClient } from '../../api/queries'
+import type { Me, PreferencesResponse, UiPrefs } from '../../api/types'
 import { control, setControl, type JiraMode } from '../control'
 import { runDemo, sendOne } from '../pipeline'
 import { currentSession, signIn, signOut } from '../session'
@@ -12,6 +15,19 @@ const box: CSSProperties = {
 }
 const row: CSSProperties = { display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', margin: '6px 0' }
 const btn: CSSProperties = { font: 'inherit', padding: '3px 8px', borderRadius: 6, border: '1px solid #5b6280', background: '#2a3048', color: 'inherit', cursor: 'pointer' }
+
+/**
+ * Sets ui_prefs.idle_minutes through the real PATCH /me/preferences, then puts the answer into the /me cache, so the
+ * shell passes it to the lock controller (lock.configure) exactly as a Settings change would (task 16).
+ */
+async function setIdle(idle_minutes: UiPrefs['idle_minutes']) {
+  const { ui_prefs } = await api<PreferencesResponse>('/me/preferences', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idle_minutes }),
+  })
+  queryClient.setQueryData<Me>(['me'], (me) => me && { ...me, ui_prefs: { ...ui_prefs } })
+}
 
 export function DevPanel() {
   const [open, setOpen] = useState(false)
@@ -72,6 +88,18 @@ export function DevPanel() {
       <div style={row}>
         <button style={btn} onClick={set(() => session && signIn(session.user_id))}>Re-sign in (Reveal window)</button>
         <button style={btn} onClick={set(signOut)}>Sign out</button>
+      </div>
+      <div style={row}>
+        Idle lock:
+        {([['1 min', 1], ['15 min', 15], ['off', null]] as const).map(([label, minutes]) => {
+          const current = session && db.users.find((u) => u.id === session.user_id)?.ui_prefs.idle_minutes
+          const active = (current === undefined ? 15 : current) === minutes
+          return (
+            <button key={label} style={{ ...btn, outline: active ? '2px solid #7aa2ff' : undefined }} onClick={() => void setIdle(minutes).then(refresh)}>
+              {label}
+            </button>
+          )
+        })}
       </div>
       <div style={row}>
         Jira:
