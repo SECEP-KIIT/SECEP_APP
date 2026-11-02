@@ -2,6 +2,7 @@
 // code (FR-WP-002). This module drives it. It is imported by both the boot entry and the app, and must stay ONE module
 // instance (one state machine); the build check in the README verifies Vite emits it once.
 import {
+  DONE_HOLD_MS,
   INITIAL,
   effectiveMotion,
   isIdle,
@@ -80,7 +81,7 @@ function render() {
     if (state.view !== 'open' && document.activeElement !== lock) lock.focus({ preventScroll: true })
   }
   const status = $('lock-status')
-  if (status) status.textContent = state.view === 'waiting' ? 'Loading SECEP…' : ''
+  if (status) status.textContent = state.view === 'waiting' ? 'Loading SECEP…' : state.view === 'done' ? 'SECEP is ready' : ''
 
   // Frosted bars only blur once the sheet has stopped moving: nothing may animate beneath a moving
   // backdrop-filter area (frontend-decisions item 9).
@@ -96,8 +97,11 @@ function render() {
 function dispatch(e: LockEvent) {
   const next = reduce(state, e)
   if (next === state) return
+  const entering = next.view === 'done' && state.view !== 'done'
   state = next
   render()
+  // Spinner → green tick → slide up: hold the tick briefly, then release into the dashboard.
+  if (entering) setTimeout(() => dispatch({ type: 'release' }), DONE_HOLD_MS)
 }
 
 const dateFmt = new Intl.DateTimeFormat(undefined, { weekday: 'long', day: 'numeric', month: 'long' })

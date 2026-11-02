@@ -17,11 +17,17 @@ describe('lock state (FR-WP-001–005)', () => {
     expect(reduce(ready, { type: 'request' }).view).toBe('open')
   })
 
-  it('shows Loading when asked early, then enters by itself when ready (FR-WP-003)', () => {
+  it('shows Loading when asked early, then the done tick, then enters by itself (FR-WP-003)', () => {
     const waiting = run([...steps(['app', 'me']), { type: 'request' }])
     expect(waiting.view).toBe('waiting')
     expect(reduce(waiting, { type: 'step', step: 'emails' }).view).toBe('waiting')
-    expect(run(steps(['emails', 'layout', 'socket']), waiting).view).toBe('open')
+    const done = run(steps(['emails', 'layout', 'socket']), waiting)
+    expect(done.view).toBe('done')
+    // Clicks, keys and idle during the tick change nothing; only the release opens.
+    expect(run([{ type: 'request' }, { type: 'idle' }, { type: 'auto', auto: true }], done).view).toBe('done')
+    expect(reduce(done, { type: 'release' })).toMatchObject({ view: 'open', entered: true })
+    // A stray release elsewhere is ignored.
+    expect(reduce(waiting, { type: 'release' })).toBe(waiting)
   })
 
   it('counts a step once', () => {

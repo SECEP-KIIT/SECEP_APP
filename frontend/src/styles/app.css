@@ -125,13 +125,11 @@ html[data-settled] .topbar {
   box-shadow: 12px 0 32px rgb(30 34 48 / 0.18);
 }
 .sidebar[data-collapsed] .nav-label,
-.sidebar[data-collapsed] .progress-ring,
 .sidebar[data-collapsed] .nav-heading {
   opacity: 0;
   transition: opacity var(--dur-fade) ease-in;
 }
 .sidebar[data-collapsed][data-peek] .nav-label,
-.sidebar[data-collapsed][data-peek] .progress-ring,
 .sidebar[data-collapsed][data-peek] .nav-heading {
   opacity: 1;
   transition: opacity var(--dur-peek) ease-out 60ms;
@@ -240,12 +238,18 @@ html[data-settled] .topbar {
 .progress-ring {
   flex-shrink: 0;
 }
-.progress-ring circle {
+.progress-ring-track,
+.progress-ring-value {
   fill: none;
   stroke-width: 2.5;
 }
+.progress-ring-value {
+  stroke-linecap: round;
+}
+/* The unfilled part is a faint full circle, so a 0 % ring still reads as a ring around the dot, not a solid dot. */
 .progress-ring-track {
-  stroke: var(--bar-hover);
+  stroke: currentColor;
+  opacity: 0.28;
 }
 .avatar {
   display: grid;
@@ -272,7 +276,14 @@ html[data-settled] .topbar {
   box-shadow: 0 0 16px 4px rgb(255 122 61 / 0.45);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 600ms ease-out;
+  transition:
+    opacity 600ms ease-out,
+    transform var(--dur-peek) ease-out;
+}
+/* The glow marks the sidebar's outer edge, so it follows the hover-peek out to the expanded width, in step with the
+   clip-path reveal (same duration and easing). Transform only. */
+.sidebar[data-collapsed][data-peek] .glow {
+  transform: translateX(calc(var(--sidebar-w) - var(--sidebar-collapsed-w)));
 }
 .sidebar[data-glow] .glow {
   opacity: 0.8;
@@ -420,8 +431,14 @@ html[data-motion='off'] .sync-dot {
   .sheet-content {
     grid-column: 1;
   }
+  /* Three zones in one row: left (title, clock) shrinks and truncates; search, bell and + keep their size. */
   .topbar {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: var(--space-2);
+    padding: 0 var(--space-3);
+  }
+  .topbar-right {
+    gap: var(--space-1);
   }
   .topbar-centre .search-pill {
     width: 34px;

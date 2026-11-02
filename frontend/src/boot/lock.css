@@ -11,11 +11,13 @@
   --fade: 180ms;
   --rise: 24px;
   --settle: 1.04;
+  --lock-ok: #237a37; /* done tick */
 }
 html[data-tone='dark'] {
   --lock-ink: #f6f7fb;
   --lock-ink-soft: rgb(246 247 251 / 0.84); /* ≥ 4.8:1 on every dark phase */
   --lock-card: rgb(20 24 38 / 0.5);
+  --lock-ok: #8ce99a;
 }
 /* Most reduction wins (lock-state.ts effectiveMotion); before JS runs, follow the OS unless the mirror says Full. */
 html[data-motion='reduced'] {
@@ -190,6 +192,38 @@ html[data-lock='open'] .lock {
 }
 html[data-lock='waiting'] .lock-loading {
   opacity: 0.6;
+}
+/* Done (lock-state DONE_HOLD_MS): the ring closes in green and a tick replaces the label, then the sheet rises. */
+html[data-lock='done'] .lock-loading {
+  opacity: 1;
+  color: var(--lock-ok);
+}
+.lock-loading .lock-tick {
+  inset: 12px auto auto 56px; /* centred in the 132 × 44 box */
+  opacity: 0;
+}
+.lock-tick path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+}
+html[data-lock='done'] .lock-loading-label {
+  opacity: 0;
+}
+html[data-lock='done'] .lock-loading .lock-tick {
+  opacity: 1;
+}
+html[data-lock='done'] .lock-tick path {
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 180ms ease-out;
+}
+html[data-motion='reduced'] .lock-tick path,
+html[data-motion='off'] .lock-tick path {
+  transition: none;
 }
 .lock-loading svg {
   position: absolute;

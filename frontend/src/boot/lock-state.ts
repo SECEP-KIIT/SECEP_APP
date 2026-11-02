@@ -4,8 +4,14 @@
 export type Step = 'app' | 'me' | 'emails' | 'layout' | 'socket'
 export const STEP_WEIGHTS: Record<Step, number> = { app: 40, me: 25, emails: 25, layout: 5, socket: 5 }
 
-/** locked: lock visible · waiting: the user asked to enter before ready, so show Loading · open: dashboard. */
-export type View = 'locked' | 'waiting' | 'open'
+/**
+ * locked: lock visible · waiting: the user asked to enter before ready, so show Loading · done: ready after waiting,
+ * the Loading box shows a green tick for a moment (DONE_HOLD_MS) before releasing · open: dashboard.
+ */
+export type View = 'locked' | 'waiting' | 'done' | 'open'
+
+/** How long the done tick stays before the sheet rises (spinner → tick → slide up). */
+export const DONE_HOLD_MS = 400
 
 export interface LockState {
   view: View
@@ -21,6 +27,7 @@ export type LockEvent =
   | { type: 'request' } // click or key press on the lock
   | { type: 'idle' }
   | { type: 'auto'; auto: boolean }
+  | { type: 'release' } // the done tick has been shown
 
 export const INITIAL: LockState = { view: 'locked', done: [], auto: false, entered: false }
 
@@ -35,17 +42,21 @@ export function reduce(s: LockState, e: LockEvent): LockState {
       if (s.done.includes(e.step)) return s
       const next = { ...s, done: [...s.done, e.step] }
       if (!isReady(next)) return next
-      // Ready: enter if the user already asked (FR-WP-003), or by itself on first boot when auto.
-      return next.view === 'waiting' || (next.auto && !next.entered) ? open(next) : next
+      // Ready. The user already asked (FR-WP-003): confirm with the done tick first, then release. Otherwise enter by
+      // itself on first boot when auto (nothing was shown loading, so there is nothing to confirm).
+      if (next.view === 'waiting') return { ...next, view: 'done' }
+      return next.auto && !next.entered ? open(next) : next
     }
     case 'request':
       if (s.view !== 'locked') return s
       return isReady(s) ? open(s) : { ...s, view: 'waiting' }
+    case 'release':
+      return s.view === 'done' ? open(s) : s
     case 'idle':
       return s.view === 'open' ? { ...s, view: 'locked' } : s
     case 'auto': {
       const next = { ...s, auto: e.auto }
-      return e.auto && !s.entered && s.view !== 'open' && isReady(next) ? open(next) : next
+      return e.auto && !s.entered && (s.view === 'locked' || s.view === 'waiting') && isReady(next) ? open(next) : next
     }
   }
 }

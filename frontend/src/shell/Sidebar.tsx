@@ -103,10 +103,9 @@ export function Sidebar() {
                 <li key={p.id}>
                   <NavLink to={`/projects/${p.id}`} className="nav-link">
                     <span className="nav-icon">
-                      <span className="project-dot" style={{ background: p.colour }} aria-hidden="true" />
+                      <ProgressRing done={p.progress.done} total={p.progress.total} colour={p.colour} />
                     </span>
                     <span className="nav-label">{p.name}</span>
-                    <ProgressRing done={p.progress.done} total={p.progress.total} colour={p.colour} />
                   </NavLink>
                 </li>
               ))}
