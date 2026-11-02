@@ -11,6 +11,7 @@ import {
   duplicateWidget,
   MAX_PAGES,
   movePage,
+  moveToSlot,
   patchWidget,
   removePage,
   removeWidget,
@@ -49,8 +50,14 @@ function Dashboard() {
   const { pages, isDefault, query, state, update } = useLayout(device, toast)
   const [activeId, setActiveId] = useState<string | null>(null)
   const [direction, setDirection] = useState<-1 | 1>(1)
-  const [editing, setEditing] = useState(false)
+  const [editing, setEditingState] = useState(false)
   const [gallery, setGallery] = useState(false)
+  // Phone edit mode: the widget picked to move (FR-UI-009).
+  const [selected, setSelected] = useState<string | null>(null)
+  const setEditing = (on: boolean) => {
+    setEditingState(on)
+    if (!on) setSelected(null)
+  }
 
   const sorted = pages ? sortedPages(pages) : []
   const index = Math.max(0, sorted.findIndex((p) => p.id === activeId))
@@ -61,6 +68,7 @@ function Dashboard() {
     if (!target || target.id === page?.id) return
     setDirection(i > index ? 1 : -1)
     setActiveId(target.id)
+    setSelected(null)
   }
   const goRef = useRef(go)
   useEffect(() => {
@@ -134,8 +142,7 @@ function Dashboard() {
   })
   const render = (id: string) => {
     const w = page.widgets.find((x) => x.id === id)
-    // Phones show the saved layout read-only until phone editing (task 8b): no menu, nothing that saves.
-    return w && <WidgetFrame widget={w} device={device} editing={editing} actions={actionsFor(w)} readOnly={phone} />
+    return w && <WidgetFrame widget={w} device={device} editing={editing} actions={actionsFor(w)} />
   }
 
   const newPage = () => {
@@ -185,12 +192,11 @@ function Dashboard() {
             <Plus size={14} aria-hidden="true" /> Add widget
           </button>
         )}
-        {!phone && (
-          <button type="button" className={editing ? 'primary-button' : 'ghost-button'} aria-pressed={editing} onClick={() => setEditing((e) => !e)}>
-            {editing ? <Check size={14} aria-hidden="true" /> : <LayoutGrid size={14} aria-hidden="true" />}
-            {editing ? 'Done' : 'Edit'}
-          </button>
-        )}
+        {/* On phones a long-press in a gap also enters edit mode; the button is the discoverable, accessible way. */}
+        <button type="button" className={editing ? 'primary-button' : 'ghost-button'} aria-pressed={editing} onClick={() => setEditing(!editing)}>
+          {editing ? <Check size={14} aria-hidden="true" /> : <LayoutGrid size={14} aria-hidden="true" />}
+          {editing ? 'Done' : 'Edit'}
+        </button>
       </div>
 
       <div className="dash-pages" onWheel={onWheel} onPointerDown={onPointerDown} onPointerUp={onPointerUp}>
@@ -198,10 +204,22 @@ function Dashboard() {
           {page.widgets.length === 0 ? (
             <div className="col-state">
               <p className="col-state-title">An empty page</p>
-              {phone ? <p>Add widgets on a larger screen for now.</p> : <p>Choose Edit, then Add widget.</p>}
+              <p>Choose Edit, then Add widget.</p>
             </div>
           ) : phone ? (
-            <PhonePage page={page} render={render} />
+            <PhonePage
+              page={page}
+              render={render}
+              editing={editing}
+              selected={selected}
+              onSelect={setSelected}
+              onEnterEdit={() => setEditing(true)}
+              onMove={(id, slot) => {
+                const next = moveToSlot(page, id, slot)
+                if (next) editPage(() => next)
+                setSelected(null)
+              }}
+            />
           ) : (
             <GridPage page={page} editing={editing} render={render} onLayout={(items) => {
               const next = applyGrid(page, items)
@@ -218,12 +236,10 @@ function Dashboard() {
             <span className="dot-pill">{p.name}</span>
           </button>
         ))}
-        {!phone && (
-          <button type="button" className="page-dot page-add" onClick={newPage} title="Add a page" disabled={sorted.length >= MAX_PAGES}>
-            <Plus size={12} aria-hidden="true" />
-            <span className="sr-only">Add a page</span>
-          </button>
-        )}
+        <button type="button" className="page-dot page-add" onClick={newPage} title="Add a page" disabled={sorted.length >= MAX_PAGES}>
+          <Plus size={12} aria-hidden="true" />
+          <span className="sr-only">Add a page</span>
+        </button>
       </nav>
 
       <Gallery

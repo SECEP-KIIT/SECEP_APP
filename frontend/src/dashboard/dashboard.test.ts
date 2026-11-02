@@ -12,7 +12,7 @@ import { filterError } from '../mocks/routes/emails'
 import { signIn } from '../mocks/session'
 import { STARTERS, starterLayout } from '../mocks/starters'
 import { db, initStore } from '../mocks/store/db'
-import { firstFit, freeSlots, phoneRowsFor } from './grid'
+import { firstFit, freeSlots, ghostSlots, overlaps, phoneRowsFor } from './grid'
 import {
   addPage,
   addWidget,
@@ -58,10 +58,24 @@ describe('grid geometry', () => {
     expect(freeSlots([{ x: 0, y: 0, w: 2, h: 2 }])).toHaveLength(4)
   })
 
+  it('phone ghost slots (8b): sized to the picked widget, never overlapping each other or other widgets', () => {
+    const big = { id: 'a', x: 0, y: 0, w: 2, h: 2 }
+    const small = { id: 'b', x: 0, y: 2, w: 1, h: 1 }
+    const ghosts = ghostSlots([big, small], small)
+    expect(ghosts).toEqual([{ x: 1, y: 2 }, { x: 0, y: 3 }, { x: 1, y: 3 }])
+    // A tall widget: candidates at y = 1 and y = 2 would overlap each other, so only one survives per column.
+    const tall = { id: 'c', x: 0, y: 0, w: 1, h: 2 }
+    const g = ghostSlots([tall], tall).map((p) => ({ ...p, w: 1, h: 2 }))
+    for (const [i, a] of g.entries()) for (const b of g.slice(i + 1)) expect(overlaps(a, b)).toBe(false)
+    expect(g.some((p) => p.x === 0 && p.y === 0)).toBe(false) // where it already is
+    expect(ghostSlots([big, { id: 'd', x: 0, y: 2, w: 2, h: 2 }], big)).toEqual([]) // nowhere to go
+  })
+
   it('short phone screens show 3 rows instead of cramming 4 (360 × 480)', () => {
-    // 480 px tall minus the topbar, tab bar, page bar and dots leaves about 300 px for slots.
-    expect(phoneRowsFor(300, 12, 132)).toBe(3)
-    expect(phoneRowsFor(600, 12, 132)).toBe(4)
+    // 360 × 480: 480 minus the topbar (56), tab bar (~58), padding (16), page bar (28 + 8) and dots (24 + 8) ≈ 282.
+    expect(phoneRowsFor(282, 12, 110)).toBe(3)
+    // 360 × 740 ≈ 542: four rows of about 126 px.
+    expect(phoneRowsFor(542, 12, 110)).toBe(4)
   })
 })
 

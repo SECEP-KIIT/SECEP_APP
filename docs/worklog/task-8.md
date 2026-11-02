@@ -1,4 +1,4 @@
-# Task 8: Tiling dashboard (frontend-decisions item 2; FR-UI-006–010): HALTED at planning
+# Task 8: Tiling dashboard (frontend-decisions item 2; FR-UI-006–010): plan
 
 **Status:** decided on 2 Nov 2026 (proposals §13a). Built in 8a (`task-8a.md`) and 8b (`task-8b.md`). The plan below is kept for reference.
 

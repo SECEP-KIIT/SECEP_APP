@@ -59,3 +59,22 @@ export function freeSlots(taken: Box[]): { x: number; y: number }[] {
 export function phoneRowsFor(availableHeight: number, gap: number, minRow: number): 3 | 4 {
   return (availableHeight - 3 * gap) / 4 >= minRow ? 4 : 3
 }
+
+/**
+ * Where a picked phone widget could move (FR-UI-009 ghost outlines, sized to the widget): every top-left at which it
+ * fits without the others, minus where it is now. Ghosts overlapping an earlier ghost are dropped, so the outlines
+ * never overlap each other and each tap target is unambiguous.
+ */
+export function ghostSlots(widgets: (Box & { id: string })[], picked: Box & { id: string }): { x: number; y: number }[] {
+  const others = widgets.filter((w) => w.id !== picked.id)
+  const out: Box[] = []
+  for (let y = 0; y + picked.h <= PHONE_ROWS; y++) {
+    for (let x = 0; x + picked.w <= PHONE_COLS; x++) {
+      const box = { x, y, w: picked.w, h: picked.h }
+      if (x === picked.x && y === picked.y) continue
+      if (others.some((o) => overlaps(o, box)) || out.some((g) => overlaps(g, box))) continue
+      out.push(box)
+    }
+  }
+  return out.map(({ x, y }) => ({ x, y }))
+}

@@ -295,7 +295,7 @@ interface EmailFilter {
 - **Owner-only:** the row is keyed by the caller's user id from the token, and no request can name another user. Contract test: `layouts are owner-only`.
 - **Grid units:**
   - **Desktop and tablet:** 12 columns, with 12 rows per screen. The row height follows the page height, and taller pages scroll.
-  - **Phone:** 2 × 4 slots (`w`, `h` ∈ {1, 2}). The row height comes from the available height, and when a row would be under 132 px, 3 rows show at a time and the 4th is a snap-scroll away.
+  - **Phone:** 2 × 4 slots (`w`, `h` ∈ {1, 2}). The row height comes from the available height: 4 rows when each gets at least 110 px, otherwise 3 rows fill the screen and the 4th is a snap-scroll away.
 - **Breakpoints:** one constant in `src/lib/breakpoints.ts`: phone ≤ 640, tablet 641–1023, desktop ≥ 1024. The layout device class, the idle lock and all CSS read it. The CSS selects on `<html data-device>`, and a test forbids width media queries.
 - **Routing:** `/` is the paged dashboard. `/inbox` is the independent single-column view, and one commented line in `App.tsx` points `/` back at it. ⤢ on a tile opens `/inbox?<filter>&sort=…`.
 

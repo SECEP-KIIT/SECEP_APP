@@ -24,14 +24,7 @@ export interface WidgetActions {
  * double-click on the title), Colour, Icon, Size, Duplicate, Remove. Only inbox columns are built; any other saved
  * type shows a placeholder until its task lands.
  */
-export function WidgetFrame({ widget, device, editing, actions, readOnly = false }: {
-  widget: Widget
-  device: LayoutDeviceClass
-  editing: boolean
-  actions: WidgetActions
-  /** No menu, no rename: the saved layout as is (phones until phone editing exists). */
-  readOnly?: boolean
-}) {
+export function WidgetFrame({ widget, device, editing, actions }: { widget: Widget; device: LayoutDeviceClass; editing: boolean; actions: WidgetActions }) {
   const [menu, setMenu] = useState(false)
   const [renaming, setRenaming] = useState(false)
   const title = widgetTitle(widget)
@@ -40,12 +33,11 @@ export function WidgetFrame({ widget, device, editing, actions, readOnly = false
   // Long-press on the title bar opens the menu on touch (FR-UI-008).
   const press = useRef(0)
   const onPointerDown = (e: PointerEvent) => {
-    if (readOnly || e.pointerType === 'mouse') return
+    if (e.pointerType === 'mouse') return
     press.current = window.setTimeout(() => setMenu(true), LONG_PRESS_MS)
   }
   const cancelPress = () => clearTimeout(press.current)
   const onContextMenu = (e: MouseEvent) => {
-    if (readOnly) return
     e.preventDefault()
     setMenu(true)
   }
@@ -66,7 +58,7 @@ export function WidgetFrame({ widget, device, editing, actions, readOnly = false
           }}
         />
       ) : (
-        <h2 className="col-title widget-title" id={titleId} tabIndex={-1} onDoubleClick={() => !readOnly && setRenaming(true)} title={readOnly ? undefined : 'Double-click to rename'}>
+        <h2 className="col-title widget-title" id={titleId} tabIndex={-1} onDoubleClick={() => setRenaming(true)} title="Double-click to rename">
           {title}
         </h2>
       )}
@@ -81,7 +73,6 @@ export function WidgetFrame({ widget, device, editing, actions, readOnly = false
           <span className="sr-only">Open {title} as full view</span>
         </Link>
       )}
-      {!readOnly && (
       <WidgetMenu
         widget={widget}
         device={device}
@@ -93,7 +84,6 @@ export function WidgetFrame({ widget, device, editing, actions, readOnly = false
         }}
         actions={actions}
       />
-      )}
     </span>
   )
 

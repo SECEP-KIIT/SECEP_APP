@@ -438,6 +438,18 @@ html[data-motion='off'] .dash[data-editing] .widget > .column {
   color: var(--ink-muted);
 }
 
+/* Phone: denser chrome around the slots, so short screens give the slots every pixel they can. */
+html[data-device='phone'] .dash {
+  gap: var(--space-2);
+  margin: calc(-1 * var(--space-2));
+}
+html[data-device='phone'] .dash-bar {
+  min-height: 28px;
+}
+html[data-device='phone'] .page-dots {
+  min-height: 24px;
+}
+
 /* ── Phone slot pages (FR-UI-009) ──────────────────────────────────────────────────────────────────────── */
 .phone-page {
   height: 100%;
@@ -455,9 +467,72 @@ html[data-motion='off'] .dash[data-editing] .widget > .column {
   gap: var(--slot-gap);
 }
 .phone-slot {
+  position: relative;
   min-width: 0;
   min-height: 0;
   scroll-snap-align: start;
+}
+
+/* Phone edit mode (FR-UI-009): the widget body becomes a pick target (the title bar keeps its ⋯ menu); the picked
+   widget gets a thick outline plus a check badge (shape, not colour alone); ghost outlines show where it fits. */
+.slot-pick {
+  position: absolute;
+  inset: 44px 0 0;
+  z-index: 2;
+  border: 0;
+  border-radius: 0 0 var(--tile-radius) var(--tile-radius);
+  background: rgb(255 255 255 / 0.35);
+}
+.slot-pick:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+.phone-slot[data-selected] > .widget > .column {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+  animation: none;
+}
+.phone-slot[data-selected]::after {
+  content: '✓';
+  position: absolute;
+  top: -8px;
+  right: -6px;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.ghost-slot {
+  z-index: 4;
+  min-height: 0;
+  border: 2px dashed var(--accent);
+  border-radius: var(--tile-radius);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  animation: page-fade var(--dur-menu) ease-out;
+}
+.ghost-slot:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.phone-page[data-editing] .phone-slot:not([data-selected]) > .widget > .column {
+  outline: 1px dashed var(--line-strong);
+  outline-offset: 2px;
+  animation: jiggle 260ms ease-in-out infinite alternate;
+}
+html[data-motion='reduced'] .phone-page[data-editing] .phone-slot > .widget > .column,
+html[data-motion='off'] .phone-page[data-editing] .phone-slot > .widget > .column {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-motion]) .phone-page[data-editing] .phone-slot > .widget > .column {
+    animation: none;
+  }
 }
 .phone-slot > .widget > .column[data-variant='stack'] .col-head {
   padding: var(--space-2);
