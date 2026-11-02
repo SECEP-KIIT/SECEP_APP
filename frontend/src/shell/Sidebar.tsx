@@ -74,7 +74,7 @@ export function Sidebar() {
             const showCritical = to === '/inbox' && critical > 0
             return (
               <li key={to}>
-                <NavLink to={to} className="nav-link">
+                <NavLink to={to} end={to === '/'} className="nav-link">
                   <span className="nav-icon">
                     <Icon aria-hidden="true" size={20} />
                     {showCritical && <span className="crit-dot" aria-hidden="true" />}

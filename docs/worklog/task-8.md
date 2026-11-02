@@ -1,6 +1,6 @@
 # Task 8: Tiling dashboard (frontend-decisions item 2; FR-UI-006–010): HALTED at planning
 
-**Status:** halted under halt-don't-invent. The layout wire shape (`GET`/`PUT /layouts/:deviceClass`) isn't in §6.4.1. The gaps and a concrete proposal are in **proposals §13**. No task-8 code exists; only this plan and the proposal are committed.
+**Status:** decided on 2 Nov 2026 (proposals §13a). Built in 8a (`task-8a.md`) and 8b (`task-8b.md`). The plan below is kept for reference.
 
 ## Plan (ready to build once §13 is decided)
 

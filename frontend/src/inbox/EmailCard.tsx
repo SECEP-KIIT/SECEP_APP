@@ -1,5 +1,5 @@
 import { Pin } from 'lucide-react'
-import { memo, useState, type KeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react'
+import { memo, useId, useState, type KeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import type { EmailListItem } from '../api/types'
 import { MaskedText } from '../components/MaskedText'
 import { cardTags, cardTime, senderName, senderRole, visibleTags, type CardTag, type Density, type FilterPatch } from './cardModel'
@@ -29,7 +29,8 @@ interface Props {
 export const EmailCard = memo(function EmailCard({ email, now, density, fresh, onFilter }: Props) {
   const triage = email.triage
   const role = senderRole(email)
-  const subjectId = `subj-${email.id}`
+  // Per card instance: the same email can sit in several columns on one dashboard page.
+  const subjectId = useId()
   const { open } = useInbox()
   const [leaving, setLeaving] = useState(false)
   const filter = (patch: FilterPatch) => (e: ReactMouseEvent) => {

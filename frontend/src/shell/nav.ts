@@ -1,4 +1,4 @@
-import { CalendarDays, ChartColumn, Inbox, ShieldAlert, SquareKanban, type LucideIcon } from 'lucide-react'
+import { CalendarDays, ChartColumn, Inbox, LayoutGrid, ShieldAlert, SquareKanban, type LucideIcon } from 'lucide-react'
 import type { Glance, Me } from '../api/types'
 
 export interface NavItem {
@@ -15,7 +15,9 @@ export const isAdmin = (me: Me) => me.is_admin
 
 // FR-UI-002 top section. Shared by the sidebar and the phone tab bar, so both apply the same gating.
 // Hiding is a convenience only: the API enforces RBAC and returns 403 regardless (FR-ADM-005).
+// Home (the paged dashboard at /, task 8) leads the list; flagged in the task 8 worklog as an addition to FR-UI-002.
 export const NAV: NavItem[] = [
+  { to: '/', label: 'Home', icon: LayoutGrid },
   { to: '/inbox', label: 'Inbox', icon: Inbox, count: (g) => g.counts.inbox_unread },
   { to: '/board', label: 'Board', icon: SquareKanban, count: (g) => g.counts.board_todo },
   { to: '/calendar', label: 'Calendar', icon: CalendarDays },

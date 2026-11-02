@@ -65,17 +65,43 @@ const matchesKeywords = (e: EmailRow, q: string) => {
   return q.toLowerCase().split(/\s+/).filter(Boolean).every((term) => hay.includes(term))
 }
 
-function filtered(user: { id: string }, url: URL) {
+/** The GET /emails filter parameters (§6.4.1 plus the PROPOSED view), parsed and checked. Throws Fail like the route. */
+function parseFilters(url: URL) {
   // OR within a parameter, AND across parameters (§6.4.1).
-  const type = csv(url, 'type', TYPES)
-  const urgency = csv(url, 'urgency', URGENCIES)
-  const sentiment = csv(url, 'sentiment', SENTIMENTS)
-  const flag = csv(url, 'flag', FLAGS)
-  const sender = url.searchParams.get('sender')?.trim().toLowerCase() || null
-  const after = dateParam(url, 'received_after')
-  const before = dateParam(url, 'received_before')
+  return {
+    type: csv(url, 'type', TYPES),
+    urgency: csv(url, 'urgency', URGENCIES),
+    sentiment: csv(url, 'sentiment', SENTIMENTS),
+    flag: csv(url, 'flag', FLAGS),
+    sender: url.searchParams.get('sender')?.trim().toLowerCase() || null,
+    after: dateParam(url, 'received_after'),
+    before: dateParam(url, 'received_before'),
+    view: views(url),
+  }
+}
+
+/** The parameters a saved column filter may hold: GET /emails filters only, no sort, cursor, limit or q. */
+export const FILTER_PARAMS = ['type', 'urgency', 'sentiment', 'flag', 'sender', 'received_after', 'received_before', 'view'] as const
+
+/**
+ * Checks a widget filter (proposals §13) with the same parser GET /emails uses, so there is one vocabulary.
+ * Returns an error message, or null when it is valid.
+ */
+export function filterError(filter: string): string | null {
+  const url = new URL(`http://x/?${filter}`)
+  const extra = [...url.searchParams.keys()].find((k) => !(FILTER_PARAMS as readonly string[]).includes(k))
+  if (extra) return `Not a filter parameter: ${extra}`
+  try {
+    parseFilters(url)
+    return null
+  } catch (err) {
+    return err instanceof Fail ? err.message : 'Invalid filter'
+  }
+}
+
+function filtered(user: { id: string }, url: URL) {
+  const { type, urgency, sentiment, flag, sender, after, before, view } = parseFilters(url)
   const q = url.searchParams.get('q')?.trim() || null
-  const view = views(url)
   const today = localDate(new Date().toISOString())
   // The S parameters (project, due, status, pinned, snoozed, tag) are accepted and ignored until built (§6.4.1).
   const order = sorter(url)

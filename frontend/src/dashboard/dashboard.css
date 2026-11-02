@@ -1,0 +1,473 @@
+/* Paged dashboard (FR-UI-006–010, item 2). Lazy chunk with the Dashboard route. Motion: transform and opacity only. */
+.dash {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  height: 100%;
+  min-height: 0;
+  /* A sideways swipe changes pages and never triggers browser Back (FR-UI-007). */
+  overscroll-behavior-x: contain;
+}
+.dash-loading {
+  min-height: 60vh;
+}
+
+/* ── Top bar: page name, save state, edit ─────────────────────────────────────────────────────────────── */
+.dash-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.dash-title {
+  font-size: 1rem;
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dash-page-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.dash-page-name {
+  width: 14em;
+  max-width: 40vw;
+  height: 30px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--card-bg);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+}
+.dash-save {
+  margin-left: auto;
+  color: var(--ink-muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+.dash-save[data-state='error'] {
+  color: var(--tag-danger-fg);
+  font-weight: 600;
+}
+
+/* ── Pages: only the active one renders; it slides in from the side it came from ───────────────────────── */
+.dash-pages {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  touch-action: pan-y;
+}
+.dash-page {
+  height: 100%;
+  min-height: 0;
+  animation: page-in 200ms ease-out;
+}
+.dash-page[data-direction='-1'] {
+  animation-name: page-in-left;
+}
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateX(32px);
+  }
+}
+@keyframes page-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-32px);
+  }
+}
+html[data-motion='reduced'] .dash-page {
+  animation: page-fade 100ms ease-out;
+}
+html[data-motion='off'] .dash-page {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-motion]) .dash-page {
+    animation: page-fade 100ms ease-out;
+  }
+}
+@keyframes page-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/* ── Desktop and tablet grid ───────────────────────────────────────────────────────────────────────────── */
+.grid-page {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.grid-item > .widget {
+  height: 100%;
+}
+.grid-page .react-grid-placeholder {
+  border-radius: var(--tile-radius);
+  background: var(--accent);
+  opacity: 0.15;
+}
+
+/* ── Widget frame: colour tints the title bar and draws a thin left stripe (FR-UI-008) ─────────────────── */
+.widget {
+  --swatch: transparent;
+  position: relative;
+  height: 100%;
+  min-height: 0;
+}
+.widget > .column {
+  max-width: none;
+  overflow: hidden;
+}
+.widget[data-swatch] > .column {
+  border-left: 3px solid var(--swatch);
+}
+.widget[data-swatch] .col-head {
+  background: color-mix(in srgb, var(--swatch) 9%, transparent);
+}
+.widget[data-swatch='slate'] { --swatch: #5c677d; }
+.widget[data-swatch='blue'] { --swatch: #3b5bdb; }
+.widget[data-swatch='teal'] { --swatch: #0c8599; }
+.widget[data-swatch='green'] { --swatch: #2b8a3e; }
+.widget[data-swatch='amber'] { --swatch: #e09f00; }
+.widget[data-swatch='orange'] { --swatch: #e8590c; }
+.widget[data-swatch='red'] { --swatch: #e03131; }
+.widget[data-swatch='violet'] { --swatch: #7048e8; }
+
+.widget-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.widget-icon {
+  flex: none;
+  font-size: 1rem;
+  line-height: 1;
+}
+.widget-title {
+  min-width: 0;
+}
+.widget-rename {
+  min-width: 0;
+  flex: 1;
+  height: 28px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--card-bg);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+}
+.widget-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.widget-placeholder .col-state {
+  padding: var(--space-4);
+}
+
+/* Edit mode (iOS jiggle, item 2): tiles move by their title bar. The wobble is a small rotation (transform only),
+   off under reduced motion. */
+.dash[data-editing] .widget-bar {
+  cursor: grab;
+}
+.dash[data-editing] .widget > .column {
+  outline: 1px dashed var(--line-strong);
+  outline-offset: 2px;
+  animation: jiggle 260ms ease-in-out infinite alternate;
+}
+.dash[data-editing] .grid-item:nth-child(2n) .widget > .column {
+  animation-delay: -130ms;
+}
+@keyframes jiggle {
+  from {
+    transform: rotate(-0.25deg);
+  }
+  to {
+    transform: rotate(0.25deg);
+  }
+}
+html[data-motion='reduced'] .dash[data-editing] .widget > .column,
+html[data-motion='off'] .dash[data-editing] .widget > .column {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-motion]) .dash[data-editing] .widget > .column {
+    animation: none;
+  }
+}
+
+/* ── Widget menu ───────────────────────────────────────────────────────────────────────────────────────── */
+.widget-menu {
+  width: 272px;
+  display: grid;
+  gap: var(--space-2);
+}
+.menu-group {
+  display: grid;
+  gap: var(--space-1);
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.menu-group legend {
+  color: var(--ink-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-bottom: var(--space-1);
+}
+.swatches {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2px;
+}
+.swatch,
+.size-choice,
+.icon-choice {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: var(--ink);
+  font-size: 0.75rem;
+}
+.swatch {
+  justify-content: flex-start;
+}
+.swatch:hover,
+.size-choice:hover,
+.icon-choice:hover {
+  background: var(--tag-muted-bg);
+}
+.swatch[aria-pressed='true'],
+.size-choice[aria-pressed='true'],
+.icon-choice[aria-pressed='true'] {
+  border-color: var(--accent);
+  font-weight: 650;
+}
+.swatch-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  background: var(--swatch, transparent);
+}
+.swatch[data-swatch='slate'] { --swatch: #5c677d; }
+.swatch[data-swatch='blue'] { --swatch: #3b5bdb; }
+.swatch[data-swatch='teal'] { --swatch: #0c8599; }
+.swatch[data-swatch='green'] { --swatch: #2b8a3e; }
+.swatch[data-swatch='amber'] { --swatch: #e09f00; }
+.swatch[data-swatch='orange'] { --swatch: #e8590c; }
+.swatch[data-swatch='red'] { --swatch: #e03131; }
+.swatch[data-swatch='violet'] { --swatch: #7048e8; }
+.icon-grid {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 2px;
+}
+.icon-choice {
+  padding: 0;
+  font-size: 1rem;
+}
+.size-choices {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2px;
+}
+.menu-note {
+  color: var(--ink-muted);
+  font-size: 0.75rem;
+}
+.menu-item-danger {
+  color: var(--tag-danger-fg);
+}
+
+/* ── Page dots: hover shows every page's name as a pill above its dot (FR-UI-007) ─────────────────────── */
+.page-dots {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 2px;
+  min-height: 28px;
+}
+.page-dot {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--ink-muted);
+}
+.page-dot .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ink-muted);
+}
+/* The current page is a filled dot (shape, not colour alone). */
+.page-dot[aria-current='page'] .dot {
+  background: var(--ink);
+  border-color: var(--ink);
+}
+.dot-pill {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--card-bg);
+  color: var(--ink);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, 4px);
+  transition:
+    opacity var(--dur-fade) ease-in,
+    transform var(--dur-fade) ease-in;
+}
+.page-dots:hover .dot-pill,
+.page-dot:focus-visible .dot-pill {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  transition:
+    opacity var(--dur-menu) ease-out var(--hover-intent),
+    transform var(--dur-menu) ease-out var(--hover-intent);
+}
+.page-dot[aria-current='page'] .dot-pill {
+  border-color: var(--ink);
+}
+.page-dot:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+.page-add {
+  border: 1px dashed var(--line-strong);
+  width: 20px;
+  height: 20px;
+  margin-left: var(--space-1);
+}
+.page-add:disabled {
+  opacity: 0.4;
+}
+
+/* ── Gallery ───────────────────────────────────────────────────────────────────────────────────────────── */
+.gallery {
+  width: min(720px, calc(100vw - 32px));
+  max-height: min(80vh, 720px);
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--tile-radius);
+  background: var(--card-bg);
+  color: var(--ink);
+  font-size: 0.875rem;
+}
+.gallery::backdrop {
+  background: rgb(20 24 36 / 0.18);
+}
+.gallery-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-2);
+}
+.gallery-head h2 {
+  font-size: 1rem;
+}
+.gallery-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  list-style: none;
+  padding: 0;
+}
+.gallery-item {
+  display: grid;
+  gap: var(--space-2);
+  width: 100%;
+  height: 100%;
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--tile-radius);
+  background: var(--col-bg);
+  color: var(--ink);
+  text-align: left;
+}
+.gallery-item:hover {
+  border-color: var(--accent);
+}
+.gallery-item:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.gallery-item-head {
+  font-weight: 650;
+}
+.gallery-preview {
+  display: grid;
+  gap: 2px;
+  min-height: 3.6em;
+  font-size: 0.75rem;
+}
+.gallery-preview-line {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--ink-muted);
+}
+
+/* ── Phone slot pages (FR-UI-009) ──────────────────────────────────────────────────────────────────────── */
+.phone-page {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+/* Short screen: three rows fit; the fourth is a snap-scroll away instead of squeezing all four. */
+.phone-page[data-rows='3'] {
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  overscroll-behavior-y: contain;
+}
+.phone-slots {
+  display: grid;
+  gap: var(--slot-gap);
+}
+.phone-slot {
+  min-width: 0;
+  min-height: 0;
+  scroll-snap-align: start;
+}
+.phone-slot > .widget > .column[data-variant='stack'] .col-head {
+  padding: var(--space-2);
+}
+.column[data-variant='stack'] .col-scroll {
+  scroll-snap-type: y mandatory;
+}
+.column[data-variant='stack'] .col-row {
+  scroll-snap-align: start;
+}
+.stack-counter {
+  margin-left: auto;
+}

@@ -325,6 +325,19 @@ describe('GET /emails query (§6.4.1)', () => {
     expect(await unread()).toContain(email.id)
   })
 
+  it('layouts are owner-only (proposals §13): keyed by the caller, never another user', async () => {
+    const demo = await login()
+    const start = (await call('GET', '/layouts/desktop', { token: demo })).json
+    const put = await call('PUT', '/layouts/desktop', { token: demo, body: { pages: [{ ...start.pages[0], name: 'Demo only' }], base_updated_at: null } })
+    expect(put.status).toBe(200)
+    const sam = await login('sam')
+    expect((await call('GET', '/layouts/desktop', { token: sam })).json).toMatchObject({ is_default: true })
+    // Sam saving doesn't touch the demo user's layout.
+    expect((await call('PUT', '/layouts/desktop', { token: sam, body: { pages: start.pages, base_updated_at: null } })).status).toBe(200)
+    expect((await call('GET', '/layouts/desktop', { token: await login() })).json.pages[0].name).toBe('Demo only')
+    expect((await call('GET', '/layouts/desktop', {})).status).toBe(401)
+  })
+
   it('keyword search runs over masked text only (FR-UI-026)', async () => {
     const token = await login()
     db.handled.clear() // search the whole mailbox; handled mail is otherwise outside the default inbox

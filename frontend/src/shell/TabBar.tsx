@@ -15,7 +15,7 @@ export function TabBar() {
       {visibleNav(me)
         .slice(0, 4)
         .map(({ to, label, icon: Icon }) => (
-          <NavLink key={to} to={to} className="tab">
+          <NavLink key={to} to={to} end={to === '/'} className="tab">
             <span className="nav-icon">
               <Icon aria-hidden="true" size={22} />
               {to === '/inbox' && critical > 0 && <span className="crit-dot" aria-hidden="true" />}

@@ -11,6 +11,9 @@ import type {
   GoResponse,
   EmailListItem,
   Glance,
+  Layout,
+  LayoutDeviceClass,
+  LayoutPut,
   LabelCorrection,
   LabelCorrectionResponse,
   Me,
@@ -223,3 +226,19 @@ export function useUpdatePreferences() {
     },
   })
 }
+
+// ── Layouts (FR-UI-010; PROPOSED, proposals §13) ──────────────────────────────────────────────────────────────
+
+/** GET /layouts/:deviceClass. Never refetched on its own: the dashboard owns the local copy while editing. */
+export const layoutOptions = (device: LayoutDeviceClass) =>
+  queryOptions({
+    queryKey: ['layout', device],
+    queryFn: ({ signal }) => api<Layout>(`/layouts/${device}`, { signal }),
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  })
+
+/** PUT /layouts/:deviceClass: a full replace, based on the version the edit started from (409 if it moved on). */
+export const putLayout = (device: LayoutDeviceClass, body: LayoutPut) =>
+  api<Layout>(`/layouts/${device}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })

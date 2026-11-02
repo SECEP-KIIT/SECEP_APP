@@ -52,11 +52,11 @@ describe('focus mode keys (FR-UI-004)', () => {
 describe('nav gating (sidebar and tab bar share it)', () => {
   const user = { ...me, is_admin: false, permissions: [] } satisfies Me
   it('hides Security without security.review and Metrics without admin', () => {
-    expect(visibleNav(user).map((i) => i.label)).toEqual(['Inbox', 'Board', 'Calendar'])
+    expect(visibleNav(user).map((i) => i.label)).toEqual(['Home', 'Inbox', 'Board', 'Calendar'])
     expect(visibleNav(me).map((i) => i.label)).toEqual(NAV.map((i) => i.label))
   })
   it('shows only ungated items before /me arrives', () => {
-    expect(visibleNav(undefined).map((i) => i.label)).toEqual(['Inbox', 'Board', 'Calendar'])
+    expect(visibleNav(undefined).map((i) => i.label)).toEqual(['Home', 'Inbox', 'Board', 'Calendar'])
   })
 })
 

@@ -1,6 +1,7 @@
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { useEffect } from 'react'
-import { DEFAULT_COLUMN_QUERY, emailListOptions, queryClient, useMe } from '../api/queries'
+import { DEFAULT_COLUMN_QUERY, emailListOptions, layoutOptions, queryClient, useMe } from '../api/queries'
+import { currentDevice } from '../lib/breakpoints'
 import { connectRealtime } from '../api/realtime'
 import { lock } from '../boot/lock'
 
@@ -16,8 +17,8 @@ export function useBootSteps() {
   useEffect(() => {
     // The shell renders only after the router has loaded the matched route chunks: the app JS is in.
     lock.step('app')
-    // Not built yet: the layout (task 8) is counted as done until it exists.
-    lock.step('layout')
+    // The dashboard layout for this device class (FR-UI-010), so / opens with its pages ready.
+    void queryClient.fetchQuery(layoutOptions(currentDevice())).finally(() => lock.step('layout'))
     // The socket connects once for the app's lifetime (idempotent, so StrictMode's double effect is harmless).
     connectRealtime(queryClient, () => lock.step('socket'))
   }, [])

@@ -1,0 +1,118 @@
+// Layouts (FR-UI-010; PROPOSED shape, proposals §13). One saved layout per user and device class. Owner-only by
+// construction: the row is keyed by the caller's id from the token, so no request can name another user's layout.
+import type { Layout, LayoutDeviceClass, LayoutPage, Widget, WidgetType } from '../../api/types'
+import { GRID_COLS, GRID_MAX_H, overlaps, PHONE_COLS, PHONE_ROWS } from '../../dashboard/grid'
+import { Fail, route } from '../http/route'
+import { isDateTime, isInt, object, type Fields } from '../http/validate'
+import { starterLayout } from '../starters'
+import { changed, db } from '../store/db'
+import { filterError } from './emails'
+
+const DEVICES: LayoutDeviceClass[] = ['desktop', 'tablet', 'phone']
+const TYPES: WidgetType[] = ['inbox_column', 'board', 'projects', 'reminders', 'calendar', 'notes', 'stats', 'security']
+const SWATCHES = ['slate', 'blue', 'teal', 'green', 'amber', 'orange', 'red', 'violet']
+const SORTS = ['smart', 'newest', 'oldest', 'due', 'urgency', 'sender', 'confidence']
+const DENSITIES = ['compact', 'comfortable', 'spacious']
+const WIDGET_KEYS = ['id', 'type', 'x', 'y', 'w', 'h', 'title', 'colour', 'icon', 'filter', 'sort', 'density']
+/** Caps (task 8 decision): Ctrl+1…9 reaches every page. */
+export const MAX_PAGES = 9
+export const MAX_WIDGETS = 24
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+/** One emoji (a single grapheme that is pictographic), e.g. "🔥" or "🛡️". */
+const isEmoji = (v: unknown) =>
+  typeof v === 'string' && v.length <= 16 && [...segmenter.segment(v)].length === 1 && /\p{Extended_Pictographic}/u.test(v)
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
+
+function device(params: { deviceClass: string }): LayoutDeviceClass {
+  const d = params.deviceClass as LayoutDeviceClass
+  if (!DEVICES.includes(d)) throw new Fail(400, 'bad_request', 'deviceClass must be desktop, tablet or phone')
+  return d
+}
+
+function checkWidget(f: Fields, at: string, w: unknown, dc: LayoutDeviceClass, ids: Set<string>) {
+  if (!isRecord(w)) return f.add(at, 'Expected an object')
+  for (const k of Object.keys(w)) if (!WIDGET_KEYS.includes(k)) f.add(`${at}.${k}`, 'Unknown field')
+  for (const k of WIDGET_KEYS) if (!(k in w)) f.add(`${at}.${k}`, 'Required')
+  if (typeof w.id !== 'string' || !UUID.test(w.id)) f.add(`${at}.id`, 'Must be a uuid')
+  else if (ids.has(w.id)) f.add(`${at}.id`, 'Duplicate id')
+  else ids.add(w.id)
+  if (!TYPES.includes(w.type as WidgetType)) f.add(`${at}.type`, 'Unknown widget type')
+  const phone = dc === 'phone'
+  const cols = phone ? PHONE_COLS : GRID_COLS
+  if (!isInt(w.w, 1, phone ? 2 : cols)) f.add(`${at}.w`, `Must be 1–${phone ? 2 : cols}`)
+  if (!isInt(w.h, 1, phone ? 2 : GRID_MAX_H)) f.add(`${at}.h`, `Must be 1–${phone ? 2 : GRID_MAX_H}`)
+  if (!isInt(w.x, 0, cols - 1) || (isInt(w.w, 1, cols) && (w.x as number) + (w.w as number) > cols)) f.add(`${at}.x`, 'Outside the grid')
+  if (!isInt(w.y, 0, phone ? PHONE_ROWS - 1 : 10_000) || (phone && isInt(w.h, 1, 2) && (w.y as number) + (w.h as number) > PHONE_ROWS)) {
+    f.add(`${at}.y`, 'Outside the grid')
+  }
+  if (w.title !== null && !(typeof w.title === 'string' && w.title.trim().length >= 1 && w.title.length <= 60)) f.add(`${at}.title`, 'Must be 1–60 characters or null')
+  if (w.colour !== null && !SWATCHES.includes(w.colour as string)) f.add(`${at}.colour`, `Must be one of ${SWATCHES.join(', ')} or null`)
+  if (w.icon !== null && !isEmoji(w.icon)) f.add(`${at}.icon`, 'Must be one emoji or null')
+  if (w.sort !== null && !SORTS.includes(w.sort as string)) f.add(`${at}.sort`, 'Unknown sort')
+  if (w.density !== null && !DENSITIES.includes(w.density as string)) f.add(`${at}.density`, 'Unknown density')
+  if (w.filter !== null) {
+    if (w.type !== 'inbox_column') f.add(`${at}.filter`, 'Only inbox columns have a filter')
+    else if (typeof w.filter !== 'string' || w.filter.length > 500) f.add(`${at}.filter`, 'Must be a query string')
+    else {
+      const err = filterError(w.filter)
+      if (err) f.add(`${at}.filter`, err)
+    }
+  }
+}
+
+function checkPages(f: Fields, pages: unknown, dc: LayoutDeviceClass) {
+  if (!Array.isArray(pages) || pages.length < 1 || pages.length > MAX_PAGES) return f.add('pages', `Must be 1–${MAX_PAGES} pages`)
+  const ids = new Set<string>()
+  pages.forEach((p, i) => {
+    const at = `pages.${i}`
+    if (!isRecord(p)) return f.add(at, 'Expected an object')
+    for (const k of Object.keys(p)) if (!['id', 'name', 'order', 'widgets'].includes(k)) f.add(`${at}.${k}`, 'Unknown field')
+    if (typeof p.id !== 'string' || !UUID.test(p.id)) f.add(`${at}.id`, 'Must be a uuid')
+    else if (ids.has(p.id)) f.add(`${at}.id`, 'Duplicate id')
+    else ids.add(p.id)
+    if (!(typeof p.name === 'string' && p.name.trim().length >= 1 && p.name.length <= 40)) f.add(`${at}.name`, 'Must be 1–40 characters')
+    if (!isInt(p.order, 0, MAX_PAGES - 1)) f.add(`${at}.order`, `Must be 0–${MAX_PAGES - 1}`)
+    if (!Array.isArray(p.widgets) || p.widgets.length > MAX_WIDGETS) return f.add(`${at}.widgets`, `At most ${MAX_WIDGETS} widgets`)
+    p.widgets.forEach((w, j) => checkWidget(f, `${at}.widgets.${j}`, w, dc, ids))
+    // Phone slots can't overlap (the 12-column grid compacts, so overlap there is harmless).
+    if (dc === 'phone') {
+      const boxes = p.widgets as Widget[]
+      boxes.forEach((a, j) => boxes.slice(j + 1).forEach((b) => overlaps(a, b) && f.add(`${at}.widgets.${j}`, 'Overlaps another widget')))
+    }
+  })
+}
+
+const respond = (dc: LayoutDeviceClass, saved: { pages: LayoutPage[]; updated_at: string } | undefined): Layout =>
+  saved ? { device_class: dc, pages: structuredClone(saved.pages), updated_at: saved.updated_at, is_default: false } : starterLayout(dc)
+
+export const layoutRoutes = [
+  route<{ deviceClass: string }>('get', '/layouts/:deviceClass', 'user', ({ user, params }) => {
+    const dc = device(params)
+    return respond(dc, db.layouts.get(user.id)?.[dc])
+  }),
+
+  // A full replace (task 8 decision), checked against the version the edit started from.
+  route<{ deviceClass: string }>('put', '/layouts/:deviceClass', 'user', ({ user, params, body }) => {
+    const dc = device(params)
+    const f = object(body).only(['pages', 'base_updated_at'])
+    if (!('base_updated_at' in f.body) || (f.body.base_updated_at !== null && !isDateTime(f.body.base_updated_at))) {
+      f.add('base_updated_at', 'Must be the updated_at the edit started from, or null')
+    }
+    checkPages(f, f.body.pages, dc)
+    f.done()
+
+    const mine = db.layouts.get(user.id) ?? {}
+    const current = mine[dc]
+    if ((f.body.base_updated_at ?? null) !== (current?.updated_at ?? null)) {
+      throw new Fail(409, 'conflict', 'The layout was changed somewhere else since this edit started', { updated_at: current?.updated_at ?? null })
+    }
+    // Strictly increasing, so two saves in the same millisecond still have different versions.
+    const now = Math.max(Date.now(), current ? Date.parse(current.updated_at) + 1 : 0)
+    mine[dc] = { pages: structuredClone(f.body.pages as LayoutPage[]), updated_at: new Date(now).toISOString() }
+    db.layouts.set(user.id, mine)
+    changed()
+    return respond(dc, mine[dc])
+  }),
+]

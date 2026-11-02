@@ -161,6 +161,14 @@ export interface ColumnFilters {
 
 export const NO_FILTERS: ColumnFilters = { view: [], type: [], urgency: [], sentiment: [], flag: [], sender: null, received_after: null, received_before: null }
 
+/** What a column remembers: a saved filter, sort and density (FR-UI-006). A dashboard widget stores it. */
+export interface ColumnState {
+  filters: ColumnFilters
+  sort: SortKey
+  density: Density
+}
+export const DEFAULT_COLUMN_STATE: ColumnState = { filters: NO_FILTERS, sort: 'newest', density: 'comfortable' }
+
 /** `smart` and `due` are not offered yet (proposals §9). */
 export type SortKey = 'newest' | 'oldest' | 'urgency' | 'sender' | 'confidence'
 export const SORTS: { key: SortKey; label: string }[] = [
@@ -198,6 +206,52 @@ export function columnQuery(filters: ColumnFilters, sort: SortKey, focused: bool
   if (filters.received_before) q.set('received_before', filters.received_before)
   if (sort !== 'newest') q.set('sort', sort)
   return q.toString()
+}
+
+/**
+ * A column's saved filter (proposals §13): the GET /emails filter parameters as a query string, no sort. The SAME
+ * vocabulary as columnQuery, written with plain commas so stored layouts stay readable (e.g. "urgency=Critical,High").
+ */
+export function filterQuery(filters: ColumnFilters): string {
+  const parts: string[] = []
+  const add = (k: string, values: readonly string[]) => values.length && parts.push(`${k}=${values.map(encodeURIComponent).join(',')}`)
+  add('view', filters.view)
+  add('type', filters.type)
+  add('urgency', filters.urgency)
+  add('sentiment', filters.sentiment)
+  add('flag', filters.flag)
+  if (filters.sender?.trim()) add('sender', [filters.sender.trim()])
+  if (filters.received_after) add('received_after', [filters.received_after])
+  if (filters.received_before) add('received_before', [filters.received_before])
+  return parts.join('&')
+}
+
+const SORT_KEYS = new Set<string>(['newest', 'oldest', 'urgency', 'sender', 'confidence'])
+/** A stored or linked sort the UI offers, else newest (smart and due aren't offered yet). */
+export const sortKeyOf = (sort: string | null | undefined): SortKey => (sort && SORT_KEYS.has(sort) ? (sort as SortKey) : 'newest')
+
+/**
+ * Reads GET /emails parameters back into column filters: a widget's saved filter, or an /inbox?… link (⤢ full view).
+ * Values outside the known sets are dropped, so a bad link can't break the column.
+ */
+export function parseColumnQuery(query: string): { filters: ColumnFilters; sort: SortKey } {
+  const p = new URLSearchParams(query)
+  const list = <T extends string>(k: string, allowed: readonly T[]) =>
+    (p.get(k) ?? '').split(',').map((v) => v.trim()).filter((v): v is T => (allowed as readonly string[]).includes(v))
+  const text = (k: string) => p.get(k)?.trim() || null
+  return {
+    filters: {
+      view: list('view', QUICK_VIEWS.map((v) => v.key)),
+      type: list('type', TYPES),
+      urgency: list('urgency', URGENCIES),
+      sentiment: list('sentiment', SENTIMENTS),
+      flag: list('flag', ['none', ...FLAGS] as SecurityFlag[]),
+      sender: text('sender'),
+      received_after: text('received_after'),
+      received_before: text('received_before'),
+    },
+    sort: sortKeyOf(p.get('sort')),
+  }
 }
 
 /**

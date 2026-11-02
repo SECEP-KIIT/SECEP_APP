@@ -744,47 +744,47 @@ html[data-motion='off'] .card[data-fresh]::after {
   }
 }
 
-@media (max-width: 639px) {
-  .column {
-    max-width: none;
-  }
-  /* F7: the tools stay on the title row as icons only. Sort and density keep their native select, invisible over
-     the icon (still focusable and announced); a dot marks a non-default choice, and the filter shows its count. */
-  .col-select {
-    width: 30px;
-    padding: 0;
-    justify-content: center;
-  }
-  .col-select select {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    max-width: none;
-    opacity: 0;
-    cursor: pointer;
-  }
-  .col-select:focus-within {
-    outline: 2px solid var(--focus-ring);
-    outline-offset: 2px;
-  }
-  .col-select[data-set] .col-tool-dot {
-    display: block;
-  }
-  /* Quick chips: one row that scrolls sideways instead of wrapping. */
-  .quick-chips {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    scrollbar-width: none;
-  }
-  .quick-chips::-webkit-scrollbar {
-    display: none;
-  }
-  .quick-chip {
-    flex-shrink: 0;
-    white-space: nowrap;
-  }
+/* Phone (src/lib/breakpoints.ts, ≤ 640 px): selected on <html data-device>, not a media query. */
+html[data-device='phone'] .column {
+  max-width: none;
 }
+/* F7: the tools stay on the title row as icons only. Sort and density keep their native select, invisible over
+   the icon (still focusable and announced); a dot marks a non-default choice, and the filter shows its count. */
+html[data-device='phone'] .col-select {
+  width: 30px;
+  padding: 0;
+  justify-content: center;
+}
+html[data-device='phone'] .col-select select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  max-width: none;
+  opacity: 0;
+  cursor: pointer;
+}
+html[data-device='phone'] .col-select:focus-within {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+html[data-device='phone'] .col-select[data-set] .col-tool-dot {
+  display: block;
+}
+/* Quick chips: one row that scrolls sideways instead of wrapping. */
+html[data-device='phone'] .quick-chips {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+html[data-device='phone'] .quick-chips::-webkit-scrollbar {
+  display: none;
+}
+html[data-device='phone'] .quick-chip {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
 /* A non-default sort or density on the phone's icon-only toolbar: a dot on the icon (a shape, not colour alone). */
 .col-tool-dot {
   display: none;

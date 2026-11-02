@@ -10,7 +10,7 @@
 import type { Db, SettingsRow } from './types'
 
 export const STORAGE_KEY = 'secep.mock'
-export const SCHEMA_VERSION = 3 // 2: handled state; correction ids are UUIDs. 3: link samples, wall-clock action times
+export const SCHEMA_VERSION = 4 // 2: handled state; correction ids are UUIDs. 3: link samples, wall-clock action times. 4: layouts
 
 type PersistedSettings = Omit<SettingsRow, 'jira' | 'llm'> & {
   jira: Omit<SettingsRow['jira'], 'token'> & { token_set: boolean }
@@ -32,6 +32,7 @@ export interface Snapshot {
     audit: Db['audit']
     settings: PersistedSettings
     arrivals: Db['arrivals']
+    layouts: Record<string, NonNullable<ReturnType<Db['layouts']['get']>>>
   }
 }
 
@@ -54,6 +55,7 @@ export function snapshot(db: Db, seed: number): Snapshot {
       audit: db.audit,
       settings: { ...rest, jira: { ...jiraRest, token_set: token !== null }, llm: { ...llmRest, api_key_set: api_key !== null } },
       arrivals: db.arrivals,
+      layouts: Object.fromEntries(db.layouts),
     },
   }
 }
@@ -74,7 +76,7 @@ export function load(storage: Pick<Storage, 'getItem' | 'removeItem'>, seed: num
       snap?.schema === SCHEMA_VERSION &&
       snap.seed === seed &&
       Array.isArray(d?.users) && Array.isArray(d.actions) && Array.isArray(d.arrivals) &&
-      typeof d.reads === 'object' && typeof d.handled === 'object' && d.settings?.jira !== undefined
+      typeof d.reads === 'object' && typeof d.handled === 'object' && typeof d.layouts === 'object' && d.settings?.jira !== undefined
     if (ok) return snap
   } catch {
     // fall through to discard
@@ -99,6 +101,7 @@ export function apply(db: Db, snap: Snapshot) {
     if (c.field === 'email_type') triage.email_type.source = 'user'
     triage.needs_review = false
   }
+  db.layouts = new Map(Object.entries(d.layouts))
   db.labelRules = d.labelRules
   db.projects = d.projects
   db.models = d.models

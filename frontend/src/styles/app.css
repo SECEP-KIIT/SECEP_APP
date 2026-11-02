@@ -415,76 +415,76 @@ html[data-motion='off'] .sync-dot {
 .tabbar {
   display: none;
 }
-@media (max-width: 639px) {
-  .sheet,
-  .sheet[data-collapsed],
-  .sheet[data-focus] {
-    inset: 0;
-    border-radius: 0;
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: var(--topbar-h) minmax(0, 1fr) auto;
-  }
-  .sidebar {
-    display: none;
-  }
-  .topbar,
-  .sheet-content {
-    grid-column: 1;
-  }
-  /* Three zones in one row: left (title, clock) shrinks and truncates; search, bell and + keep their size. */
-  .topbar {
-    grid-template-columns: minmax(0, 1fr) auto auto;
-    gap: var(--space-2);
-    padding: 0 var(--space-3);
-  }
-  .topbar-right {
-    gap: var(--space-1);
-  }
-  .topbar-centre .search-pill {
-    width: 34px;
-    padding: 0;
-    justify-content: center;
-  }
-  .search-pill-label,
-  .search-pill kbd,
-  .sync {
-    display: none;
-  }
-  .tabbar {
-    grid-column: 1;
-    grid-row: 3;
-    display: grid;
-    grid-auto-flow: column;
-    grid-auto-columns: 1fr;
-    padding: var(--space-1) var(--space-1) max(var(--space-1), env(safe-area-inset-bottom));
-    background: var(--bar-fill-unsettled);
-  }
-  html[data-settled] .tabbar {
-    background: var(--bar-fill);
-    -webkit-backdrop-filter: blur(18px) saturate(1.5);
-    backdrop-filter: blur(18px) saturate(1.5);
-  }
-  .tab {
-    position: relative;
-    display: grid;
-    justify-items: center;
-    gap: 2px;
-    padding: 6px 0;
-    border-radius: 8px;
-    color: var(--bar-ink-muted);
-    font-size: 0.6875rem;
-    font-weight: 500;
-    text-decoration: none;
-  }
-  .tab[aria-current='page'] {
-    color: var(--bar-ink);
-    font-weight: 650;
-    background: var(--bar-active);
-  }
-  .tab .crit-dot {
-    right: 12px;
-  }
+/* Phone (src/lib/breakpoints.ts, ≤ 640 px): selected on <html data-device>, not a media query. */
+html[data-device='phone'] .sheet,
+html[data-device='phone'] .sheet[data-collapsed],
+html[data-device='phone'] .sheet[data-focus] {
+  inset: 0;
+  border-radius: 0;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: var(--topbar-h) minmax(0, 1fr) auto;
 }
+html[data-device='phone'] .sidebar {
+  display: none;
+}
+html[data-device='phone'] .topbar,
+html[data-device='phone'] .sheet-content {
+  grid-column: 1;
+}
+/* Three zones in one row: left (title, clock) shrinks and truncates; search, bell and + keep their size. */
+html[data-device='phone'] .topbar {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+}
+html[data-device='phone'] .topbar-right {
+  gap: var(--space-1);
+}
+html[data-device='phone'] .topbar-centre .search-pill {
+  width: 34px;
+  padding: 0;
+  justify-content: center;
+}
+html[data-device='phone'] .search-pill-label,
+html[data-device='phone'] .search-pill kbd,
+html[data-device='phone'] .sync {
+  display: none;
+}
+html[data-device='phone'] .tabbar {
+  grid-column: 1;
+  grid-row: 3;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  padding: var(--space-1) var(--space-1) max(var(--space-1), env(safe-area-inset-bottom));
+  background: var(--bar-fill-unsettled);
+}
+html[data-device='phone'][data-settled] .tabbar {
+  background: var(--bar-fill);
+  -webkit-backdrop-filter: blur(18px) saturate(1.5);
+  backdrop-filter: blur(18px) saturate(1.5);
+}
+html[data-device='phone'] .tab {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 6px 0;
+  border-radius: 8px;
+  color: var(--bar-ink-muted);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  text-decoration: none;
+}
+html[data-device='phone'] .tab[aria-current='page'] {
+  color: var(--bar-ink);
+  font-weight: 650;
+  background: var(--bar-active);
+}
+html[data-device='phone'] .tab .crit-dot {
+  right: 12px;
+}
+
 
 /* ── Lock-screen content rendered by React into the static slots (LockSlots.tsx) ───────────────────────────── */
 .lock-subject {

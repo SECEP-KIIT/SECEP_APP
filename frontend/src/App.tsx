@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { Navigate, createBrowserRouter } from 'react-router'
+import { createBrowserRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import { queryClient } from './api/queries'
 import { Shell } from './shell/Shell'
@@ -14,7 +14,9 @@ const router = createBrowserRouter([
     Component: Shell,
     hydrateFallbackElement: <></>,
     children: [
-      { index: true, element: <Navigate to="/inbox" replace /> },
+      // The paged dashboard (FR-UI-007). To point / back at the single inbox column, use this line instead:
+      //   { index: true, element: <Navigate to="/inbox" replace /> },
+      { index: true, lazy: () => import('./pages/Dashboard'), handle: { title: 'Home' } },
       { path: 'inbox', lazy: () => import('./pages/Inbox'), handle: { title: 'Inbox' } },
       { path: 'board', lazy: placeholder, handle: { title: 'Board' } },
       { path: 'calendar', lazy: placeholder, handle: { title: 'Calendar' } },

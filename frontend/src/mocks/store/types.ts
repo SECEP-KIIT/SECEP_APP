@@ -5,6 +5,8 @@ import type {
   Action,
   AppNotification,
   EmailStatus,
+  LayoutDeviceClass,
+  LayoutPage,
   LinkVerdict,
   MailboxStatus,
   Person,
@@ -178,6 +180,8 @@ export interface Db {
   reads: Map<string, Set<string>>
   /** Handled state per user: email id → handled_at (proposals §10.3, email_states for M6). */
   handled: Map<string, Map<string, string>>
+  /** Saved layouts per user and device class (user_layouts, FR-UI-010). None saved = the starter layout. */
+  layouts: Map<string, Partial<Record<LayoutDeviceClass, { pages: LayoutPage[]; updated_at: string }>>>
   /** Emails delivered by the incoming-mail simulation, so persistence can regenerate them. */
   arrivals: { template: number; received_at: string; user_id: string }[]
 }

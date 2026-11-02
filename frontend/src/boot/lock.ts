@@ -1,6 +1,7 @@
 // Lock screen controller (FR-WP-001–005). The lock is static markup in index.html, so it paints before any app
 // code (FR-WP-002). This module drives it. It is imported by both the boot entry and the app, and must stay ONE module
 // instance (one state machine); the build check in the README verifies Vite emits it once.
+import { currentDevice } from '../lib/breakpoints'
 import {
   DONE_HOLD_MS,
   INITIAL,
@@ -27,7 +28,6 @@ export interface BootPrefs {
 const MIRROR_KEY = 'secep.boot'
 const DEFAULTS: BootPrefs = { skip_lock: false, idle_minutes: 15 }
 
-const PHONE = '(max-width: 639px)'
 const OS_REDUCED = '(prefers-reduced-motion: reduce)'
 const SETTLE_MS = 300 // a little over the 250 ms enter transition
 
@@ -37,7 +37,8 @@ let lastActive = Date.now()
 let started = false
 
 const $ = (id: string) => document.getElementById(id)
-const isPhone = () => matchMedia(PHONE).matches
+// Phones never idle-lock and dissolve automatically (FR-WP-005); "phone" is the shared breakpoint.
+const isPhone = () => currentDevice() === 'phone'
 
 function readMirror(): BootPrefs {
   try {

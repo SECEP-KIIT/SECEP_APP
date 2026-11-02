@@ -17,9 +17,11 @@ export interface Toast {
 export interface InboxApi {
   open: (id: string, opts?: OpenOptions) => void
   toast: (message: string, tone?: Toast['tone']) => void
+  /** The `?` legend (FR-UI-014), one per page however many columns it has. */
+  showLegend: () => void
 }
 
-export const InboxContext = createContext<InboxApi>({ open: () => {}, toast: () => {} })
+export const InboxContext = createContext<InboxApi>({ open: () => {}, toast: () => {}, showLegend: () => {} })
 export const useInbox = () => useContext(InboxContext)
 
 const TOAST_MS = 5_000

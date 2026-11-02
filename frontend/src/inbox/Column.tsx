@@ -1,7 +1,7 @@
 import { useInfiniteQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { ArrowDownUp, ArrowUp, CircleHelp, Rows3, X } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from 'react'
 import { emailListOptions, listRequestedAt } from '../api/queries'
 import { arrivals } from '../api/realtime'
 import type { EmailListItem, Page } from '../api/types'
@@ -20,13 +20,16 @@ import {
   ROW_PITCH,
   SORTS,
   urgencySplit,
+  DEFAULT_COLUMN_STATE,
   type ColumnFilters,
+  type ColumnState,
   type Density,
   type FilterPatch,
   type SortKey,
 } from './cardModel'
 import { EmailCard } from './EmailCard'
 import { FilterPopover } from './FilterPopover'
+import { useInbox } from './inboxContext'
 import './inbox.css'
 
 /** How long cards brought in by the pill keep their accent tint (item 9). */
@@ -35,9 +38,23 @@ const FRESH_MS = 2_000
 const PREFETCH_ROWS = 8
 const SKELETON_ROWS = 6
 
+
 interface Props {
   title: string
-  onLegend: () => void
+  /** Controlled by a dashboard widget, which saves every change. Absent: the column keeps its own state. */
+  state?: ColumnState
+  onStateChange?: (state: ColumnState) => void
+  /** Starting state when uncontrolled (the /inbox full view opened from a tile's ⤢). */
+  initial?: ColumnState
+  /** Replaces the plain title (a widget's title bar: icon, rename). Gets the id the section is labelled by. */
+  heading?: (titleId: string) => ReactNode
+  /** Extra controls at the end of the title row (a widget's ⋯ menu, ⤢). */
+  tools?: ReactNode
+  /**
+   * `stack`: a phone slot (FR-UI-009). One card plus a peek, scrolling inside, with an n / N counter; the filter
+   * tools, quick chips and urgency bar stay in the full view.
+   */
+  variant?: 'full' | 'stack'
 }
 
 /**
@@ -48,13 +65,35 @@ interface Props {
  * (TanStack Virtual) and live updates patch cards in place. New mail is never inserted: it shows as "↑ n new"
  * (FR-UI-024), and only a click on the pill brings it in, at the top, after scrolling there.
  */
-export function Column({ title, onLegend }: Props) {
+export function Column({ title, state, onStateChange, initial, heading, tools, variant = 'full' }: Props) {
   const focused = useFocused()
   const now = useMinuteClock()
   const qc = useQueryClient()
-  const [filters, setFilters] = useState<ColumnFilters>(NO_FILTERS)
-  const [sort, setSort] = useState<SortKey>('newest')
-  const [density, setDensity] = useState<Density>('comfortable')
+  const { showLegend } = useInbox()
+  const titleId = useId()
+  const [own, setOwn] = useState<ColumnState>(initial ?? DEFAULT_COLUMN_STATE)
+  const current = state ?? own
+  const { filters, sort } = current
+  const stack = variant === 'stack'
+  const density: Density = stack ? 'compact' : current.density
+  // Setters read the latest state through a ref, so functional updates compose like useState's.
+  const latest = useRef(current)
+  latest.current = current
+  const change = useCallback(
+    (patch: Partial<ColumnState>) => {
+      const next = { ...latest.current, ...patch }
+      latest.current = next
+      if (onStateChange) onStateChange(next)
+      else setOwn(next)
+    },
+    [onStateChange],
+  )
+  const setFilters = useCallback(
+    (f: ColumnFilters | ((f: ColumnFilters) => ColumnFilters)) => change({ filters: typeof f === 'function' ? f(latest.current.filters) : f }),
+    [change],
+  )
+  const setSort = (s: SortKey) => change({ sort: s })
+  const setDensity = (d: Density) => change({ density: d })
   const [fresh, setFresh] = useState<ReadonlySet<string>>(new Set())
 
   const query = columnQuery(filters, sort, focused)
@@ -93,7 +132,7 @@ export function Column({ title, onLegend }: Props) {
     if (more && !isFetchingNextPage && lastIndex >= items.length - PREFETCH_ROWS) void fetchNextPage()
   }, [more, isFetchingNextPage, lastIndex, items.length, fetchNextPage])
 
-  const onFilter = useCallback((patch: FilterPatch) => setFilters((f) => addFilter(f, patch)), [])
+  const onFilter = useCallback((patch: FilterPatch) => setFilters((f) => addFilter(f, patch)), [setFilters])
 
   // The pill: scroll to the top first, then reload page 1 only. The old cards stay on screen until it arrives (no
   // skeleton flash), and the arrivals fade in with an accent tint.
@@ -116,16 +155,23 @@ export function Column({ title, onLegend }: Props) {
   const loadedCount = `${items.length}${more ? '+' : ''}`
 
   return (
-    <section className="column" aria-labelledby="col-title" data-density={density}>
+    <section className="column" aria-labelledby={titleId} data-density={density} data-variant={variant}>
       <header className="col-head">
         <div className="col-title-row">
-          <h2 className="col-title" id="col-title" tabIndex={-1}>
-            {title}
-          </h2>
+          {heading ? (
+            heading(titleId)
+          ) : (
+            <h2 className="col-title" id={titleId} tabIndex={-1}>
+              {title}
+            </h2>
+          )}
           <span className="col-count" title={more ? `${items.length} loaded, more below` : `${items.length} emails`}>
             {loadedCount}
             <span className="sr-only">{more ? ' emails loaded, more below' : ' emails'}</span>
           </span>
+          {stack ? (
+            <StackCounter scrollRef={scrollRef} pitch={pitch} loaded={items.length} more={more} />
+          ) : (
           <div className="col-tools">
             <FilterPopover filters={filters} onChange={setFilters} />
             <label className="col-select" title="Sort" data-set={sort !== 'newest' || undefined}>
@@ -152,12 +198,16 @@ export function Column({ title, onLegend }: Props) {
                 ))}
               </select>
             </label>
-            <button type="button" className="col-tool" onClick={onLegend} title="Card symbols (?)" aria-keyshortcuts="?">
+            <button type="button" className="col-tool" onClick={showLegend} title="Card symbols (?)" aria-keyshortcuts="?">
               <CircleHelp size={16} aria-hidden="true" />
               <span className="sr-only">Card symbols</span>
             </button>
           </div>
+          )}
+          {tools}
         </div>
+        {!stack && (
+          <>
         <UrgencyBar split={split} total={items.length} />
         {focused && <p className="col-note">Focus mode: Critical and High only</p>}
         <div className="quick-chips" role="group" aria-label="Quick filters">
@@ -185,6 +235,8 @@ export function Column({ title, onLegend }: Props) {
               </li>
             ))}
           </ul>
+        )}
+          </>
         )}
       </header>
 
@@ -240,6 +292,28 @@ export function Column({ title, onLegend }: Props) {
         </div>
       </div>
     </section>
+  )
+}
+
+/**
+ * "n / N" for a stack column (FR-UI-009): the card at the top of the scroll area, of those loaded ("+" while more
+ * pages exist). Updated on scroll; the list itself is the same virtualised list as the full column.
+ */
+function StackCounter({ scrollRef, pitch, loaded, more }: { scrollRef: RefObject<HTMLDivElement | null>; pitch: number; loaded: number; more: boolean }) {
+  const [top, setTop] = useState(0)
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const onScroll = () => setTop(Math.round(el.scrollTop / pitch))
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [scrollRef, pitch])
+  if (loaded === 0) return <span className="col-count" />
+  return (
+    <span className="col-count stack-counter" aria-live="off">
+      {Math.min(top + 1, loaded)} / {loaded}
+      {more ? '+' : ''}
+    </span>
   )
 }
 

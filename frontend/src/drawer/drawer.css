@@ -38,15 +38,14 @@ html[data-motion='off'] .drawer::backdrop {
     animation: fade-in 100ms ease-out;
   }
 }
-/* F10: full screen on phones (up to and including 640 px). */
-@media (max-width: 640px) {
-  .drawer {
-    inset: 0;
-    width: 100%;
-    border: 0;
-    border-radius: 0;
-  }
+/* Phone (src/lib/breakpoints.ts, ≤ 640 px): selected on <html data-device>, not a media query. */
+html[data-device='phone'] .drawer {
+  inset: 0;
+  width: 100%;
+  border: 0;
+  border-radius: 0;
 }
+
 
 .link-ready {
   display: flex;

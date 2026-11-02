@@ -295,3 +295,53 @@ export interface Project {
 export interface SenderPerson extends Person {
   role_category: RoleCategory | null
 }
+
+// ── Layouts (PROPOSED, proposals §13 as decided on 2 Nov 2026; FR-UI-006–010) ─────────────────────────────────────
+// GET /layouts/:deviceClass → Layout (nothing saved: the starter layout, is_default true, updated_at null).
+// PUT /layouts/:deviceClass { pages, base_updated_at } → Layout. A full replace; a stale base_updated_at → 409.
+
+export type LayoutDeviceClass = 'desktop' | 'tablet' | 'phone'
+export type WidgetType = 'inbox_column' | 'board' | 'projects' | 'reminders' | 'calendar' | 'notes' | 'stats' | 'security'
+export type Swatch = 'slate' | 'blue' | 'teal' | 'green' | 'amber' | 'orange' | 'red' | 'violet'
+
+export interface Widget {
+  /** A stable uuid, made by the client when the widget is added. */
+  id: string
+  type: WidgetType
+  /** Grid units. Desktop and tablet: 12 columns. Phone: 2 columns × 4 rows of slots per screen. */
+  x: number
+  y: number
+  w: number
+  h: number
+  /** null = the type's default title. */
+  title: string | null
+  colour: Swatch | null
+  /** One emoji, or null. */
+  icon: string | null
+  /** inbox_column only: a GET /emails query string of filter parameters (no sort, cursor or limit). */
+  filter: string | null
+  sort: 'smart' | 'newest' | 'oldest' | 'due' | 'urgency' | 'sender' | 'confidence' | null
+  density: 'compact' | 'comfortable' | 'spacious' | null
+}
+
+export interface LayoutPage {
+  id: string
+  name: string
+  order: number
+  widgets: Widget[]
+}
+
+export interface Layout {
+  device_class: LayoutDeviceClass
+  pages: LayoutPage[]
+  /** null until the first save. */
+  updated_at: string | null
+  /** true while nothing is saved: these are the starter pages. */
+  is_default: boolean
+}
+
+export interface LayoutPut {
+  pages: LayoutPage[]
+  /** The updated_at this edit was based on (null for the first save). */
+  base_updated_at: string | null
+}

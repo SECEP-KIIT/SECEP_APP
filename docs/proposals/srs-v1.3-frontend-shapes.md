@@ -276,3 +276,35 @@ interface EmailFilter {
   - **Planning:** Overdue, Inbox sorted by urgency, and a Board tile once task 10 lands.
 - **Routing:** `/` is the paged dashboard; `/inbox` stays the full-view column, and sidebar Inbox opens it.
 - **Gallery:** lists only widget types that are built. The others appear as their tasks land.
+
+### 13a. Decided (2 Nov 2026): the §13 shape with these amendments; implemented in the mock and the client
+
+- **`filter` is a `GET /emails` query string of filter parameters**, e.g. `urgency=Critical,High` or `view=due_today`. It replaces the `EmailFilter` object above, so there is no second format.
+  - **Allowed parameters:** `type`, `urgency`, `sentiment`, `flag`, `sender`, `received_after`, `received_before`, `view`. Not `sort` (a separate field), `cursor`, `limit` or `q`.
+  - The mock checks it with the same parser `GET /emails` uses.
+  - It is `null` for every widget type except `inbox_column`.
+- **Every page and widget has a stable uuid.** The starter layout's ids are stable too, so two GETs of the default return the same layout.
+- **`colour`** is one of the 8 names (`slate … violet`), never a hex value. **`icon`** is a single emoji (one pictographic grapheme) or `null`.
+- **PUT** `{ pages, base_updated_at }` is a full replace.
+  - If `base_updated_at` doesn't match the stored `updated_at` (`null` when nothing is saved), the response is `409 conflict` with `details.updated_at`. The client drops its draft and reloads.
+  - `updated_at` is strictly increasing.
+- **GET with nothing saved** returns 200 with the starter layout, `is_default: true` and `updated_at: null`. Once anything is saved, `is_default` is `false`.
+- **422 `validation_failed`** with `details.fields` covers: an unknown widget `type`, the caps (1–9 pages, ≤ 24 widgets per page), unknown keys, a bad filter, swatch, emoji, sort or density, a position outside the grid, and overlapping phone slots.
+  - An unknown `deviceClass` in the path gets 400 `bad_request`.
+  - **There is no 413:** the SRS has no such error code, and the caps plus field lengths bound the body.
+- **Owner-only:** the row is keyed by the caller's user id from the token, and no request can name another user. Contract test: `layouts are owner-only`.
+- **Grid units:**
+  - **Desktop and tablet:** 12 columns, with 12 rows per screen. The row height follows the page height, and taller pages scroll.
+  - **Phone:** 2 × 4 slots (`w`, `h` ∈ {1, 2}). The row height comes from the available height, and when a row would be under 132 px, 3 rows show at a time and the 4th is a snap-scroll away.
+- **Breakpoints:** one constant in `src/lib/breakpoints.ts`: phone ≤ 640, tablet 641–1023, desktop ≥ 1024. The layout device class, the idle lock and all CSS read it. The CSS selects on `<html data-device>`, and a test forbids width media queries.
+- **Routing:** `/` is the paged dashboard. `/inbox` is the independent single-column view, and one commented line in `App.tsx` points `/` back at it. ⤢ on a tile opens `/inbox?<filter>&sort=…`.
+
+## 14. Found while building the tiling dashboard (task 8a, 2 Nov 2026)
+
+1. **"Due this week" (Planning starter) has no query vocabulary.** `GET /emails` has no parameter for it: `due` is a reserved S parameter with no values, and `view` has `due_today` and `overdue` only.
+   - **Not built.** The Planning starter holds "Needs my reply" only. A comment in `src/mocks/starters.ts` marks where the column goes.
+   - **Options:** (a) `view=due_this_week` (due_date from today to the end of the week, excluding handled; needs a week-start rule), or (b) give `due` values, e.g. `due=today|week|overdue`, folding in the two existing views.
+2. **"Needs review (least-confident first)."** No `needs_review` filter parameter exists. The starter column is the inbox sorted with `sort=confidence`, so needs-review mail rises to the top, but the column also lists everything else.
+   - If it should list only needs-review mail, it needs a parameter, e.g. `view=needs_review` (`triage.needs_review = true`). Confirm.
+3. **Home in the navigation.** The sidebar and tab bar gained "Home" (`/`) first, otherwise the dashboard is unreachable. FR-UI-002's list doesn't name it. On phones it takes a tab slot, so Security moves under More (it shows only with `security.review` anyway). Confirm.
+4. **Ctrl+1…9:** some browsers keep these keys for switching tabs and never deliver them to the page. Ctrl+←/→, the dots and swipe always work.

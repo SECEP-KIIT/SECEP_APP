@@ -24,7 +24,7 @@ export function focusKeyAction(e: KeyLike, focused: boolean): 'toggle' | 'exit' 
   return null
 }
 
-function inLayer(target: EventTarget | null) {
+export function inLayer(target: EventTarget | null) {
   const el = target as { closest?: (selector: string) => unknown } | null
   return !!el?.closest?.('dialog[open], [data-radix-popper-content-wrapper]')
 }
