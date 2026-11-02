@@ -74,6 +74,7 @@ export function toListItem(db: Db, e: EmailRow): EmailListItem {
     snoozed_until: e.snoozed_until,
     due_date: dueDateOf(actions),
     handled: db.handled.get(e.user_id)?.has(e.id) ?? false,
+    read: db.reads.get(e.user_id)?.has(e.id) ?? false, // PROPOSED (proposals §12.3)
     projects: [],
     tags: [],
   }

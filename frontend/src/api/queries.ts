@@ -111,12 +111,17 @@ export async function createAction(emailId: string, type: ActionType, payload: P
 
 type ListData = InfiniteData<{ items: EmailListItem[]; next_cursor: string | null }, string | null>
 
-/** Whether a list's per-user state views admit the email: the Handled view holds only handled mail, every other list none. */
-export const stateAdmits = (query: string, e: Pick<EmailListItem, 'handled'>) =>
-  (new URLSearchParams(query).get('view')?.split(',') ?? []).includes('handled') === e.handled
+/**
+ * Whether a list's per-user state views admit the email: the Handled view holds only handled mail and every other
+ * list none (§10.3); the Unread view holds only unread mail (§12.3).
+ */
+export function stateAdmits(query: string, e: Pick<EmailListItem, 'handled' | 'read'>) {
+  const view = new URLSearchParams(query).get('view')?.split(',') ?? []
+  return view.includes('handled') === e.handled && !(view.includes('unread') && e.read)
+}
 
 /**
- * Settles every cached list after the caller's own state for one email changed (handled, proposals §10.3). It is
+ * Settles every cached list after the caller's own state for one email changed (handled §10.3, read §12.3). It is
  * decided here, from the PATCH response alone, so the outcome never depends on whether the socket echo arrives
  * before or after the response (F11):
  * - a list the email no longer belongs to drops it: a deliberate removal, not a layout shift (item 9);
@@ -140,14 +145,18 @@ function settleLists(detail: EmailListItem) {
 }
 
 /**
- * PATCH /emails/:id {pinned, handled} (proposals §10.3, owner-only and per user, §12.1). The detail is replaced with
- * the response and every list copy patched in place; a handled change then settles list membership (settleLists).
+ * PATCH /emails/:id {pinned, handled, read} (proposals §10.3 and §12.3, owner-only and per user, §12.1). The detail is
+ * replaced with the response and every list copy patched in place; a handled or read change then settles list
+ * membership (settleLists) and the unread counts.
  */
 export async function updateEmail(id: string, patch: EmailPatch) {
   const detail = await api<EmailDetail>(`/emails/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) })
   queryClient.setQueryData(['email', id], detail)
   patchEmailCache(queryClient, id, detail)
-  if (patch.handled !== undefined) settleLists(detail)
+  if (patch.handled !== undefined || patch.read !== undefined) {
+    settleLists(detail)
+    void queryClient.invalidateQueries({ queryKey: ['glance'] }) // sidebar badge and lock glance counts
+  }
   return detail
 }
 

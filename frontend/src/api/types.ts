@@ -110,6 +110,11 @@ export interface EmailListItem {
   due_date: string | null
   /** PROPOSED (proposals §10.3): handled by the current user (per recipient). Reversible; hidden from the default inbox. */
   handled: boolean
+  /**
+   * PROPOSED (proposals §1, §12.3): read by the current user (per recipient, an email_reads row). Set when the user
+   * opens the email and by the manual Mark read / unread toggle.
+   */
+  read: boolean
   // Should features; element shapes are not in the SRS yet, so nothing can be put in them until it is.
   projects: never[]
   tags: never[]
@@ -161,11 +166,15 @@ export interface Page<T> {
 /** GET /emails `view` values (PROPOSED, proposals §10.1/§10.3), AND-combined. */
 export type EmailView = 'unread' | 'due_today' | 'needs_reply' | 'overdue' | 'handled'
 
-/** PATCH /emails/:id request (§6.5 v1.1: pinned, snoozed_until; handled is PROPOSED, §10.3). Response: EmailDetail. */
+/**
+ * PATCH /emails/:id request (§6.5 v1.1: pinned, snoozed_until; handled and read are PROPOSED, §10.3 and §12.3, owner-only
+ * and per user, §12.1). Response: EmailDetail.
+ */
 export interface EmailPatch {
   pinned?: boolean
   snoozed_until?: string | null
   handled?: boolean
+  read?: boolean
 }
 
 /** PATCH /emails/:id/labels request (§6.4.1). scope defaults to email; similar is S (FR-ML-014). */

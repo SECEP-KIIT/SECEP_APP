@@ -3,7 +3,7 @@ import type { DecoderActionPayload, EmailType, EmailView, Sentiment, SecurityFla
 import { page } from '../http/cursor'
 import { Fail, own, route } from '../http/route'
 import { csv, isDate, isDateTime, object } from '../http/validate'
-import { changed, db, emailsOf } from '../store/db'
+import { changed, db, emailsOf, readsOf } from '../store/db'
 import { publish } from '../store/events'
 import { handledOf } from '../store/generate'
 import { localDate, toDetail, toListItem } from '../store/serialize'
@@ -141,12 +141,14 @@ export const emailRoutes = [
     toDetail(db, own(db.emails.get(params.id), user, 'Email')),
   ),
 
-  // PATCH /emails/:id (§6.5 v1.1 {pinned, snoozed_until}; handled PROPOSED, §10.3). Returns the updated EmailDetail.
+  // PATCH /emails/:id (§6.5 v1.1 {pinned, snoozed_until}; handled and read PROPOSED, §10.3 and §12.3). Returns the
+  // updated EmailDetail. own() makes it owner-only, and handled and read change only the caller's own state (§12.1).
   route<{ id: string }>('patch', '/emails/:id', 'user', ({ user, params, body }) => {
     const email = own(db.emails.get(params.id), user, 'Email')
-    const f = object(body).only(['pinned', 'snoozed_until', 'handled'])
+    const f = object(body).only(['pinned', 'snoozed_until', 'handled', 'read'])
     if ('pinned' in f.body && typeof f.body.pinned !== 'boolean') f.add('pinned', 'Must be true or false')
     if ('handled' in f.body && typeof f.body.handled !== 'boolean') f.add('handled', 'Must be true or false')
+    if ('read' in f.body && typeof f.body.read !== 'boolean') f.add('read', 'Must be true or false')
     if ('snoozed_until' in f.body && f.body.snoozed_until !== null && !isDateTime(f.body.snoozed_until)) f.add('snoozed_until', 'Must be an ISO date-time or null')
     f.done()
     if (typeof f.body.pinned === 'boolean') email.pinned = f.body.pinned
@@ -155,6 +157,10 @@ export const emailRoutes = [
       const handled = handledOf(db, user.id)
       if (f.body.handled) handled.set(email.id, handled.get(email.id) ?? new Date().toISOString())
       else handled.delete(email.id)
+    }
+    if (typeof f.body.read === 'boolean') {
+      if (f.body.read) readsOf(user.id).add(email.id)
+      else readsOf(user.id).delete(email.id)
     }
     changed()
     publish(user.id, 'email.triaged', { email_id: email.id, email: toListItem(db, email) })

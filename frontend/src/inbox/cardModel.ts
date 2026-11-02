@@ -212,6 +212,7 @@ export function matchesColumn(e: EmailListItem, filters: ColumnFilters, focused:
   for (const v of filters.view) {
     // An arrival is new: unread, and its thread's latest message is the inbound one, with nothing accepted yet. So
     // for needs_reply only the type part of the rule can fail.
+    if (v === 'unread' && e.read) return false
     if (v === 'due_today' && e.due_date !== today) return false
     if (v === 'overdue' && !(e.due_date !== null && e.due_date < today)) return false
     if (v === 'needs_reply' && !(e.triage && ['Task', 'Approval', 'Meeting'].includes(e.triage.email_type.label))) return false

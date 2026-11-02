@@ -302,6 +302,18 @@
   text-overflow: ellipsis;
   min-width: 0;
 }
+/* Unread (proposals §12.3): a dot before the sender plus a heavier sender name, so it isn't colour alone. Same line
+   height either way, so reading an email never changes the card's height. */
+.card-unread {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.card-sender[data-unread] {
+  font-weight: 600;
+}
 .card-role {
   flex: none;
   color: var(--ink-muted);

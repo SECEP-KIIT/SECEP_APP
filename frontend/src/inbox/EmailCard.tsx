@@ -73,7 +73,12 @@ export const EmailCard = memo(function EmailCard({ email, now, density, fresh, o
             <span className="sr-only">Type {triage.email_type.label}. Filter by this type</span>
           </button>
         )}
-        <span className="card-sender" title={email.from.address}>
+        {!email.read && (
+          <span className="card-unread" title="Unread">
+            <span className="sr-only">Unread</span>
+          </span>
+        )}
+        <span className="card-sender" title={email.from.address} data-unread={!email.read || undefined}>
           {senderName(email)}
         </span>
         {role && <span className="card-role">{role}</span>}

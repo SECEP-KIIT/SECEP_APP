@@ -217,3 +217,4 @@ These were decided by the user after task 6. The mock and the frontend implement
    - **On the wire:** `EmailListItem.read: boolean` (and on `EmailDetail`), computed for the caller.
    - **Same owner-only rule as handled.** The change goes out to the user's other tabs as `email.triaged`, like other `PATCH /emails/:id` changes.
    - **The Unread chip** (`view=unread`) now reflects live changes. An email read while the Unread chip is on leaves that list, the same way handled leaves the inbox.
+   - **Implemented in the mock and the client (qa-pass-2-read).** `read` is in `EmailListItem` and `EmailPatch` (the PROPOSED parts of `src/api/types.ts`); this supersedes §1's "not a wire field yet". A card shows unread as a dot plus a heavier sender name. A failed automatic mark is silent and leaves the email unread.

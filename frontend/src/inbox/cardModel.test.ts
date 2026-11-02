@@ -35,6 +35,7 @@ const email = (patch: Partial<EmailListItem> = {}): EmailListItem => ({
   snoozed_until: null,
   due_date: null,
   handled: false,
+  read: false,
   triage: base.triage && { ...base.triage, sentiment: { ...base.triage.sentiment, label: 'Neutral' } },
   ...patch,
 })
@@ -183,6 +184,8 @@ describe('quick views and due dates (PROPOSED view / due_date / handled, proposa
     expect(matchesColumn(email({ handled: true }), NO_FILTERS, false, now)).toBe(false)
     expect(matchesColumn(email({ handled: true }), { ...NO_FILTERS, view: ['handled'] }, false, now)).toBe(true)
     expect(matchesColumn(email(), { ...NO_FILTERS, view: ['handled'] }, false, now)).toBe(false)
+    expect(matchesColumn(email({ read: true }), { ...NO_FILTERS, view: ['unread'] }, false, now)).toBe(false)
+    expect(matchesColumn(email({ read: false }), { ...NO_FILTERS, view: ['unread'] }, false, now)).toBe(true)
     expect(matchesColumn(email({ due_date: '2026-11-04' }), { ...NO_FILTERS, view: ['due_today'] }, false, now)).toBe(true)
     expect(matchesColumn(email({ due_date: '2026-11-03' }), { ...NO_FILTERS, view: ['due_today'] }, false, now)).toBe(false)
     expect(matchesColumn(email({ due_date: '2026-11-03' }), { ...NO_FILTERS, view: ['overdue'] }, false, now)).toBe(true)

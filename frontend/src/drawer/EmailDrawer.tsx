@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { CircleCheck, Paperclip, Pin, PinOff, ShieldAlert, ShieldX, Undo2, X } from 'lucide-react'
+import { CircleCheck, Mail, MailOpen, Paperclip, Pin, PinOff, ShieldAlert, ShieldX, Undo2, X } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { emailDetailOptions, updateEmail } from '../api/queries'
 import type { EmailDetail, LabelSource, Person } from '../api/types'
@@ -75,7 +75,17 @@ function DrawerBody({ email, compose, onClose }: { email: EmailDetail; compose?:
   const triage = email.triage
   const role = senderRole(email)
 
-  const toggle = async (patch: { pinned: boolean } | { handled: boolean }) => {
+  // Opening an email marks it read for this user (proposals §12.3): one explicit PATCH per open, only if unread. A
+  // failure is quiet: the email simply stays unread, and the manual toggle below still works.
+  const marked = useRef(false)
+  useEffect(() => {
+    if (marked.current || email.read) return
+    marked.current = true
+    updateEmail(email.id, { read: true }).catch(() => {})
+  }, [email.id, email.read])
+
+  const toggle = async (patch: { pinned: boolean } | { handled: boolean } | { read: boolean }) => {
+    marked.current = true // a manual choice wins over the automatic mark
     setBusy(true)
     try {
       await updateEmail(email.id, patch)
@@ -111,6 +121,10 @@ function DrawerBody({ email, compose, onClose }: { email: EmailDetail; compose?:
           <button type="button" className="ghost-button" aria-pressed={email.handled} disabled={busy} onClick={() => toggle({ handled: !email.handled })}>
             {email.handled ? <Undo2 size={14} aria-hidden="true" /> : <CircleCheck size={14} aria-hidden="true" />}
             {email.handled ? 'Mark not handled' : 'Mark handled'}
+          </button>
+          <button type="button" className="ghost-button" disabled={busy} onClick={() => toggle({ read: !email.read })}>
+            {email.read ? <Mail size={14} aria-hidden="true" /> : <MailOpen size={14} aria-hidden="true" />}
+            {email.read ? 'Mark unread' : 'Mark read'}
           </button>
         </div>
       </header>

@@ -109,6 +109,23 @@ describe('drawer and quick actions (task 7)', () => {
   })
 })
 
+describe('read-marking (proposals §12.3)', () => {
+  it('reading leaves the Unread list; marking unread brings it back on the next load, never inserted', async () => {
+    await queryClient.fetchInfiniteQuery(emailListOptions('view=unread'))
+    await queryClient.fetchInfiniteQuery(emailListOptions(''))
+    const target = items('view=unread')[0]
+    expect(target.read).toBe(false)
+    await updateEmail(target.id, { read: true })
+    expect(items('view=unread').some((e) => e.id === target.id)).toBe(false)
+    expect(items('').find((e) => e.id === target.id)?.read).toBe(true) // patched in place in the inbox
+    await updateEmail(target.id, { read: false })
+    expect(items('view=unread').some((e) => e.id === target.id)).toBe(false) // not inserted
+    expect(queryClient.getQueryState(emailListOptions('view=unread').queryKey)?.isInvalidated).toBe(true)
+    await queryClient.fetchInfiniteQuery(emailListOptions('view=unread'))
+    expect(items('view=unread').some((e) => e.id === target.id)).toBe(true)
+  })
+})
+
 describe('seed data for the browser checks', () => {
   it('one email carries every click-time link outcome, plus a slow check', async () => {
     const sample = [...db.emails.values()].find((e) => e.user_id === db.users[0].id && e.subject === 'Links for this week’s planning')!

@@ -58,7 +58,7 @@ const demoEmails = () => [...db.emails.values()].filter((e) => e.user_id === db.
 const inboxEmails = () => demoEmails().filter((e) => !db.handled.get(db.users[0].id)?.has(e.id))
 
 // Key sets copied from SRS §6.4.1.
-const LIST_KEYS = ['id', 'thread_id', 'from', 'to', 'cc', 'recipient_position', 'subject', 'received_at', 'status', 'security_flag', 'duplicate_count', 'attachment_count', 'reply_count', 'has_masked_secret', 'triage', 'summary_one_line', 'proposed_action_count', 'jira_key', 'pinned', 'snoozed_until', 'due_date', 'handled', 'projects', 'tags']
+const LIST_KEYS = ['id', 'thread_id', 'from', 'to', 'cc', 'recipient_position', 'subject', 'received_at', 'status', 'security_flag', 'duplicate_count', 'attachment_count', 'reply_count', 'has_masked_secret', 'triage', 'summary_one_line', 'proposed_action_count', 'jira_key', 'pinned', 'snoozed_until', 'due_date', 'handled', 'read', 'projects', 'tags']
 const DETAIL_KEYS = [...LIST_KEYS, 'body_text', 'summary_short', 'actions', 'links', 'attachments', 'masked_secrets', 'auth_results', 'thread']
 const TRIAGE_KEYS = ['email_type', 'urgency', 'sentiment', 'needs_review', 'model_version', 'processed_at']
 const LINK_KEYS = ['check_id', 'anchor_text', 'host', 'verdict', 'go_url']
@@ -304,6 +304,25 @@ describe('GET /emails query (§6.4.1)', () => {
     expect((await call('PATCH', `/emails/${email.id}`, { token, body: { done: true } })).status).toBe(422)
     // Per recipient: another user can't touch it.
     expect((await call('PATCH', `/emails/${email.id}`, { token: await login('sam'), body: { handled: true } })).status).toBe(404)
+  })
+
+  it('PATCH /emails/:id read (proposals §12.3): per user, reversible, drives view=unread and the glance count', async () => {
+    const token = await login()
+    const email = inboxEmails().find((e) => !db.reads.get(db.users[0].id)?.has(e.id))!
+    const unread = async () => ((await call('GET', '/emails?limit=50&view=unread', { token })).json.items as Json[]).map((e) => e.id)
+    const glance = async () => (await call('GET', '/me/glance', { token })).json.counts.inbox_unread as number
+    const before = await glance()
+    expect(await unread()).toContain(email.id)
+    const res = await call('PATCH', `/emails/${email.id}`, { token, body: { read: true } })
+    expect(res.json).toMatchObject({ id: email.id, read: true })
+    expect(await unread()).not.toContain(email.id)
+    expect(await glance()).toBe(before - 1)
+    expect((await call('PATCH', `/emails/${email.id}`, { token, body: { read: false } })).json.read).toBe(false)
+    expect(await unread()).toContain(email.id)
+    expect((await call('PATCH', `/emails/${email.id}`, { token, body: { read: 1 } })).status).toBe(422)
+    // Owner-only (§12.1): another user gets 404, and the owner's state is untouched.
+    expect((await call('PATCH', `/emails/${email.id}`, { token: await login('sam'), body: { read: true } })).status).toBe(404)
+    expect(await unread()).toContain(email.id)
   })
 
   it('keyword search runs over masked text only (FR-UI-026)', async () => {
