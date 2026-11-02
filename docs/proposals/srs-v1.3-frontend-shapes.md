@@ -218,3 +218,61 @@ These were decided by the user after task 6. The mock and the frontend implement
    - **Same owner-only rule as handled.** The change goes out to the user's other tabs as `email.triaged`, like other `PATCH /emails/:id` changes.
    - **The Unread chip** (`view=unread`) now reflects live changes. An email read while the Unread chip is on leaves that list, the same way handled leaves the inbox.
    - **Implemented in the mock and the client (qa-pass-2-read).** `read` is in `EmailListItem` and `EmailPatch` (the PROPOSED parts of `src/api/types.ts`); this supersedes §1's "not a wire field yet". A card shows unread as a dot plus a heavier sender name. A failed automatic mark is silent and leaves the email unread.
+
+## 13. Found while planning the tiling dashboard (task 8, 2 Nov 2026): **HALTED, needs a decision**
+
+FR-UI-010 (S) saves layouts per user and device class through `GET, PUT /layouts/:deviceClass` (§6.5). **§6.4.1 defines no request or response shape for it.** The only hint is the §6.6 comment on `user_layouts.pages`: `[{name, order, widgets:[{type, x, y, w, h, title, colour, icon, filter, sort, density}]}]`. Every part of task 8 (pages, tiles, the title-bar menu, the gallery, saving) is built on this model, so nothing has been built.
+
+**What's missing** (each is a needed field or rule, not a detail):
+1. **Request and response bodies.**
+   - What GET returns when nothing is saved yet: 404, or the starter layout?
+   - Whether PUT replaces the whole layout or patches it.
+   - Concurrent saves from two tabs: last write wins, or a 409?
+   - How the client picks a `deviceClass`: the tablet breakpoint is undefined.
+2. **Identity.** There is no `id` on pages or widgets, but duplicate, remove, rename, React keys and moves all need a stable one.
+3. **Widget `type` values.** FR-UI-006 lists the views but gives no enum.
+4. **`filter`, `sort`, `density`:** no format. Is `filter` a query string, or an object of §6.4.1 `GET /emails` parameters?
+5. **`colour`:** "8 swatches" (FR-UI-008), with no names or values.
+6. **`icon`:** no value set.
+7. **Phone units (FR-UI-009).** Slots are half × 1, full × 1 and full × 2 cards, but neither `x, y, w, h` in slot units nor the slots per one-screen page is defined.
+8. **Starter templates Today, Triage and Planning (FR-UI-007):** no contents. Do they come from the server or the client?
+9. **Limits:** pages per device (Ctrl+1…9 suggests 9), widgets per page, body size.
+10. **Routing.** Does `/` become the paged dashboard, with sidebar Inbox opening the single-column full view (FR-UI-006 "tile or full view")? Today `/` redirects to `/inbox`.
+
+**Proposed shape (for approval; the mock would implement exactly this):**
+
+```ts
+type DeviceClass = 'desktop' | 'tablet' | 'phone'   // client: < 640 px phone, 640–1023 tablet, else desktop
+// GET /layouts/:deviceClass → 200 Layout. Nothing saved: 200 with the starter pages and updated_at: null
+//   (the server owns the templates, so every client gets the same ones). Unknown deviceClass → 400 bad_request.
+// PUT /layouts/:deviceClass { pages, base_updated_at } → 200 Layout. Replaces the whole layout (ajv-validated).
+//   base_updated_at older than the stored row → 409 conflict with details.current (another tab or device saved).
+interface Layout { device_class: DeviceClass; pages: LayoutPage[]; updated_at: string | null }
+interface LayoutPage { id: string /* uuid, client-generated */; name: string /* 1–40 chars */; order: number; widgets: Widget[] }
+interface Widget {
+  id: string                                 // uuid, client-generated
+  type: 'inbox_column' | 'board' | 'projects' | 'reminders' | 'calendar' | 'notes' | 'stats' | 'security'
+  x: number; y: number; w: number; h: number // grid units. Desktop and tablet: 12 columns, row = 1 card pitch.
+                                             // Phone: 2 columns × 4 rows per screen (small 1×1, medium 2×1, large 2×2)
+  title: string | null                       // null = the type's default title
+  colour: 'slate' | 'blue' | 'teal' | 'green' | 'amber' | 'orange' | 'red' | 'violet' | null
+  icon: string | null                        // a Lucide name from a fixed allowlist of about 24
+  filter: EmailFilter | null                 // inbox_column only
+  sort: 'smart' | 'newest' | 'oldest' | 'due' | 'urgency' | 'sender' | 'confidence' | null
+  density: 'compact' | 'comfortable' | 'spacious' | null
+}
+// The §6.4.1 GET /emails parameters as an object, so ajv can check it and M6 can run it as a query unchanged.
+interface EmailFilter {
+  type?: EmailType[]; urgency?: Urgency[]; sentiment?: Sentiment[]; flag?: SecurityFlag[]
+  sender?: string; received_after?: string; received_before?: string; view?: EmailView[]
+}
+```
+
+- **Limits:** at most 9 pages and 24 widgets per page; a 64 KB body (413 above it).
+- **Save cadence:** the client PUTs 800 ms after the last change (FR-UI-010).
+- **Starters**, using only built widgets until tasks 10–15 add theirs:
+  - **Today:** Due today, Needs my reply, and Critical + High.
+  - **Triage:** Unread, Security (`flag=suspicious,malicious`), and Inbox.
+  - **Planning:** Overdue, Inbox sorted by urgency, and a Board tile once task 10 lands.
+- **Routing:** `/` is the paged dashboard; `/inbox` stays the full-view column, and sidebar Inbox opens it.
+- **Gallery:** lists only widget types that are built. The others appear as their tasks land.
