@@ -1,7 +1,6 @@
 // Layouts (FR-UI-010; PROPOSED shape, proposals §13). One saved layout per user and device class. Owner-only by
 // construction: the row is keyed by the caller's id from the token, so no request can name another user's layout.
-import type { Layout, LayoutDeviceClass, LayoutPage, Widget, WidgetType } from '../../api/types'
-import { GRID_COLS, GRID_MAX_H, overlaps, PHONE_COLS, PHONE_ROWS } from '../../dashboard/grid'
+import type { Layout, LayoutDeviceClass, LayoutPage, WidgetSize, WidgetType } from '../../api/types'
 import { Fail, route } from '../http/route'
 import { isDateTime, isInt, object, type Fields } from '../http/validate'
 import { starterLayout } from '../starters'
@@ -13,7 +12,9 @@ const TYPES: WidgetType[] = ['inbox_column', 'board', 'projects', 'reminders', '
 const SWATCHES = ['slate', 'blue', 'teal', 'green', 'amber', 'orange', 'red', 'violet']
 const SORTS = ['smart', 'newest', 'oldest', 'due', 'urgency', 'sender', 'confidence']
 const DENSITIES = ['compact', 'comfortable', 'spacious']
-const WIDGET_KEYS = ['id', 'type', 'x', 'y', 'w', 'h', 'title', 'colour', 'icon', 'filter', 'sort', 'density']
+const SIZES: WidgetSize[] = ['small', 'medium', 'large']
+// Order in the array is the order on the page (proposals §16.3): no positions.
+const WIDGET_KEYS = ['id', 'type', 'size', 'hidden', 'title', 'colour', 'icon', 'filter', 'sort', 'density']
 /** Caps (task 8 decision): Ctrl+1…9 reaches every page. */
 export const MAX_PAGES = 9
 export const MAX_WIDGETS = 24
@@ -31,7 +32,7 @@ function device(params: { deviceClass: string }): LayoutDeviceClass {
   return d
 }
 
-function checkWidget(f: Fields, at: string, w: unknown, dc: LayoutDeviceClass, ids: Set<string>) {
+function checkWidget(f: Fields, at: string, w: unknown, ids: Set<string>) {
   if (!isRecord(w)) return f.add(at, 'Expected an object')
   for (const k of Object.keys(w)) if (!WIDGET_KEYS.includes(k)) f.add(`${at}.${k}`, 'Unknown field')
   for (const k of WIDGET_KEYS) if (!(k in w)) f.add(`${at}.${k}`, 'Required')
@@ -39,14 +40,8 @@ function checkWidget(f: Fields, at: string, w: unknown, dc: LayoutDeviceClass, i
   else if (ids.has(w.id)) f.add(`${at}.id`, 'Duplicate id')
   else ids.add(w.id)
   if (!TYPES.includes(w.type as WidgetType)) f.add(`${at}.type`, 'Unknown widget type')
-  const phone = dc === 'phone'
-  const cols = phone ? PHONE_COLS : GRID_COLS
-  if (!isInt(w.w, 1, phone ? 2 : cols)) f.add(`${at}.w`, `Must be 1–${phone ? 2 : cols}`)
-  if (!isInt(w.h, 1, phone ? 2 : GRID_MAX_H)) f.add(`${at}.h`, `Must be 1–${phone ? 2 : GRID_MAX_H}`)
-  if (!isInt(w.x, 0, cols - 1) || (isInt(w.w, 1, cols) && (w.x as number) + (w.w as number) > cols)) f.add(`${at}.x`, 'Outside the grid')
-  if (!isInt(w.y, 0, phone ? PHONE_ROWS - 1 : 10_000) || (phone && isInt(w.h, 1, 2) && (w.y as number) + (w.h as number) > PHONE_ROWS)) {
-    f.add(`${at}.y`, 'Outside the grid')
-  }
+  if (!SIZES.includes(w.size as WidgetSize)) f.add(`${at}.size`, 'Must be small, medium or large')
+  if (typeof w.hidden !== 'boolean') f.add(`${at}.hidden`, 'Must be true or false')
   if (w.title !== null && !(typeof w.title === 'string' && w.title.trim().length >= 1 && w.title.length <= 60)) f.add(`${at}.title`, 'Must be 1–60 characters or null')
   if (w.colour !== null && !SWATCHES.includes(w.colour as string)) f.add(`${at}.colour`, `Must be one of ${SWATCHES.join(', ')} or null`)
   if (w.icon !== null && !isEmoji(w.icon)) f.add(`${at}.icon`, 'Must be one emoji or null')
@@ -62,7 +57,7 @@ function checkWidget(f: Fields, at: string, w: unknown, dc: LayoutDeviceClass, i
   }
 }
 
-function checkPages(f: Fields, pages: unknown, dc: LayoutDeviceClass) {
+function checkPages(f: Fields, pages: unknown) {
   if (!Array.isArray(pages) || pages.length < 1 || pages.length > MAX_PAGES) return f.add('pages', `Must be 1–${MAX_PAGES} pages`)
   const ids = new Set<string>()
   pages.forEach((p, i) => {
@@ -75,12 +70,7 @@ function checkPages(f: Fields, pages: unknown, dc: LayoutDeviceClass) {
     if (!(typeof p.name === 'string' && p.name.trim().length >= 1 && p.name.length <= 40)) f.add(`${at}.name`, 'Must be 1–40 characters')
     if (!isInt(p.order, 0, MAX_PAGES - 1)) f.add(`${at}.order`, `Must be 0–${MAX_PAGES - 1}`)
     if (!Array.isArray(p.widgets) || p.widgets.length > MAX_WIDGETS) return f.add(`${at}.widgets`, `At most ${MAX_WIDGETS} widgets`)
-    p.widgets.forEach((w, j) => checkWidget(f, `${at}.widgets.${j}`, w, dc, ids))
-    // Phone slots can't overlap (the 12-column grid compacts, so overlap there is harmless).
-    if (dc === 'phone') {
-      const boxes = p.widgets as Widget[]
-      boxes.forEach((a, j) => boxes.slice(j + 1).forEach((b) => overlaps(a, b) && f.add(`${at}.widgets.${j}`, 'Overlaps another widget')))
-    }
+    p.widgets.forEach((w, j) => checkWidget(f, `${at}.widgets.${j}`, w, ids))
   })
 }
 
@@ -100,7 +90,7 @@ export const layoutRoutes = [
     if (!('base_updated_at' in f.body) || (f.body.base_updated_at !== null && !isDateTime(f.body.base_updated_at))) {
       f.add('base_updated_at', 'Must be the updated_at the edit started from, or null')
     }
-    checkPages(f, f.body.pages, dc)
+    checkPages(f, f.body.pages)
     f.done()
 
     const mine = db.layouts.get(user.id) ?? {}

@@ -5,8 +5,13 @@
   gap: var(--space-3);
   height: 100%;
   min-height: 0;
-  /* A sideways swipe changes pages and never triggers browser Back (FR-UI-007). */
-  overscroll-behavior-x: contain;
+  /* A sideways swipe changes pages and never triggers browser Back (FR-UI-007). html and body too: Chrome on a
+     Windows precision touchpad navigates on the root scroller otherwise (QA pass 3). */
+  overscroll-behavior-x: none;
+}
+html:has(.dash),
+html:has(.dash) body {
+  overscroll-behavior-x: none;
 }
 .dash-loading {
   min-height: 60vh;
@@ -60,6 +65,7 @@
   position: relative;
   min-height: 0;
   overflow: hidden;
+  overscroll-behavior-x: none;
   touch-action: pan-y;
 }
 .dash-page {
@@ -99,19 +105,55 @@ html[data-motion='off'] .dash-page {
   }
 }
 
-/* ── Desktop and tablet grid ───────────────────────────────────────────────────────────────────────────── */
-.grid-page {
+/* ── Desktop and tablet: tiles in order, filling rows of 3 slots (proposals §16.3) ────────────────────────
+   CSS grid sparse auto-placement is the flow: a tile that doesn't fit the rest of a row starts the next one. Rows
+   share the page height and are as tall as their tallest tile; more rows than fit scroll the page. */
+.flow-page {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: minmax(var(--tile-row-min, 300px), 1fr);
+  grid-auto-flow: row;
+  gap: var(--space-3);
   height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
+  /* Room for the edit-mode wobble, so it never overflows into a scrollbar that would narrow the tiles. */
+  padding: 3px;
 }
-.grid-item > .widget {
+.flow-tile {
+  min-width: 0;
+  min-height: 0;
+}
+.flow-tile[data-size='small'] { grid-column: span 1; }
+.flow-tile[data-size='medium'] { grid-column: span 2; }
+.flow-tile[data-size='large'] { grid-column: span 3; }
+/* The tile being dragged stays in its new place, faded; a light copy follows the pointer. */
+.flow-tile[data-dragging] {
+  opacity: 0.35;
+}
+.tile-drag {
+  --swatch: var(--line-strong);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   height: 100%;
-}
-.grid-page .react-grid-placeholder {
+  padding: var(--space-3);
+  border: 1px solid var(--line-strong);
+  border-left: 3px solid var(--swatch);
   border-radius: var(--tile-radius);
-  background: var(--accent);
-  opacity: 0.15;
+  background: var(--card-bg);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.18);
+  font-weight: 600;
+  align-content: start;
+  align-items: start;
+  cursor: grabbing;
+}
+/* No text selection while a tile is dragged (QA pass 3). */
+html[data-dragging],
+html[data-dragging] * {
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grabbing;
 }
 
 /* ── Widget frame: colour tints the title bar and draws a thin left stripe (FR-UI-008) ─────────────────── */
@@ -131,14 +173,14 @@ html[data-motion='off'] .dash-page {
 .widget[data-swatch] .col-head {
   background: color-mix(in srgb, var(--swatch) 9%, transparent);
 }
-.widget[data-swatch='slate'] { --swatch: #5c677d; }
-.widget[data-swatch='blue'] { --swatch: #3b5bdb; }
-.widget[data-swatch='teal'] { --swatch: #0c8599; }
-.widget[data-swatch='green'] { --swatch: #2b8a3e; }
-.widget[data-swatch='amber'] { --swatch: #e09f00; }
-.widget[data-swatch='orange'] { --swatch: #e8590c; }
-.widget[data-swatch='red'] { --swatch: #e03131; }
-.widget[data-swatch='violet'] { --swatch: #7048e8; }
+.widget[data-swatch='slate'], .tile-drag[data-swatch='slate'] { --swatch: #5c677d; }
+.widget[data-swatch='blue'], .tile-drag[data-swatch='blue'] { --swatch: #3b5bdb; }
+.widget[data-swatch='teal'], .tile-drag[data-swatch='teal'] { --swatch: #0c8599; }
+.widget[data-swatch='green'], .tile-drag[data-swatch='green'] { --swatch: #2b8a3e; }
+.widget[data-swatch='amber'], .tile-drag[data-swatch='amber'] { --swatch: #e09f00; }
+.widget[data-swatch='orange'], .tile-drag[data-swatch='orange'] { --swatch: #e8590c; }
+.widget[data-swatch='red'], .tile-drag[data-swatch='red'] { --swatch: #e03131; }
+.widget[data-swatch='violet'], .tile-drag[data-swatch='violet'] { --swatch: #7048e8; }
 
 .widget-bar {
   display: flex;
@@ -186,7 +228,7 @@ html[data-motion='off'] .dash-page {
   outline-offset: 2px;
   animation: jiggle 260ms ease-in-out infinite alternate;
 }
-.dash[data-editing] .grid-item:nth-child(2n) .widget > .column {
+.dash[data-editing] .flow-tile:nth-child(2n) .widget > .column {
   animation-delay: -130ms;
 }
 @keyframes jiggle {
@@ -328,18 +370,15 @@ html[data-motion='off'] .dash[data-editing] .widget > .column {
   background: var(--ink);
   border-color: var(--ink);
 }
-.dot-pill {
+/* Every page name, side by side in order, above the dots (QA pass 3: one pill per dot overlapped). */
+.page-pills {
   position: absolute;
-  bottom: calc(100% + 4px);
+  bottom: calc(100% + 2px);
   left: 50%;
-  padding: 2px 8px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
-  background: var(--card-bg);
-  color: var(--ink);
-  font-size: 0.6875rem;
-  font-weight: 600;
-  white-space: nowrap;
+  display: flex;
+  gap: var(--space-1);
+  max-width: calc(100vw - 32px);
+  padding-bottom: 2px;
   pointer-events: none;
   opacity: 0;
   transform: translate(-50%, 4px);
@@ -347,16 +386,37 @@ html[data-motion='off'] .dash[data-editing] .widget > .column {
     opacity var(--dur-fade) ease-in,
     transform var(--dur-fade) ease-in;
 }
-.page-dots:hover .dot-pill,
-.page-dot:focus-visible .dot-pill {
+.page-dots:hover .page-pills,
+.page-dots:focus-within .page-pills {
+  pointer-events: auto;
   opacity: 1;
   transform: translate(-50%, 0);
   transition:
     opacity var(--dur-menu) ease-out var(--hover-intent),
     transform var(--dur-menu) ease-out var(--hover-intent);
 }
-.page-dot[aria-current='page'] .dot-pill {
+.dot-pill {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--card-bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+/* The current page: a heavier border and a dot before the name (shape, not colour alone). */
+.dot-pill[data-current] {
   border-color: var(--ink);
+}
+.dot-pill[data-current]::before {
+  content: '● ';
 }
 .page-dot:focus-visible {
   outline: 2px solid var(--focus-ring);
@@ -450,92 +510,19 @@ html[data-device='phone'] .page-dots {
   min-height: 24px;
 }
 
-/* ── Phone slot pages (FR-UI-009) ──────────────────────────────────────────────────────────────────────── */
+/* ── Phone: the page's widgets in order, one under the other (proposals §16.3) ───────────────────────────── */
 .phone-page {
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
   height: 100%;
   min-height: 0;
-  overflow: hidden;
-}
-/* Short screen: three rows fit; the fourth is a snap-scroll away instead of squeezing all four. */
-.phone-page[data-rows='3'] {
   overflow-y: auto;
-  scroll-snap-type: y mandatory;
   overscroll-behavior-y: contain;
 }
-.phone-slots {
-  display: grid;
-  gap: var(--slot-gap);
-}
-.phone-slot {
-  position: relative;
-  min-width: 0;
+.phone-section {
+  height: 300px;
   min-height: 0;
-  scroll-snap-align: start;
-}
-
-/* Phone edit mode (FR-UI-009): the widget body becomes a pick target (the title bar keeps its ⋯ menu); the picked
-   widget gets a thick outline plus a check badge (shape, not colour alone); ghost outlines show where it fits. */
-.slot-pick {
-  position: absolute;
-  inset: 44px 0 0;
-  z-index: 2;
-  border: 0;
-  border-radius: 0 0 var(--tile-radius) var(--tile-radius);
-  background: rgb(255 255 255 / 0.35);
-}
-.slot-pick:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: -2px;
-}
-.phone-slot[data-selected] > .widget > .column {
-  outline: 3px solid var(--accent);
-  outline-offset: 1px;
-  animation: none;
-}
-.phone-slot[data-selected]::after {
-  content: '✓';
-  position: absolute;
-  top: -8px;
-  right: -6px;
-  z-index: 3;
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: var(--accent);
-  color: #fff;
-  font-size: 0.75rem;
-  font-weight: 700;
-}
-.ghost-slot {
-  z-index: 4;
-  min-height: 0;
-  border: 2px dashed var(--accent);
-  border-radius: var(--tile-radius);
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
-  animation: page-fade var(--dur-menu) ease-out;
-}
-.ghost-slot:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-}
-.phone-page[data-editing] .phone-slot:not([data-selected]) > .widget > .column {
-  outline: 1px dashed var(--line-strong);
-  outline-offset: 2px;
-  animation: jiggle 260ms ease-in-out infinite alternate;
-}
-html[data-motion='reduced'] .phone-page[data-editing] .phone-slot > .widget > .column,
-html[data-motion='off'] .phone-page[data-editing] .phone-slot > .widget > .column {
-  animation: none;
-}
-@media (prefers-reduced-motion: reduce) {
-  html:not([data-motion]) .phone-page[data-editing] .phone-slot > .widget > .column {
-    animation: none;
-  }
-}
-.phone-slot > .widget > .column[data-variant='stack'] .col-head {
-  padding: var(--space-2);
 }
 .column[data-variant='stack'] .col-scroll {
   scroll-snap-type: y mandatory;

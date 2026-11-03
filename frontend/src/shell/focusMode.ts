@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import { focusKeyAction } from './focusKeys'
+import { anyLayerOpen, focusKeyAction } from './focusKeys'
 
 // Focus mode (FR-UI-004). The shell owns the state and hides the sidebar and slims the topbar; the card widgets
 // (task 6) read it through useFocused() to show only Critical and High.
@@ -13,7 +13,7 @@ export function useFocusMode() {
     const onKey = (e: KeyboardEvent) => {
       // The lock screen stops keys before they get here while it's up.
       if (e.defaultPrevented) return
-      const action = focusKeyAction(e, focused)
+      const action = focusKeyAction(e, focused, anyLayerOpen())
       if (!action) return
       e.preventDefault()
       setFocused(action === 'toggle' ? !focused : false)

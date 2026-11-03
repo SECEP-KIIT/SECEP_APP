@@ -15,16 +15,25 @@ export function isTypingTarget(target: EventTarget | null) {
   return el.isContentEditable === true || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)
 }
 
-export function focusKeyAction(e: KeyLike, focused: boolean): 'toggle' | 'exit' | null {
-  // F9: inside an open dialog (drawer, legend) or a popover, keys belong to that layer. So Esc closes the layer
-  // first, and only a later Esc, with nothing open, leaves Focus mode.
-  if (e.ctrlKey || e.metaKey || e.altKey || isTypingTarget(e.target) || inLayer(e.target)) return null
+/**
+ * F9, QA pass 3: while any dialog (drawer, legend, gallery) or popover is open, keys belong to the topmost layer,
+ * wherever keyboard focus is. Focus can land outside the layer (a clicked button inside it disappears), so asking
+ * whether the key's target is inside a layer isn't enough. Esc closes the layer first; only a later Esc, with
+ * nothing open, leaves Focus mode. The native modal <dialog> and Radix popovers close on Esc themselves.
+ */
+export function focusKeyAction(e: KeyLike, focused: boolean, layerOpen = false): 'toggle' | 'exit' | null {
+  if (layerOpen || e.ctrlKey || e.metaKey || e.altKey || isTypingTarget(e.target) || inLayer(e.target)) return null
   if (e.key === 'f' || e.key === 'F') return 'toggle'
   if (e.key === 'Escape' && focused) return 'exit'
   return null
 }
 
+const LAYER = 'dialog[open], [data-radix-popper-content-wrapper]'
+
 export function inLayer(target: EventTarget | null) {
   const el = target as { closest?: (selector: string) => unknown } | null
-  return !!el?.closest?.('dialog[open], [data-radix-popper-content-wrapper]')
+  return !!el?.closest?.(LAYER)
 }
+
+/** Whether any dialog or popover is open anywhere on the page. */
+export const anyLayerOpen = (doc: Pick<Document, 'querySelector'> = document) => doc.querySelector(LAYER) !== null

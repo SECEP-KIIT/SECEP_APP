@@ -2,18 +2,19 @@ import * as Popover from '@radix-ui/react-popover'
 import { Copy, Ellipsis, Maximize2, Pencil, Trash2 } from 'lucide-react'
 import { useContext, useMemo, useRef, useState, type MouseEvent, type PointerEvent, type ReactNode } from 'react'
 import { Link } from 'react-router'
-import type { LayoutDeviceClass, Widget } from '../api/types'
+import type { LayoutDeviceClass, Widget, WidgetSize } from '../api/types'
 import { filterQuery, parseColumnQuery, sortKeyOf, type ColumnState } from '../inbox/cardModel'
 import { Column } from '../inbox/Column'
 import { PortalContainer } from '../inbox/portal'
-import { sizeNameOf, type SizeName } from './grid'
+import { useDragHandle } from './dragHandle'
+import { SIZES } from './grid'
 import { BUILT_TYPES, fullViewHref, ICONS, SWATCHES, widgetTitle } from './layoutModel'
 
 const LONG_PRESS_MS = 500
 
 export interface WidgetActions {
   patch: (patch: Partial<Omit<Widget, 'id' | 'type'>>) => void
-  resize: (size: SizeName) => boolean
+  resize: (size: WidgetSize) => void
   duplicate: () => boolean
   remove: () => void
 }
@@ -29,10 +30,14 @@ export function WidgetFrame({ widget, device, editing, actions }: { widget: Widg
   const [renaming, setRenaming] = useState(false)
   const title = widgetTitle(widget)
   const stack = device === 'phone'
+  // While editing on desktop and tablet, the title bar is the drag handle (FlowPage).
+  const handle = useDragHandle()
+  const drag = editing ? handle : null
 
   // Long-press on the title bar opens the menu on touch (FR-UI-008).
   const press = useRef(0)
   const onPointerDown = (e: PointerEvent) => {
+    drag?.listeners?.onPointerDown?.(e)
     if (e.pointerType === 'mouse') return
     press.current = window.setTimeout(() => setMenu(true), LONG_PRESS_MS)
   }
@@ -43,7 +48,19 @@ export function WidgetFrame({ widget, device, editing, actions }: { widget: Widg
   }
 
   const heading = (titleId: string) => (
-    <div className="widget-bar" onContextMenu={onContextMenu} onPointerDown={onPointerDown} onPointerUp={cancelPress} onPointerLeave={cancelPress}>
+    <div
+      className="widget-bar"
+      ref={drag?.ref}
+      {...drag?.attributes}
+      {...drag?.listeners}
+      // Pressing to drag isn't a long-press for the menu: moving cancels it, like a scroll.
+      onPointerMove={(e) => e.buttons && cancelPress()}
+      onContextMenu={onContextMenu}
+      onPointerDown={onPointerDown}
+      onPointerUp={cancelPress}
+      onPointerLeave={cancelPress}
+      aria-label={drag ? `Move ${title}` : undefined}
+    >
       {widget.icon && (
         <span className="widget-icon" aria-hidden="true">
           {widget.icon}
@@ -157,7 +174,7 @@ function RenameField({ initial, onDone }: { initial: string; onDone: (name: stri
   )
 }
 
-const SIZE_LABEL: Record<SizeName, string> = { small: 'Small', medium: 'Medium', large: 'Large' }
+const SIZE_LABEL: Record<WidgetSize, string> = { small: 'Small (1 slot)', medium: 'Medium (2 slots)', large: 'Large (3 slots)' }
 
 function WidgetMenu({ widget, device, open, onOpenChange, onRename, actions }: {
   widget: Widget
@@ -169,7 +186,6 @@ function WidgetMenu({ widget, device, open, onOpenChange, onRename, actions }: {
 }) {
   const container = useContext(PortalContainer)
   const [note, setNote] = useState<string | null>(null)
-  const size = sizeNameOf(device, widget)
   const close = () => onOpenChange(false)
   return (
     <Popover.Root open={open} onOpenChange={(o) => (setNote(null), onOpenChange(o))}>
@@ -214,22 +230,19 @@ function WidgetMenu({ widget, device, open, onOpenChange, onRename, actions }: {
             </div>
           </fieldset>
 
-          <fieldset className="menu-group">
-            <legend>Size</legend>
-            <div className="size-choices">
-              {(Object.keys(SIZE_LABEL) as SizeName[]).map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  className="size-choice"
-                  aria-pressed={size === s}
-                  onClick={() => setNote(actions.resize(s) ? null : 'No room for that size on this page.')}
-                >
-                  {SIZE_LABEL[s]}
-                </button>
-              ))}
-            </div>
-          </fieldset>
+          {/* Phones stack widgets as sections, so size applies to desktop and tablet only (proposals §16.3). */}
+          {device !== 'phone' && (
+            <fieldset className="menu-group">
+              <legend>Size</legend>
+              <div className="size-choices">
+                {SIZES.map((s) => (
+                  <button key={s} type="button" className="size-choice" aria-pressed={widget.size === s} onClick={() => actions.resize(s)}>
+                    {SIZE_LABEL[s]}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+          )}
           {note && (
             <p className="menu-note" role="status">
               {note}

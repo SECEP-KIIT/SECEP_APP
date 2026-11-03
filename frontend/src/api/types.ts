@@ -310,15 +310,21 @@ export type LayoutDeviceClass = 'desktop' | 'tablet' | 'phone'
 export type WidgetType = 'inbox_column' | 'board' | 'projects' | 'reminders' | 'calendar' | 'notes' | 'stats' | 'security'
 export type Swatch = 'slate' | 'blue' | 'teal' | 'green' | 'amber' | 'orange' | 'red' | 'violet'
 
+/** How many of a row's 3 slots a tile takes on desktop and tablet: 1, 2 or 3 (proposals §16.3). */
+export type WidgetSize = 'small' | 'medium' | 'large'
+
+/**
+ * A tile. A page lists its widgets IN ORDER: on desktop and tablet they flow into rows of 3 slots, left to right,
+ * top to bottom (proposals §16.3, replacing free x/y on a 12-column grid). Phone stacks them as sections.
+ */
 export interface Widget {
   /** A stable uuid, made by the client when the widget is added. */
   id: string
   type: WidgetType
-  /** Grid units. Desktop and tablet: 12 columns. Phone: 2 columns × 4 rows of slots per screen. */
-  x: number
-  y: number
-  w: number
-  h: number
+  /** Desktop and tablet only; phones ignore it. */
+  size: WidgetSize
+  /** Phone only (a section toggled off in the edit sheet); desktop and tablet ignore it. */
+  hidden: boolean
   /** null = the type's default title. */
   title: string | null
   colour: Swatch | null

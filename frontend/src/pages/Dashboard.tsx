@@ -1,22 +1,20 @@
 import { ArrowLeft, ArrowRight, Check, LayoutGrid, Plus, Trash2 } from 'lucide-react'
-import { useEffect, useRef, useState, type PointerEvent, type WheelEvent } from 'react'
+import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import type { Widget } from '../api/types'
+import { FlowPage } from '../dashboard/FlowPage'
 import { Gallery } from '../dashboard/Gallery'
-import { GridPage } from '../dashboard/GridPage'
 import { isPhoneLayout } from '../dashboard/grid'
 import {
   addPage,
   addWidget,
-  applyGrid,
   duplicateWidget,
   MAX_PAGES,
   movePage,
-  moveToSlot,
   patchWidget,
   removePage,
   removeWidget,
   renamePage,
-  resizeWidget,
+  restorePage,
   sortedPages,
   updatePage,
 } from '../dashboard/layoutModel'
@@ -25,6 +23,7 @@ import { PhonePage } from '../dashboard/PhonePage'
 import { useLayout, type SaveState } from '../dashboard/useLayout'
 import { WidgetFrame, type WidgetActions } from '../dashboard/WidgetFrame'
 import { useInbox } from '../inbox/inboxContext'
+import { anyLayerOpen } from '../shell/focusKeys'
 import { InboxHost } from '../inbox/InboxHost'
 import { useDeviceClass } from '../shell/useDeviceClass'
 import '../dashboard/dashboard.css'
@@ -33,7 +32,7 @@ const SWIPE_COOLDOWN_MS = 600
 
 /**
  * The paged dashboard at `/` (FR-UI-006–010, item 2). Pages of widget tiles, saved per user and device class.
- * Desktop and tablet tile on a 12-column grid; phones use fixed slot pages. Only the active page renders.
+ * Desktop and tablet flow tiles into rows of 3 slots (proposals §16.3); phones stack them. Only the active page renders.
  */
 export function Component() {
   return (
@@ -50,14 +49,10 @@ function Dashboard() {
   const { pages, isDefault, query, state, update } = useLayout(device, toast)
   const [activeId, setActiveId] = useState<string | null>(null)
   const [direction, setDirection] = useState<-1 | 1>(1)
-  const [editing, setEditingState] = useState(false)
+  const [editingState, setEditing] = useState(false)
   const [gallery, setGallery] = useState(false)
-  // Phone edit mode: the widget picked to move (FR-UI-009).
-  const [selected, setSelected] = useState<string | null>(null)
-  const setEditing = (on: boolean) => {
-    setEditingState(on)
-    if (!on) setSelected(null)
-  }
+  // Phones are read-only until their edit sheet (QA pass 3 commit 4).
+  const editing = editingState && !phone
 
   const sorted = pages ? sortedPages(pages) : []
   const index = Math.max(0, sorted.findIndex((p) => p.id === activeId))
@@ -68,7 +63,6 @@ function Dashboard() {
     if (!target || target.id === page?.id) return
     setDirection(i > index ? 1 : -1)
     setActiveId(target.id)
-    setSelected(null)
   }
   const goRef = useRef(go)
   useEffect(() => {
@@ -79,7 +73,7 @@ function Dashboard() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return
-      const action = pageKeyAction(e, sorted.length)
+      const action = pageKeyAction(e, sorted.length, anyLayerOpen())
       if (!action) return
       e.preventDefault()
       goRef.current('to' in action ? action.to : index + action.by)
@@ -89,17 +83,34 @@ function Dashboard() {
   }, [sorted.length, index])
 
   // Trackpad swipe (wheel deltaX) and touch swipe. Never while editing, where dragging means moving tiles.
-  const wheel = useRef({ dx: 0, until: 0 })
-  const onWheel = (e: WheelEvent) => {
-    if (editing || !isSideways(e.deltaX, e.deltaY)) return
-    const now = Date.now()
-    if (now < wheel.current.until) return
-    wheel.current.dx += e.deltaX
-    if (Math.abs(wheel.current.dx) >= SWIPE_WHEEL_PX) {
-      go(index + (wheel.current.dx > 0 ? 1 : -1))
-      wheel.current = { dx: 0, until: now + SWIPE_COOLDOWN_MS }
+  // A native, non-passive listener, so a sideways swipe is claimed (preventDefault) and never reaches the browser as
+  // history navigation. overscroll-behavior-x: none on html, body and the pages does the same in CSS.
+  const pagesRef = useRef<HTMLDivElement>(null)
+  const wheel = useRef({ dx: 0, until: 0, editing, index })
+  useEffect(() => {
+    wheel.current.editing = editing
+    wheel.current.index = index
+  })
+  const ready = !query.isPending && !!page
+  useEffect(() => {
+    const el = pagesRef.current
+    if (!el) return
+    const onWheel = (e: globalThis.WheelEvent) => {
+      const w = wheel.current
+      if (w.editing || !isSideways(e.deltaX, e.deltaY)) return
+      e.preventDefault()
+      const now = Date.now()
+      if (now < w.until) return
+      w.dx += e.deltaX
+      if (Math.abs(w.dx) >= SWIPE_WHEEL_PX) {
+        goRef.current(w.index + (w.dx > 0 ? 1 : -1))
+        w.dx = 0
+        w.until = now + SWIPE_COOLDOWN_MS
+      }
     }
-  }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [ready])
   const touch = useRef<{ x: number; y: number } | null>(null)
   const onPointerDown = (e: PointerEvent) => {
     if (e.pointerType !== 'mouse' && !editing) touch.current = { x: e.clientX, y: e.clientY }
@@ -128,13 +139,9 @@ function Dashboard() {
   const editPage = (fn: Parameters<typeof updatePage>[2]) => update((ps) => updatePage(ps, page.id, fn))
   const actionsFor = (w: Widget): WidgetActions => ({
     patch: (patch) => editPage((p) => patchWidget(p, w.id, patch)),
-    resize: (size) => {
-      const next = resizeWidget(page, w.id, size, device)
-      if (next) editPage(() => next)
-      return next !== null
-    },
+    resize: (size) => editPage((p) => patchWidget(p, w.id, { size })),
     duplicate: () => {
-      const next = duplicateWidget(page, w.id, device)
+      const next = duplicateWidget(page, w.id)
       if (next) editPage(() => next)
       return next !== null
     },
@@ -151,6 +158,27 @@ function Dashboard() {
     update(() => next)
     setDirection(1)
     setActiveId(sortedPages(next).at(-1)!.id)
+  }
+
+  // Moving a page keeps you on it, and its dot moves with it (QA pass 3).
+  const shiftPage = (by: -1 | 1) => {
+    setActiveId(page.id)
+    update((ps) => movePage(ps, page.id, by))
+  }
+
+  // Deleting a page can be undone for 10 s (the FR-UI-029 pattern). The page after it (or before, if it was last)
+  // takes its place on screen.
+  const deletePage = () => {
+    const removed = page
+    setActiveId((sorted[index + 1] ?? sorted[index - 1])?.id ?? null)
+    update((ps) => removePage(ps, removed.id))
+    toast(`Deleted page “${removed.name}”.`, 'info', {
+      label: 'Undo',
+      run: () => {
+        update((ps) => restorePage(ps, removed))
+        setActiveId(removed.id)
+      },
+    })
   }
 
   return (
@@ -170,15 +198,15 @@ function Dashboard() {
               onBlur={(e) => update((ps) => renamePage(ps, page.id, e.target.value))}
               onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
             />
-            <button type="button" className="col-tool" title="Move page left" disabled={index === 0} onClick={() => update((ps) => movePage(ps, page.id, -1))}>
+            <button type="button" className="col-tool" title="Move page left" disabled={index === 0} onClick={() => shiftPage(-1)}>
               <ArrowLeft size={15} aria-hidden="true" />
               <span className="sr-only">Move page left</span>
             </button>
-            <button type="button" className="col-tool" title="Move page right" disabled={index === sorted.length - 1} onClick={() => update((ps) => movePage(ps, page.id, 1))}>
+            <button type="button" className="col-tool" title="Move page right" disabled={index === sorted.length - 1} onClick={() => shiftPage(1)}>
               <ArrowRight size={15} aria-hidden="true" />
               <span className="sr-only">Move page right</span>
             </button>
-            <button type="button" className="col-tool" title="Delete this page" disabled={sorted.length <= 1} onClick={() => update((ps) => removePage(ps, page.id))}>
+            <button type="button" className="col-tool" title="Delete this page" disabled={sorted.length <= 1} onClick={deletePage}>
               <Trash2 size={15} aria-hidden="true" />
               <span className="sr-only">Delete this page</span>
             </button>
@@ -192,14 +220,15 @@ function Dashboard() {
             <Plus size={14} aria-hidden="true" /> Add widget
           </button>
         )}
-        {/* On phones a long-press in a gap also enters edit mode; the button is the discoverable, accessible way. */}
-        <button type="button" className={editing ? 'primary-button' : 'ghost-button'} aria-pressed={editing} onClick={() => setEditing(!editing)}>
-          {editing ? <Check size={14} aria-hidden="true" /> : <LayoutGrid size={14} aria-hidden="true" />}
-          {editing ? 'Done' : 'Edit'}
-        </button>
+        {!phone && (
+          <button type="button" className={editing ? 'primary-button' : 'ghost-button'} aria-pressed={editing} onClick={() => setEditing(!editing)}>
+            {editing ? <Check size={14} aria-hidden="true" /> : <LayoutGrid size={14} aria-hidden="true" />}
+            {editing ? 'Done' : 'Edit'}
+          </button>
+        )}
       </div>
 
-      <div className="dash-pages" onWheel={onWheel} onPointerDown={onPointerDown} onPointerUp={onPointerUp}>
+      <div className="dash-pages" ref={pagesRef} onPointerDown={onPointerDown} onPointerUp={onPointerUp}>
         <div key={page.id} className="dash-page" data-direction={direction}>
           {page.widgets.length === 0 ? (
             <div className="col-state">
@@ -207,33 +236,27 @@ function Dashboard() {
               <p>Choose Edit, then Add widget.</p>
             </div>
           ) : phone ? (
-            <PhonePage
-              page={page}
-              render={render}
-              editing={editing}
-              selected={selected}
-              onSelect={setSelected}
-              onEnterEdit={() => setEditing(true)}
-              onMove={(id, slot) => {
-                const next = moveToSlot(page, id, slot)
-                if (next) editPage(() => next)
-                setSelected(null)
-              }}
-            />
+            <PhonePage page={page} render={render} />
           ) : (
-            <GridPage page={page} editing={editing} render={render} onLayout={(items) => {
-              const next = applyGrid(page, items)
-              if (next !== page) editPage(() => next)
-            }} />
+            <FlowPage page={page} editing={editing} render={render} onChange={(next) => editPage(() => next)} />
           )}
         </div>
       </div>
 
       <nav className="page-dots" aria-label="Pages">
+        {/* Hover or focus shows every page name, side by side in page order, above the dots (QA pass 3: pills
+            placed over their own dots overlapped). Pointer users can click a name; the dots are the keyboard route. */}
+        <div className="page-pills" aria-hidden="true">
+          {sorted.map((p, i) => (
+            <button key={p.id} type="button" tabIndex={-1} className="dot-pill" data-current={i === index || undefined} onClick={() => go(i)}>
+              {p.name}
+            </button>
+          ))}
+        </div>
         {sorted.map((p, i) => (
           <button key={p.id} type="button" className="page-dot" aria-current={i === index ? 'page' : undefined} onClick={() => go(i)} title={`${p.name} (Ctrl+${i + 1})`}>
             <span className="dot" aria-hidden="true" />
-            <span className="dot-pill">{p.name}</span>
+            <span className="sr-only">{p.name}</span>
           </button>
         ))}
         <button type="button" className="page-dot page-add" onClick={newPage} title="Add a page" disabled={sorted.length >= MAX_PAGES}>
@@ -246,7 +269,7 @@ function Dashboard() {
         open={gallery}
         onClose={() => setGallery(false)}
         onPick={(preset) => {
-          const next = addWidget(page, preset, device)
+          const next = addWidget(page, preset)
           if (!next) return toast('This page is full. Add a page first.')
           editPage(() => next)
           setGallery(false)

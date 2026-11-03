@@ -7,10 +7,13 @@
 //
 // The blob carries a schema version. On any mismatch or parse problem it is discarded and the store reseeds, so a
 // stale, incompatible store is never loaded.
+import type { LayoutPage, Widget, WidgetSize } from '../../api/types'
 import type { Db, SettingsRow } from './types'
 
 export const STORAGE_KEY = 'secep.mock'
-export const SCHEMA_VERSION = 4 // 2: handled state; correction ids are UUIDs. 3: link samples, wall-clock action times. 4: layouts
+// 2: handled state; correction ids are UUIDs. 3: link samples, wall-clock action times. 4: layouts.
+// 5: ordered widgets with size and hidden (proposals §16.3); version 4 layouts are converted, not discarded.
+export const SCHEMA_VERSION = 5
 
 type PersistedSettings = Omit<SettingsRow, 'jira' | 'llm'> & {
   jira: Omit<SettingsRow['jira'], 'token'> & { token_set: boolean }
@@ -60,6 +63,42 @@ export function snapshot(db: Db, seed: number): Snapshot {
   }
 }
 
+/** A widget as saved before proposals §16.3: free placement on a 12-column grid, or in 2 × 4 phone slots. */
+export type PlacedWidget = Omit<Widget, 'size' | 'hidden'> & { x: number; y: number; w: number; h: number }
+
+/**
+ * The §16.3 migration, as M6 would run it on user_layouts: widgets sorted by y, then x, with the size from the width.
+ * Grid: up to 4 of 12 columns is small, up to 8 medium, else large. Phone slots: half width small, full × 1 medium,
+ * full × 2 large. Nothing is hidden.
+ */
+export function fromPlaced(widgets: readonly PlacedWidget[], phone: boolean): Widget[] {
+  const size = ({ w, h }: PlacedWidget): WidgetSize =>
+    phone ? (w < 2 ? 'small' : h < 2 ? 'medium' : 'large') : w <= 4 ? 'small' : w <= 8 ? 'medium' : 'large'
+  return [...widgets]
+    .sort((a, b) => a.y - b.y || a.x - b.x)
+    .map((w) => {
+      const { x: _x, y: _y, w: _w, h: _h, ...rest } = w
+      return { ...rest, size: size(w), hidden: false }
+    })
+}
+
+type V4Layouts = Record<string, Partial<Record<string, { pages: (Omit<LayoutPage, 'widgets'> & { widgets: PlacedWidget[] })[]; updated_at: string }>>>
+
+/** Version 4 → 5: every saved layout converted with fromPlaced. Everything else is unchanged. */
+export function migrateV4(snap: Snapshot): Snapshot {
+  const layouts = snap.data.layouts as unknown as V4Layouts
+  const next: Snapshot['data']['layouts'] = {}
+  for (const [user, byDevice] of Object.entries(layouts)) {
+    next[user] = Object.fromEntries(
+      Object.entries(byDevice).map(([dc, saved]) => [
+        dc,
+        saved && { ...saved, pages: saved.pages.map((p) => ({ ...p, widgets: fromPlaced(p.widgets, dc === 'phone') })) },
+      ]),
+    )
+  }
+  return { ...snap, schema: SCHEMA_VERSION, data: { ...snap.data, layouts: next } }
+}
+
 /** Returns the snapshot if it is usable for this schema and seed; otherwise discards it and returns null. */
 export function load(storage: Pick<Storage, 'getItem' | 'removeItem'>, seed: number): Snapshot | null {
   let raw: string | null
@@ -70,7 +109,8 @@ export function load(storage: Pick<Storage, 'getItem' | 'removeItem'>, seed: num
   }
   if (!raw) return null
   try {
-    const snap = JSON.parse(raw) as Snapshot
+    const parsed = JSON.parse(raw) as Snapshot
+    const snap = parsed?.schema === 4 && typeof parsed.data?.layouts === 'object' ? migrateV4(parsed) : parsed
     const d = snap?.data
     const ok =
       snap?.schema === SCHEMA_VERSION &&

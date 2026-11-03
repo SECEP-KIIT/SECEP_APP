@@ -7,16 +7,23 @@ export interface OpenOptions {
   compose?: Exclude<ActionType, 'add_board_card'>
 }
 
+/** A toast's one button, e.g. Undo (the FR-UI-029 pattern). Running it dismisses the toast. */
+export interface ToastAction {
+  label: string
+  run: () => void
+}
+
 export interface Toast {
   id: number
   message: string
   tone: 'info' | 'error'
+  action?: ToastAction
 }
 
 /** What cards can ask the inbox page to do: open the drawer, show a toast. */
 export interface InboxApi {
   open: (id: string, opts?: OpenOptions) => void
-  toast: (message: string, tone?: Toast['tone']) => void
+  toast: (message: string, tone?: Toast['tone'], action?: ToastAction) => void
   /** The `?` legend (FR-UI-014), one per page however many columns it has. */
   showLegend: () => void
 }
@@ -25,17 +32,19 @@ export const InboxContext = createContext<InboxApi>({ open: () => {}, toast: () 
 export const useInbox = () => useContext(InboxContext)
 
 const TOAST_MS = 5_000
+/** An undo stays offered for about 10 s (FR-UI-029). */
+export const UNDO_MS = 10_000
 
-/** A small toast queue. Undo toasts (FR-UI-029) extend it with the interactions (task 9). */
+/** A small toast queue. A toast with an action (Undo) stays for UNDO_MS. */
 export function useToasts() {
   const [toasts, setToasts] = useState<Toast[]>([])
   const next = useRef(0)
   const dismiss = useCallback((id: number) => setToasts((t) => t.filter((x) => x.id !== id)), [])
   const push = useCallback(
-    (message: string, tone: Toast['tone'] = 'info') => {
+    (message: string, tone: Toast['tone'] = 'info', action?: ToastAction) => {
       const id = ++next.current
-      setToasts((t) => [...t.slice(-2), { id, message, tone }])
-      setTimeout(() => dismiss(id), TOAST_MS)
+      setToasts((t) => [...t.slice(-2), { id, message, tone, action }])
+      setTimeout(() => dismiss(id), action ? UNDO_MS : TOAST_MS)
     },
     [dismiss],
   )

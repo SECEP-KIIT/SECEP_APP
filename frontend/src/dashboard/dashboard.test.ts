@@ -13,19 +13,21 @@ import { filterError } from '../mocks/routes/emails'
 import { signIn } from '../mocks/session'
 import { STARTERS, starterLayout } from '../mocks/starters'
 import { db, initStore } from '../mocks/store/db'
-import { firstFit, freeSlots, ghostSlots, overlaps, phoneRowsFor } from './grid'
+import { fromPlaced, load, SCHEMA_VERSION, STORAGE_KEY, type PlacedWidget } from '../mocks/store/persist'
+import { flow, rowCount } from './grid'
 import {
   addPage,
   addWidget,
-  applyGrid,
   BUILT_TYPES,
   COLUMN_PRESETS,
+  duplicateWidget,
   fullViewHref,
   MAX_PAGES,
+  MAX_WIDGETS,
   movePage,
-  moveToSlot,
   removePage,
-  resizeWidget,
+  reorderWidget,
+  restorePage,
 } from './layoutModel'
 import { pageKeyAction } from './pageKeys'
 
@@ -46,38 +48,18 @@ describe('the one breakpoint constant', () => {
 })
 
 const widget = (patch: Partial<Widget>): Widget => ({
-  id: crypto.randomUUID(), type: 'inbox_column', x: 0, y: 0, w: 1, h: 1, title: null, colour: null, icon: null, filter: '', sort: null, density: null, ...patch,
+  id: crypto.randomUUID(), type: 'inbox_column', size: 'small', hidden: false, title: null, colour: null, icon: null, filter: '', sort: null, density: null, ...patch,
 })
 const pageOf = (widgets: Widget[]): LayoutPage => ({ id: crypto.randomUUID(), name: 'P', order: 0, widgets })
 
-describe('grid geometry', () => {
-  it('first fit scans rows, then columns; phone pages are a fixed 2 × 4', () => {
-    expect(firstFit([], { w: 4, h: 12 }, 'desktop')).toEqual({ x: 0, y: 0 })
-    expect(firstFit([{ x: 0, y: 0, w: 4, h: 12 }], { w: 4, h: 12 }, 'desktop')).toEqual({ x: 4, y: 0 })
-    const full = [{ x: 0, y: 0, w: 2, h: 2 }, { x: 0, y: 2, w: 2, h: 2 }]
-    expect(firstFit(full, { w: 1, h: 1 }, 'phone')).toBeNull()
-    expect(freeSlots([{ x: 0, y: 0, w: 2, h: 2 }])).toHaveLength(4)
-  })
-
-  it('phone ghost slots (8b): sized to the picked widget, never overlapping each other or other widgets', () => {
-    const big = { id: 'a', x: 0, y: 0, w: 2, h: 2 }
-    const small = { id: 'b', x: 0, y: 2, w: 1, h: 1 }
-    const ghosts = ghostSlots([big, small], small)
-    expect(ghosts).toEqual([{ x: 1, y: 2 }, { x: 0, y: 3 }, { x: 1, y: 3 }])
-    // A tall widget: candidates at y = 1 and y = 2 would overlap each other, so only one survives per column.
-    const tall = { id: 'c', x: 0, y: 0, w: 1, h: 2 }
-    const g = ghostSlots([tall], tall).map((p) => ({ ...p, w: 1, h: 2 }))
-    for (const [i, a] of g.entries()) for (const b of g.slice(i + 1)) expect(overlaps(a, b)).toBe(false)
-    expect(g.some((p) => p.x === 0 && p.y === 0)).toBe(false) // where it already is
-    expect(ghostSlots([big, { id: 'd', x: 0, y: 2, w: 2, h: 2 }], big)).toEqual([]) // nowhere to go
-  })
-
-  it('short phone screens (< 600 px tall) show 3 rows instead of cramming 4', () => {
-    // The scroll fallback applies only below 600 px of screen height (proposals §15.6).
-    expect(phoneRowsFor(480)).toBe(3)
-    expect(phoneRowsFor(599)).toBe(3)
-    expect(phoneRowsFor(600)).toBe(4)
-    expect(phoneRowsFor(740)).toBe(4)
+describe('flow geometry (proposals §16.3)', () => {
+  it('tiles fill rows of 3 slots left to right; one that does not fit the rest of a row starts the next', () => {
+    expect(flow(['small', 'small', 'small', 'small'])).toEqual([{ row: 0, col: 0 }, { row: 0, col: 1 }, { row: 0, col: 2 }, { row: 1, col: 0 }])
+    // medium after small fits (1 + 2); large after small doesn't, so it starts row 1 and pushes the next tile down.
+    expect(flow(['small', 'medium', 'small'])).toEqual([{ row: 0, col: 0 }, { row: 0, col: 1 }, { row: 1, col: 0 }])
+    expect(flow(['small', 'large', 'small'])).toEqual([{ row: 0, col: 0 }, { row: 1, col: 0 }, { row: 2, col: 0 }])
+    expect(rowCount([])).toBe(0)
+    expect(rowCount(['medium', 'medium'])).toBe(2)
   })
 })
 
@@ -94,23 +76,57 @@ describe('layout edits', () => {
     expect(moved.find((p) => p.id === two[1].id)!.order).toBe(0)
   })
 
-  it('a full phone page refuses a new widget; resize moves or refuses', () => {
-    const a = widget({ x: 0, y: 0, w: 2, h: 2 })
-    const b = widget({ x: 0, y: 2, w: 2, h: 1 })
-    const page = pageOf([a, b])
-    expect(addWidget(page, COLUMN_PRESETS[0], 'phone', 'large')).toBeNull()
-    expect(addWidget(page, COLUMN_PRESETS[0], 'phone', 'medium')!.widgets.at(-1)).toMatchObject({ x: 0, y: 3, w: 2, h: 1 })
-    expect(resizeWidget(page, b.id, 'large', 'phone')).toMatchObject({ widgets: [a, { id: b.id, x: 0, y: 2, w: 2, h: 2 }] })
-    expect(resizeWidget(pageOf([a, b, widget({ x: 0, y: 3, w: 2, h: 1 })]), b.id, 'large', 'phone')).toBeNull()
-    expect(moveToSlot(page, b.id, { x: 0, y: 0 })).toBeNull() // overlaps a
-    expect(moveToSlot(page, b.id, { x: 0, y: 3 })!.widgets[1]).toMatchObject({ x: 0, y: 3 })
+  it('a deleted page comes back where it was (undo, FR-UI-029 pattern)', () => {
+    const pages = addPage(addPage([pageOf([])])!)!
+    const middle = pages[1]
+    const after = removePage(pages, middle.id)
+    expect(after.map((p) => p.order)).toEqual([0, 1])
+    const back = restorePage(after, middle)!
+    expect(back.map((p) => p.id)).toEqual(pages.map((p) => p.id))
+    expect(back.map((p) => p.order)).toEqual([0, 1, 2])
+    expect(restorePage(back, middle)).toBeNull() // already there
   })
 
-  it('applyGrid keeps the same page object when nothing moved (no save on mount)', () => {
-    const w = widget({ x: 0, y: 0, w: 4, h: 12 })
-    const page = pageOf([w])
-    expect(applyGrid(page, [{ i: w.id, x: 0, y: 0, w: 4, h: 12 }])).toBe(page)
-    expect(applyGrid(page, [{ i: w.id, x: 4, y: 0, w: 4, h: 12 }]).widgets[0].x).toBe(4)
+  it('dragging: same-size tiles swap; a different size takes the place and the rest move one along', () => {
+    const [a, b, c, d] = [widget({ size: 'small' }), widget({ size: 'medium' }), widget({ size: 'small' }), widget({ size: 'large' })]
+    const page = pageOf([a, b, c, d])
+    const ids = (p: LayoutPage) => p.widgets.map((w) => w.id)
+    expect(ids(reorderWidget(page, a.id, c.id))).toEqual([c.id, b.id, a.id, d.id]) // small ↔ small: swap
+    expect(ids(reorderWidget(page, d.id, b.id))).toEqual([a.id, d.id, b.id, c.id]) // large onto medium: insert
+    expect(ids(reorderWidget(page, a.id, d.id))).toEqual([b.id, c.id, d.id, a.id]) // small onto large, later in order
+    expect(reorderWidget(page, a.id, a.id)).toBe(page) // its own place: nothing to save
+  })
+
+  it('adding and duplicating append in order, up to the cap', () => {
+    const one = addWidget(pageOf([]), COLUMN_PRESETS[0])!
+    expect(one.widgets[0]).toMatchObject({ size: 'small', hidden: false, title: 'Inbox' })
+    const two = addWidget(one, COLUMN_PRESETS[1], 'large')!
+    const dup = duplicateWidget(two, one.widgets[0].id)!
+    expect(dup.widgets.map((w) => w.title)).toEqual(['Inbox', 'Inbox', 'Unread'])
+    expect(new Set(dup.widgets.map((w) => w.id)).size).toBe(3)
+    const full = pageOf(Array.from({ length: MAX_WIDGETS }, () => widget({})))
+    expect(addWidget(full, COLUMN_PRESETS[0])).toBeNull()
+    expect(duplicateWidget(full, full.widgets[0].id)).toBeNull()
+  })
+
+  it('a layout saved before §16.3 converts: sorted by y, then x, sized by width (store schema 4 → 5)', () => {
+    const placed = (x: number, y: number, w: number, h: number, title: string): PlacedWidget => {
+      const { size: _s, hidden: _h, ...rest } = widget({ title })
+      return { ...rest, x, y, w, h }
+    }
+    const grid = fromPlaced([placed(8, 0, 4, 12, 'C'), placed(0, 12, 12, 6, 'D'), placed(0, 0, 8, 12, 'A')], false)
+    expect(grid.map((w) => [w.title, w.size])).toEqual([['A', 'medium'], ['C', 'small'], ['D', 'large']])
+    expect(grid.every((w) => w.hidden === false && !('x' in w))).toBe(true)
+    const phone = fromPlaced([placed(1, 2, 1, 1, 'S'), placed(0, 0, 2, 2, 'L'), placed(0, 2, 1, 1, 'R'), placed(0, 3, 2, 1, 'M')], true)
+    expect(phone.map((w) => [w.title, w.size])).toEqual([['L', 'large'], ['R', 'small'], ['S', 'small'], ['M', 'medium']])
+
+    // A version 4 store is migrated on load, not discarded.
+    const v4 = { schema: 4, seed: 42, data: { users: [], actions: [], arrivals: [], reads: {}, handled: {}, settings: { jira: {} }, layouts: { u1: { desktop: { updated_at: '2026-11-02T10:00:00.000Z', pages: [{ id: 'p', name: 'P', order: 0, widgets: [placed(4, 0, 4, 12, 'Second'), placed(0, 0, 4, 12, 'First')] }] } } } } }
+    const storage = { getItem: (k: string) => (k === STORAGE_KEY ? JSON.stringify(v4) : null), removeItem: vi.fn() }
+    const snap = load(storage, 42)!
+    expect(snap.schema).toBe(SCHEMA_VERSION)
+    expect(snap.data.layouts.u1.desktop!.pages[0].widgets.map((w) => w.title)).toEqual(['First', 'Second'])
+    expect(storage.removeItem).not.toHaveBeenCalled()
   })
 
   it('a column filter is the GET /emails vocabulary, both ways; ⤢ links with it', () => {
@@ -194,9 +210,11 @@ describe('layouts API (proposals §13)', () => {
     expect((await get('desktop')).pages[0].widgets.map((w) => w.title)).toEqual(['Critical + High', 'Due today', 'Overdue'])
     expect((await get('desktop')).pages[1].widgets.map((w) => [w.title, w.filter, w.sort])).toContainEqual(['Needs review', 'needs_review=true', 'confidence'])
     expect((await get('desktop')).pages[2].widgets.map((w) => [w.title, w.filter])).toEqual([['Due this week', 'due=next_7_days'], ['Needs my reply', 'view=needs_reply']])
-    // Tablet uses the 12-column grid, not phone slots.
-    expect((await get('tablet')).pages[0].widgets[0]).toMatchObject({ w: 6, h: 12 })
-    expect((await get('phone')).pages[0].widgets[0]).toMatchObject({ w: 2, h: 2 })
+    // Ordered tiles with a size, no positions (proposals §16.3): three small tiles fill Today's one row.
+    expect((await get('desktop')).pages[0].widgets.map((w) => [w.size, w.hidden])).toEqual([['small', false], ['small', false], ['small', false]])
+    expect((await get('desktop')).pages[2].widgets.map((w) => w.size)).toEqual(['medium', 'small'])
+    expect((await get('tablet')).pages).toEqual((await get('desktop')).pages)
+    expect(Object.keys((await get('phone')).pages[0].widgets[0])).not.toContain('x')
   })
 
   it('PUT is a full replace with an updated_at check; a stale save gets 409', async () => {
@@ -213,7 +231,7 @@ describe('layouts API (proposals §13)', () => {
     expect((await get('phone')).is_default).toBe(true)
   })
 
-  it('422 for an unknown widget type, a bad filter, a non-emoji icon, phone overlap and the caps; 400 for a bad device', async () => {
+  it('422 for an unknown widget type, a bad filter, a non-emoji icon, a bad size, old positions and the caps; 400 for a bad device', async () => {
     const start: Layout = await get('desktop')
     const w = start.pages[0].widgets[0]
     const put = (widgets: Partial<Widget>[], dc: 'desktop' | 'phone' = 'desktop') =>
@@ -224,8 +242,11 @@ describe('layouts API (proposals §13)', () => {
     expect(await field(put([{ filter: 'sort=urgency' }]))).toEqual(['pages.0.widgets.0.filter'])
     expect(await field(put([{ icon: 'ab' }]))).toEqual(['pages.0.widgets.0.icon'])
     expect(await field(put([{ colour: '#ff0000' as never }]))).toEqual(['pages.0.widgets.0.colour'])
-    expect((await put([{ x: 0, y: 0, w: 2, h: 2 }, { x: 1, y: 1, w: 1, h: 1 }], 'phone')).status).toBe(422)
-    expect((await put(Array.from({ length: 25 }, (_, i) => ({ y: i * 12 })))).status).toBe(422)
+    expect(await field(put([{ size: 'huge' as never }]))).toEqual(['pages.0.widgets.0.size'])
+    expect(await field(put([{ hidden: 'no' as never }], 'phone'))).toEqual(['pages.0.widgets.0.hidden'])
+    // The old free-placement fields are unknown now.
+    expect(await field(put([{ x: 0 } as never]))).toEqual(['pages.0.widgets.0.x'])
+    expect((await put(Array.from({ length: 25 }, () => ({}))))).toMatchObject({ status: 422 })
     const tooMany = Array.from({ length: 10 }, (_, order) => ({ id: crypto.randomUUID(), name: `P${order}`, order: order % 9, widgets: [] }))
     expect((await fails(putLayout('desktop', { pages: tooMany, base_updated_at: null }))).status).toBe(422)
     expect((await fails(queryClient.fetchQuery({ ...layoutOptions('watch' as never), retry: false }))).status).toBe(400)

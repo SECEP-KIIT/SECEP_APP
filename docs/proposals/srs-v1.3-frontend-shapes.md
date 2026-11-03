@@ -337,3 +337,20 @@ Decided after the browser pass on QA pass 2, read-marking and tasks 8a–8c. Eac
    - **For now:** the client applies the §10.2 rule (the earliest action `due_date` or calendar start date, rejected proposals excluded) to the event's `actions`. One rule in `src/lib/due.ts`, shared with the mock.
    - **For v1.3:** add `due_date: string | null` to the `email.enriched` payload. The server knows the user's time zone; the client uses the browser's.
 2. **State changes are live in every session** (commit 1). When `PATCH /emails/:id` changes `handled`, `read`, `pinned` or `snoozed_until`, M6 sends `email.triaged` with the full `EmailListItem` to room `user:{id}`, so every other tab and device of that user settles its lists. The mock already did this, and the client now acts on it (F11 list settling). §6.5 describes `email.triaged` only as the triage result, so it needs one sentence: "also sent when the user's own state for the email changes".
+3. **Layouts are ordered lists, not free placement** (commit 2). This changes FR-UI-008 ("a 12-column snap grid") and the §13a widget shape.
+   - **Desktop and tablet:** a page is an ordered list of tiles that fill rows of 3 slots, left to right, top to bottom.
+     - `small`, `medium` and `large` take 1, 2 or 3 slots.
+     - A tile that doesn't fit the rest of a row starts the next one, pushing the tiles after it right, then down.
+     - Each row is as tall as its tallest tile.
+     - Dragging changes the order: same-size tiles swap; otherwise the dragged tile takes the target's place and the rest move one along.
+     - FR-UI-008 for v1.3: "Tiles flow in order into rows of three slots; a tile is small, medium or large (1, 2 or 3 slots); dragging reorders them."
+   - **Wire shape:** `Widget` loses `x`, `y`, `w` and `h`, and gains `size: 'small' | 'medium' | 'large'` and `hidden: boolean`. Array order is page order.
+     - `size` applies to desktop and tablet; `hidden` applies to phone (commit 4's edit sheet). Both are present on every device class, so there is one shape.
+     - `PUT` gets 422 for a bad `size` or `hidden`, and for the old position fields, which are now unknown.
+     - The phone overlap check is gone, since nothing is placed.
+   - **Migration** (`user_layouts` in M6; mock store schema 4 → 5):
+     - sort each page's widgets by `y`, then `x`;
+     - size from the width: grid `w` ≤ 4 is small, ≤ 8 medium, else large; phone half width small, full × 1 medium, full × 2 large;
+     - `hidden: false`.
+   - **Starters:** Today and Triage are three small tiles each (one row); Planning is Due this week (medium) and Needs my reply (small). Desktop and tablet share them.
+   - **§15.6 is obsolete:** the phone no longer has slot rows, so the 600 px short-screen exception goes away. Commit 4 replaces the phone model and records the FR-UI-009 change.

@@ -11,7 +11,7 @@ const demo = db.users[0]
 const me = toMe(demo)
 const emails = [...db.emails.values()].filter((e) => e.user_id === demo.id)
 const notifications = db.notifications.filter((n) => n.user_id === demo.id)
-import { focusKeyAction, isTypingTarget } from './focusKeys'
+import { anyLayerOpen, focusKeyAction, isTypingTarget } from './focusKeys'
 import { glanceLine, lockNotificationText } from './lockText'
 import { moreNav, NAV, phoneTabs, visibleNav } from './nav'
 import { resolvePrefs } from './prefs'
@@ -46,6 +46,15 @@ describe('focus mode keys (FR-UI-004)', () => {
     expect(focusKeyAction(key('Escape', { target: inside('[data-radix-popper-content-wrapper]') }), true)).toBeNull()
     expect(focusKeyAction(key('f', { target: inside('dialog[open]') }), false)).toBeNull()
     expect(focusKeyAction(key('Escape', { target: inside(null) }), true)).toBe('exit')
+  })
+
+  it('an open layer gets Esc even when focus fell outside it, e.g. to <body> (QA pass 3)', () => {
+    const body = { tagName: 'BODY', closest: () => null }
+    expect(focusKeyAction(key('Escape', { target: body }), true, true)).toBeNull()
+    expect(focusKeyAction(key('f', { target: body }), false, true)).toBeNull()
+    expect(focusKeyAction(key('Escape', { target: body }), true, false)).toBe('exit')
+    expect(anyLayerOpen({ querySelector: (s: string) => (s.includes('dialog[open]') ? ({} as Element) : null) })).toBe(true)
+    expect(anyLayerOpen({ querySelector: () => null })).toBe(false)
   })
 })
 

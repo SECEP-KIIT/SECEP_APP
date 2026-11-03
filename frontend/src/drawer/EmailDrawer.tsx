@@ -40,6 +40,29 @@ export default function EmailDrawer({ id, compose, onClose }: { id: string; comp
     setContainer(d)
   }, [])
 
+  // Focus stays in the drawer (QA pass 3). An action button that is clicked and then disappears or is replaced
+  // (Accept → "Creating…" → the issue key) would otherwise drop focus to <body>: the next key would then go to the
+  // page behind instead of the drawer. When that happens, focus moves to the drawer's title.
+  useEffect(() => {
+    const d = ref.current
+    if (!d) return
+    const keep = () =>
+      requestAnimationFrame(() => {
+        if (!d.open || d.contains(document.activeElement)) return
+        // Only a drop to <body> is ours to fix; focus moved on purpose elsewhere (another dialog) stays there.
+        if (document.activeElement !== document.body && document.activeElement !== null) return
+        const title = d.querySelector<HTMLElement>('#drawer-title')
+        ;(title ?? d).focus({ preventScroll: true })
+      })
+    const observer = new MutationObserver(keep)
+    observer.observe(d, { childList: true, subtree: true })
+    d.addEventListener('focusout', keep)
+    return () => {
+      observer.disconnect()
+      d.removeEventListener('focusout', keep)
+    }
+  }, [])
+
   return (
     <dialog
       ref={ref}
@@ -110,7 +133,7 @@ function DrawerBody({ email, compose, onClose }: { email: EmailDetail; compose?:
             <X size={18} aria-hidden="true" />
           </button>
         </div>
-        <h2 className="drawer-title" id="drawer-title">
+        <h2 className="drawer-title" id="drawer-title" tabIndex={-1}>
           {email.subject ? <MaskedText text={email.subject} /> : '(no subject)'}
         </h2>
         <div className="drawer-tools">
