@@ -13,16 +13,22 @@ const FLAG_LABEL: Record<SecurityFlag, string> = { none: 'Clean', suspicious: 'S
  * groups with a GET /emails query parameter are offered: Due and Needs review are PROPOSED (proposals §15.1, §15.2).
  * Project, Status and Has attachments/notes and the live counts (FR-UI-022) wait for their wire shapes (proposals §9).
  */
-export function FilterPopover({ filters, onChange }: { filters: ColumnFilters; onChange: (f: ColumnFilters) => void }) {
+/**
+ * `summary`: a dashboard tile's whole saved filter in words (quick views too). The trigger then becomes the tile's
+ * filter badge: its count covers everything, and the tooltip lists it, since tiles show no chip rows (QA pass 3).
+ */
+export function FilterPopover({ filters, onChange, summary }: { filters: ColumnFilters; onChange: (f: ColumnFilters) => void; summary?: string[] }) {
   const count = activeFilterCount(filters)
+  const badge = summary?.length ?? count
+  const title = summary ? (summary.length ? `Filter: ${summary.join(', ')}` : 'Filter: none') : 'Filter'
   return (
     <Popover.Root>
       <Popover.Trigger asChild>
-        <button type="button" className="col-tool" aria-label={count ? `Filter, ${count} active` : 'Filter'} title="Filter">
+        <button type="button" className="col-tool" aria-label={summary?.length ? title : count ? `Filter, ${count} active` : 'Filter'} title={title}>
           <ListFilter size={16} aria-hidden="true" />
-          {count > 0 && (
+          {badge > 0 && (
             <span className="col-tool-count" aria-hidden="true">
-              {count}
+              {badge}
             </span>
           )}
         </button>

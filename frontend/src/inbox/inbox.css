@@ -17,6 +17,8 @@
   border: 1px solid var(--line);
   border-radius: var(--tile-radius);
   background: var(--col-bg);
+  /* The compact toolbar follows the column's own width (QA pass 3), see "Narrow columns" below. */
+  container: column / inline-size;
 }
 .col-head {
   display: grid;
@@ -437,40 +439,6 @@ button.tag:hover {
   outline-offset: 1px;
 }
 
-/* All-tags popover: drawn over the card's upper rows (never outside the card, so the scroller can't clip it),
-   leaving the strip itself clickable. CSS only, with the 150 ms hover intent; fades out at once. */
-.tag-popover {
-  position: absolute;
-  inset: 4px 4px 30px;
-  z-index: 2;
-  display: flex;
-  flex-wrap: wrap;
-  align-content: flex-end;
-  gap: var(--space-1);
-  padding: var(--space-1);
-  list-style: none;
-  border-radius: 8px;
-  background: var(--card-bg);
-  overflow: hidden;
-  pointer-events: none;
-  opacity: 0;
-  visibility: hidden;
-  transition:
-    opacity var(--dur-fade) ease-in,
-    visibility 0s linear var(--dur-fade);
-}
-.card[data-density='compact'] .tag-popover {
-  inset: 2px 2px 26px;
-}
-.card-tags:hover .tag-popover,
-.card-tags:focus-within .tag-popover {
-  opacity: 1;
-  visibility: visible;
-  transition:
-    opacity var(--dur-fade) ease-out var(--hover-intent),
-    visibility 0s linear var(--hover-intent);
-}
-
 /* ── Skeletons (item 3: skeletons, not spinners) ─────────────────────────────────────────────────────────── */
 .skel {
   position: relative;
@@ -748,44 +716,61 @@ html[data-motion='off'] .card[data-fresh]::after {
 html[data-device='phone'] .column {
   max-width: none;
 }
-/* F7: the tools stay on the title row as icons only. Sort and density keep their native select, invisible over
-   the icon (still focusable and announced); a dot marks a non-default choice, and the filter shows its count. */
-html[data-device='phone'] .col-select {
-  width: 30px;
-  padding: 0;
-  justify-content: center;
-}
-html[data-device='phone'] .col-select select {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  max-width: none;
-  opacity: 0;
-  cursor: pointer;
-}
-html[data-device='phone'] .col-select:focus-within {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-}
-html[data-device='phone'] .col-select[data-set] .col-tool-dot {
-  display: block;
-}
-/* Quick chips: one row that scrolls sideways instead of wrapping. */
-html[data-device='phone'] .quick-chips {
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  scrollbar-width: none;
-}
-html[data-device='phone'] .quick-chips::-webkit-scrollbar {
-  display: none;
-}
-html[data-device='phone'] .quick-chip {
-  flex-shrink: 0;
-  white-space: nowrap;
+/* ── Narrow columns (QA pass 3): dashboard tiles, phone, any column under 480 px wide ──────────────────────
+   A container query on the column's own width, not the screen's. That's allowed next to the one breakpoint
+   constant (src/lib/breakpoints.ts): the breakpoint test forbids only media queries on width, which describe the
+   screen; this describes the column.
+   The tools stay on the title row as icons only. Sort and density keep their native select, invisible over the icon
+   (still focusable and announced); a dot marks a non-default choice, and the filter shows its count. */
+@container column (max-width: 480px) {
+  .col-select {
+    width: 30px;
+    padding: 0;
+    justify-content: center;
+  }
+  .col-select select {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    max-width: none;
+    opacity: 0;
+    cursor: pointer;
+  }
+  .col-select:focus-within {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+  .col-select[data-set] .col-tool-dot {
+    display: block;
+  }
+  /* Quick chips (full view only): one row that scrolls sideways instead of wrapping. */
+  .quick-chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+  .quick-chips::-webkit-scrollbar {
+    display: none;
+  }
+  .quick-chip {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+  /* One title row: the title truncates before any tool wraps under it. */
+  .col-title-row {
+    flex-wrap: nowrap;
+  }
+  .col-tools {
+    flex-wrap: nowrap;
+    gap: 0;
+  }
+  .col-count {
+    flex: none;
+  }
 }
 
-/* A non-default sort or density on the phone's icon-only toolbar: a dot on the icon (a shape, not colour alone). */
+/* A non-default sort or density on the compact toolbar: a dot on the icon (a shape, not colour alone). */
 .col-tool-dot {
   display: none;
   position: absolute;
@@ -798,45 +783,75 @@ html[data-device='phone'] .quick-chip {
   background: var(--accent);
 }
 
-/* ── Card layer 2: quick actions (FR-UI-011, item 3) ─────────────────────────────────────────────────────────
-   Overlay the top-right corner (no height change). Pure CSS hover with the 150 ms intent; keyboard focus inside the
-   card shows them at once. Touch has no hover, so on phones a tap opens the drawer instead. */
+/* ── Card layer 2: the hover lift (FR-UI-011, item 3; QA pass 3) ─────────────────────────────────────────────
+   A fixed copy over the card, in a portal outside the list's scroller: the action bar above it (or below when
+   there's no room), every tag below it (or above). It covers neighbours, never moves them. Only opacity and
+   transform animate; the raised card lets the pointer through to the real one. */
 .card {
   cursor: pointer;
 }
-.card-actions {
+.card-lift {
+  position: fixed;
+  z-index: 40;
+  pointer-events: none;
+  opacity: 0;
+}
+.card-lift[data-placed] {
+  opacity: 1;
+  animation: lift-in var(--dur-menu) ease-out;
+}
+.lift-card {
+  height: 100%;
+  pointer-events: none;
+  box-shadow: 0 10px 28px rgb(20 24 38 / 0.22);
+  transform: translateY(-2px);
+}
+@keyframes lift-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+}
+html[data-motion='reduced'] .card-lift[data-placed],
+html[data-motion='off'] .card-lift[data-placed] {
+  animation: none;
+}
+html[data-motion='reduced'] .lift-card,
+html[data-motion='off'] .lift-card {
+  transform: none;
+}
+.lift-bar,
+.lift-tags {
   position: absolute;
-  top: 6px;
-  right: 8px;
-  z-index: 3;
-  display: flex;
-  gap: 2px;
-  padding: 2px;
+  pointer-events: auto;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--card-bg);
-  opacity: 0;
-  visibility: hidden;
-  transition:
-    opacity var(--dur-fade) ease-in,
-    visibility 0s linear var(--dur-fade);
+  box-shadow: 0 6px 18px rgb(20 24 38 / 0.16);
 }
-.card:hover .card-actions {
-  opacity: 1;
-  visibility: visible;
-  transition:
-    opacity var(--dur-fade) ease-out var(--hover-intent),
-    visibility 0s linear var(--hover-intent);
+.lift-bar {
+  right: 0;
+  padding: 2px;
 }
-.card:focus-within .card-actions {
-  opacity: 1;
-  visibility: visible;
-  transition: none;
+.lift-bar[data-place='above'] {
+  bottom: calc(100% + 4px);
 }
-@media (hover: none) {
-  .card-actions {
-    display: none;
-  }
+.lift-bar[data-place='below'] {
+  top: calc(100% + 4px);
+}
+.lift-tags {
+  left: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  max-width: 100%;
+  margin: 0;
+  padding: var(--space-2);
+  list-style: none;
+}
+.lift-bar .card-actions {
+  display: flex;
+  gap: 2px;
 }
 .card-action {
   display: inline-flex;

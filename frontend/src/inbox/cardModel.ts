@@ -354,6 +354,15 @@ export function filterChips(filters: ColumnFilters): FilterChip[] {
 
 export const activeFilterCount = (filters: ColumnFilters) => filterChips(filters).length
 
+/**
+ * Everything a saved filter selects, quick views included, in words: a tile's filter badge counts these and shows
+ * them in its tooltip (QA pass 3), since a tile has no chip rows.
+ */
+export const filterSummary = (filters: ColumnFilters): string[] => [
+  ...QUICK_VIEWS.filter((v) => filters.view.includes(v.key)).map((v) => v.label),
+  ...filterChips(filters).map((c) => c.label),
+]
+
 /** Any filter or quick view at all: decides between the "All clear" and "Nothing matches" empty states. */
 export const isFiltered = (filters: ColumnFilters) => filters.view.length > 0 || activeFilterCount(filters) > 0
 

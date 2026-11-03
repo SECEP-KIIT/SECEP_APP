@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createDb } from '../mocks/store/generate'
 import { toListItem } from '../mocks/store/serialize'
 import type { EmailListItem } from '../api/types'
+import { placeLift } from './liftContext'
 import {
   activeFilterCount,
   addFilter,
@@ -9,6 +10,7 @@ import {
   cardTime,
   columnQuery,
   dueTag,
+  filterSummary,
   isFiltered,
   filterChips,
   matchesColumn,
@@ -190,5 +192,22 @@ describe('quick views and due dates (PROPOSED view / due_date / handled, proposa
     expect(matchesColumn(email({ due_date: '2026-11-03' }), { ...NO_FILTERS, view: ['due_today'] }, false, now)).toBe(false)
     expect(matchesColumn(email({ due_date: '2026-11-03' }), { ...NO_FILTERS, view: ['overdue'] }, false, now)).toBe(true)
     expect(matchesColumn(email({ due_date: null }), { ...NO_FILTERS, view: ['overdue'] }, false, now)).toBe(false)
+  })
+})
+
+describe('hover lift placement (QA pass 3)', () => {
+  it('bar above and tags below; each flips when the viewport has no room', () => {
+    expect(placeLift({ top: 300, bottom: 400 }, 34, 40, 900)).toEqual({ bar: 'above', tags: 'below' })
+    expect(placeLift({ top: 30, bottom: 130 }, 34, 40, 900)).toEqual({ bar: 'below', tags: 'below' })
+    expect(placeLift({ top: 800, bottom: 880 }, 34, 40, 900)).toEqual({ bar: 'above', tags: 'above' })
+    // Bar below the card pushes the tags further down, which can flip them.
+    expect(placeLift({ top: 20, bottom: 820 }, 34, 40, 900)).toEqual({ bar: 'below', tags: 'above' })
+  })
+})
+
+describe('tile filter summary (QA pass 3)', () => {
+  it('counts quick views and filters, in words', () => {
+    expect(filterSummary({ ...NO_FILTERS, view: ['due_today'], urgency: ['Critical'] })).toEqual(['Due today', 'Urgency: Critical'])
+    expect(filterSummary(NO_FILTERS)).toEqual([])
   })
 })

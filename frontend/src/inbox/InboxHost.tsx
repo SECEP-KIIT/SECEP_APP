@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { isTypingTarget } from '../shell/focusKeys'
+import { CardLiftProvider } from './CardLift'
 import { InboxContext, useToasts, type InboxApi, type OpenOptions } from './inboxContext'
 import { Legend } from './Legend'
 import { Toaster } from './Toaster'
@@ -54,7 +55,7 @@ export function InboxHost({ children }: { children: ReactNode }) {
       <p id="card-hint" className="sr-only">
         Enter or Space opens the details.
       </p>
-      {children}
+      <CardLiftProvider>{children}</CardLiftProvider>
       <Legend open={legend} onClose={() => setLegend(false)} />
       {drawer && (
         <Suspense fallback={null}>

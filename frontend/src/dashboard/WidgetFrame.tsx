@@ -143,7 +143,7 @@ function ColumnWidget({ widget, title, heading, tools, stack, onChange }: {
       onStateChange={(s) => onChange({ filter: filterQuery(s.filters), sort: s.sort, density: s.density })}
       heading={heading}
       tools={tools}
-      variant={stack ? 'stack' : 'full'}
+      variant={stack ? 'stack' : 'tile'}
     />
   )
 }

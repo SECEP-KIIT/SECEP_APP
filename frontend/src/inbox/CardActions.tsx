@@ -3,6 +3,7 @@ import { useState, type MouseEvent } from 'react'
 import { acceptAction, emailDetailOptions, queryClient, updateEmail } from '../api/queries'
 import type { EmailListItem } from '../api/types'
 import { errorText, useInbox, type OpenOptions } from './inboxContext'
+import { useLift } from './liftContext'
 
 type Busy = 'jira' | 'calendar' | 'done' | null
 
@@ -10,14 +11,20 @@ type Busy = 'jira' | 'calendar' | 'done' | null
 const LEAVE_MS = 120
 
 /**
- * Card layer 2 (FR-UI-011, item 3): Jira · Calendar · Done · ⋯, overlaid on the card's top-right on hover (CSS, 150 ms
- * intent) or keyboard focus, never changing the card's height. Touch has no hover: a tap opens the drawer instead.
+ * Card layer 2 (FR-UI-011, item 3): Jira · Calendar · Done · ⋯, in the bar above a lifted card (CardLift, QA pass 3),
+ * never changing the card's height. Touch has no hover: a tap opens the drawer instead.
  *
  * Jira and Calendar send the decoder's proposal as is (FR-ORC-012). Shift+click, or no proposal to send, opens the
  * drawer's composer. Done marks the email handled (proposals §10.3); in the Handled view it restores it.
  */
 export function CardActions({ email, onLeave }: { email: EmailListItem; onLeave: (leaving: boolean) => void }) {
-  const { open, toast } = useInbox()
+  const { open: openDrawer, toast } = useInbox()
+  const lift = useLift()
+  // Opening the drawer drops the lift the actions sit in.
+  const open: typeof openDrawer = (id, opts) => {
+    lift?.hide()
+    openDrawer(id, opts)
+  }
   const [busy, setBusy] = useState<Busy>(null)
 
   const send = (type: NonNullable<OpenOptions['compose']>) => async (e: MouseEvent) => {

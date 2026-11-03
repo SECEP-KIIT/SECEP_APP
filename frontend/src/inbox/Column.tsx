@@ -12,6 +12,7 @@ import {
   columnQuery,
   DENSITIES,
   filterChips,
+  filterSummary,
   isFiltered,
   matchesColumn,
   QUICK_VIEWS,
@@ -51,10 +52,12 @@ interface Props {
   /** Extra controls at the end of the title row (a widget's ⋯ menu, ⤢). */
   tools?: ReactNode
   /**
-   * `stack`: a phone slot (FR-UI-009). One card plus a peek, scrolling inside, with an n / N counter; the filter
-   * tools, quick chips and urgency bar stay in the full view.
+   * `tile`: a dashboard tile, a saved filter (QA pass 3). No quick chips or active-filter chips; the filter button is
+   * a badge counting the whole filter, with it in words in the tooltip. The chip rows stay in the ⤢ full view.
+   * `stack`: a phone section. One card plus a peek, scrolling inside, with an n / N counter; the filter tools, quick
+   * chips and urgency bar stay in the full view.
    */
-  variant?: 'full' | 'stack'
+  variant?: 'full' | 'tile' | 'stack'
 }
 
 /**
@@ -75,6 +78,7 @@ export function Column({ title, state, onStateChange, initial, heading, tools, v
   const current = state ?? own
   const { filters, sort } = current
   const stack = variant === 'stack'
+  const tile = variant === 'tile'
   const density: Density = stack ? 'compact' : current.density
   // Setters read the latest state through a ref, so functional updates compose like useState's.
   const latest = useRef(current)
@@ -173,7 +177,7 @@ export function Column({ title, state, onStateChange, initial, heading, tools, v
             <StackCounter scrollRef={scrollRef} pitch={pitch} loaded={items.length} more={more} />
           ) : (
           <div className="col-tools">
-            <FilterPopover filters={filters} onChange={setFilters} />
+            <FilterPopover filters={filters} onChange={setFilters} summary={tile ? filterSummary(filters) : undefined} />
             <label className="col-select" title="Sort" data-set={sort !== 'newest' || undefined}>
               <ArrowDownUp size={16} aria-hidden="true" />
               <span className="col-tool-dot" aria-hidden="true" />
@@ -210,6 +214,7 @@ export function Column({ title, state, onStateChange, initial, heading, tools, v
           <>
         <UrgencyBar split={split} total={items.length} />
         {focused && <p className="col-note">Focus mode: Critical and High only</p>}
+        {!tile && (
         <div className="quick-chips" role="group" aria-label="Quick filters">
           {QUICK_VIEWS.map((v) => (
             <button
@@ -224,7 +229,8 @@ export function Column({ title, state, onStateChange, initial, heading, tools, v
             </button>
           ))}
         </div>
-        {chips.length > 0 && (
+        )}
+        {!tile && chips.length > 0 && (
           <ul className="chips" aria-label="Active filters">
             {chips.map((c) => (
               <li key={c.key}>
