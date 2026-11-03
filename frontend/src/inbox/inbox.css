@@ -237,7 +237,7 @@
 .text-button {
   border: 0;
   background: none;
-  color: var(--accent);
+  color: var(--accent-text);
   font: inherit;
   font-weight: 600;
   padding: var(--space-1) var(--space-2);
@@ -956,6 +956,7 @@ html[data-motion='off'] .lift-card {
   padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
   border-radius: 10px;
   background: #1e2230;
+  border: 1px solid rgb(255 255 255 / 0.12); /* still a visible edge on the dark sheet */
   color: #f4f6fb;
   font-size: 0.8125rem;
   box-shadow: 0 8px 24px rgb(30 34 48 / 0.25);

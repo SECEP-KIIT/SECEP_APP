@@ -237,6 +237,8 @@ export interface UiPrefs {
   idle_minutes?: number | null
   glance_subjects?: boolean
   sidebar_collapsed?: boolean
+  /** PROPOSED (proposals §16.6): Light, Dark, or Auto (follow the system). Unset = Auto. */
+  theme?: 'light' | 'dark' | 'auto'
 }
 
 /** PATCH /me/preferences: request is a partial UiPrefs; response is the full stored object. */

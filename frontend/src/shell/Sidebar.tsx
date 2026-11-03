@@ -1,10 +1,12 @@
 import { PanelLeftClose, PanelLeftOpen, Settings, UserCog } from 'lucide-react'
 import { useEffect, useRef, useState, type FocusEvent, type PointerEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { NavLink } from 'react-router'
 import { useGlance, useMe, useProjects, useUpdatePreferences } from '../api/queries'
 import { isAdmin, visibleNav } from './nav'
 import { usePrefs } from './prefs'
 import { ProgressRing } from './ProgressRing'
+import { ThemeChoice } from './ThemeChoice'
 
 const PEEK_INTENT_MS = 150
 const PEEK_LEAVE_MS = 200
@@ -42,6 +44,91 @@ function useCriticalGlow(critical: number) {
     previous.current = critical
   }, [critical])
   return pulse
+}
+
+/**
+ * The avatar menu: who is signed in, and the theme for now (proposals §16.6; Settings takes it over in task 16). A
+ * small hand-made menu, not a popover library, so nothing heavy joins the first load. Esc, a click outside or Tab
+ * closes it and returns focus to the avatar.
+ */
+function UserMenu({ name, email }: { name: string; email: string | undefined }) {
+  const [at, setAt] = useState<{ left: number; bottom: number } | null>(null)
+  const button = useRef<HTMLButtonElement>(null)
+  const menu = useRef<HTMLDivElement>(null)
+  const open = at !== null
+  const close = (refocus: boolean) => {
+    setAt(null)
+    if (refocus) button.current?.focus()
+  }
+  const toggle = () => {
+    const r = button.current?.getBoundingClientRect()
+    setAt(open || !r ? null : { left: r.left, bottom: innerHeight - r.top + 4 })
+  }
+
+  useEffect(() => {
+    if (!open) return
+    // Focus goes to the chosen theme, so the keyboard lands in the menu although it lives in a portal.
+    menu.current?.querySelector<HTMLInputElement>('input:checked')?.focus()
+    const outside = (e: globalThis.PointerEvent) => {
+      const t = e.target as Node
+      if (!menu.current?.contains(t) && !button.current?.contains(t)) setAt(null)
+    }
+    // Esc wherever focus is; claimed (preventDefault) so Focus mode, which skips handled keys, doesn't also act.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      e.preventDefault()
+      setAt(null)
+      if (menu.current?.contains(document.activeElement)) button.current?.focus()
+    }
+    const onResize = () => setAt(null)
+    addEventListener('pointerdown', outside, true)
+    addEventListener('keydown', onKey, true)
+    addEventListener('resize', onResize)
+    return () => {
+      removeEventListener('pointerdown', outside, true)
+      removeEventListener('keydown', onKey, true)
+      removeEventListener('resize', onResize)
+    }
+  }, [open])
+
+  return (
+    <li className="nav-user">
+      <button ref={button} type="button" className="nav-link" aria-expanded={open} aria-controls="user-menu" title={email} onClick={toggle}>
+        <span className="nav-icon">
+          <span className="avatar" aria-hidden="true">
+            {name[0].toUpperCase()}
+          </span>
+        </span>
+        <span className="nav-label">{name}</span>
+      </button>
+      {/* In a portal: the sidebar panel clips (overflow, clip-path) and its backdrop-filter traps fixed children. */}
+      {at &&
+        createPortal(
+          <div
+            ref={menu}
+            className="user-menu"
+            id="user-menu"
+            role="group"
+            aria-label="Account"
+            style={{ left: at.left, bottom: at.bottom }}
+            onKeyDown={(e) => {
+              // Tab leaves the menu back to where it opened from.
+              if (e.key === 'Tab') {
+                e.preventDefault()
+                close(true)
+              }
+            }}
+          >
+            <p className="user-menu-who">
+              <strong>{name}</strong>
+              {email && <span>{email}</span>}
+            </p>
+            <ThemeChoice />
+          </div>,
+          document.body,
+        )}
+    </li>
+  )
 }
 
 export function Sidebar() {
@@ -114,16 +201,7 @@ export function Sidebar() {
         )}
 
         <ul className="nav nav-bottom">
-          {name && (
-            <li className="nav-user" title={me?.email}>
-              <span className="nav-icon">
-                <span className="avatar" aria-hidden="true">
-                  {name[0].toUpperCase()}
-                </span>
-              </span>
-              <span className="nav-label">{name}</span>
-            </li>
-          )}
+          {name && <UserMenu name={name} email={me?.email} />}
           <li>
             <NavLink to="/settings" className="nav-link">
               <span className="nav-icon">

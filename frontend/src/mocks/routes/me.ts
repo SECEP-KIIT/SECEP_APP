@@ -14,6 +14,7 @@ const PREF_CHECKS: Record<keyof UiPrefs, (v: unknown) => boolean> = {
   idle_minutes: (v) => v === null || isInt(v, 1, 240),
   glance_subjects: (v) => typeof v === 'boolean',
   sidebar_collapsed: (v) => typeof v === 'boolean',
+  theme: (v) => v === 'light' || v === 'dark' || v === 'auto',
 }
 
 export const meRoutes = [

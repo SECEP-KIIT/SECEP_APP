@@ -76,7 +76,9 @@ describe('nav gating (sidebar and tab bar share it)', () => {
 
 describe('resolvePrefs', () => {
   it('defaults, and drops wrongly typed values', () => {
-    expect(resolvePrefs({})).toEqual({ motion: undefined, skip_lock: false, idle_minutes: 15, glance_subjects: false, sidebar_collapsed: false })
+    expect(resolvePrefs({})).toEqual({ motion: undefined, skip_lock: false, idle_minutes: 15, glance_subjects: false, sidebar_collapsed: false, theme: 'auto' })
+    expect(resolvePrefs({ theme: 'dark' }).theme).toBe('dark')
+    expect(resolvePrefs({ theme: 'sepia' }).theme).toBe('auto')
     expect(resolvePrefs({ motion: 'wild', skip_lock: 'yes', idle_minutes: null })).toMatchObject({ motion: undefined, skip_lock: false, idle_minutes: null })
   })
 })

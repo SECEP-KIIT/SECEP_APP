@@ -150,7 +150,7 @@ html[data-device='phone'] .drawer {
 }
 .drawer-body summary {
   cursor: pointer;
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 600;
 }
 .drawer-body-text {

@@ -368,3 +368,11 @@ Decided after the browser pass on QA pass 2, read-marking and tasks 8a–8c. Eac
    - FR-UI-009 for v1.3: "On phones each dashboard page is a vertical list of sections, one per widget, each showing its top three items and a link to the full view; a segmented control switches pages; Edit opens a sheet to reorder, hide, add and remove sections; a long-press on a card opens its actions."
    - §15.6 (the 600 px short-screen exception) no longer applies.
 5. **Lock screen on phone: the Loading box sits bottom centre** (commit 4). It's above the safe area and clear of the notifications, instead of right middle over them. Desktop keeps right middle. This changes FR-WP-003 for v1.3: "…a boxed Loading indicator at the right middle (bottom centre on phones)…"
+6. **Dark mode: new scope, a v1.3 addition** (commit 5; not in SRS v1.2).
+   - **`ui_prefs.theme: 'light' | 'dark' | 'auto'`** (PROPOSED). Unset means `auto`, which follows the system's `prefers-color-scheme` and changes with it.
+     - It's saved through `PATCH /me/preferences`; any other value gets `422 validation_failed`.
+     - It's mirrored to the `secep.boot` boot preferences (one keyword, nothing personal), so the theme is right before the app paints.
+   - **What it covers:** the sheet, columns, cards, chips, drawer, popovers, sheets, menus and dashboard tiles. The lock screen, the wallpaper and the frosted bars keep following the wallpaper tone, as before.
+   - **Contrast:** all text meets AA, and marks, edges and focus are at least 3:1. The ratios are recorded in `tokens.css`, including the urgency marks, the security and due tags, and sentiment.
+   - **Where to choose it:** in the avatar menu (desktop and tablet) and on the More page (phone) until the Settings page (task 16).
+   - New text for v1.3, next to FR-UI-032 (motion): "The user can choose a Light, Dark or Auto (system) theme; the choice is stored in ui_prefs.theme and applied on every device."

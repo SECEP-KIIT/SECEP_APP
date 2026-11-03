@@ -615,3 +615,15 @@ describe('store', () => {
     }
   })
 })
+
+describe('ui_prefs.theme (PROPOSED, proposals §16.6)', () => {
+  it('PATCH /me/preferences stores light, dark or auto; anything else is 422', async () => {
+    const token = await login()
+    const ok = await call('PATCH', '/me/preferences', { token, body: { theme: 'dark' } })
+    expect(ok.status).toBe(200)
+    expect(ok.json.ui_prefs.theme).toBe('dark')
+    expect((await call('GET', '/me', { token })).json.ui_prefs.theme).toBe('dark')
+    expect((await call('PATCH', '/me/preferences', { token, body: { theme: 'auto' } })).json.ui_prefs.theme).toBe('auto')
+    expect((await call('PATCH', '/me/preferences', { token, body: { theme: 'sepia' } })).status).toBe(422)
+  })
+})

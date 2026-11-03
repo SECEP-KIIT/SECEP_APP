@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { INITIAL, STEP_WEIGHTS, effectiveMotion, isIdle, progressOf, reduce, ringLength, type LockEvent, type LockState, type Step } from './lock-state'
+import { INITIAL, STEP_WEIGHTS, effectiveMotion, effectiveTheme, isIdle, progressOf, reduce, ringLength, type LockEvent, type LockState, type Step } from './lock-state'
 
 const ALL: Step[] = ['app', 'me', 'emails', 'layout', 'socket']
 const run = (events: LockEvent[], from: LockState = INITIAL) => events.reduce(reduce, from)
@@ -83,5 +83,15 @@ describe('effectiveMotion (FR-UI-032)', () => {
     expect(effectiveMotion('off', false)).toBe('off')
     expect(effectiveMotion('reduced', false)).toBe('reduced')
     expect(effectiveMotion('full', true)).toBe('full')
+  })
+})
+
+describe('effectiveTheme (proposals §16.6)', () => {
+  it('Light and Dark win; Auto and unset follow the system', () => {
+    expect(effectiveTheme('light', true)).toBe('light')
+    expect(effectiveTheme('dark', false)).toBe('dark')
+    expect(effectiveTheme('auto', true)).toBe('dark')
+    expect(effectiveTheme('auto', false)).toBe('light')
+    expect(effectiveTheme(undefined, true)).toBe('dark')
   })
 })

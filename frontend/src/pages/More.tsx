@@ -2,6 +2,7 @@ import { Settings, UserCog } from 'lucide-react'
 import { NavLink } from 'react-router'
 import { useMe, useProjects } from '../api/queries'
 import { isAdmin, moreNav } from '../shell/nav'
+import { ThemeChoice } from '../shell/ThemeChoice'
 
 // Phone "More" tab: whatever isn't a phone tab (nav.ts phoneTabs), with the same gating as the sidebar.
 export function Component() {
@@ -9,6 +10,7 @@ export function Component() {
   const { data: projects } = useProjects()
 
   return (
+    <>
     <ul className="more-list">
       {moreNav(me).map(({ to, label, icon: Icon }) => (
           <li key={to}>
@@ -39,5 +41,10 @@ export function Component() {
         </li>
       )}
     </ul>
+    {/* Phones have no sidebar avatar: the theme sits here until Settings (task 16). */}
+    <div className="more-theme">
+      <ThemeChoice />
+    </div>
+    </>
   )
 }

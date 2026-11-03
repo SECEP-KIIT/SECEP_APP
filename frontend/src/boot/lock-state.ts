@@ -70,6 +70,13 @@ export type MotionPref = 'full' | 'reduced' | 'off'
  * ui_prefs.motion combined with the OS setting: the most reduction wins, unless the user explicitly chose Full in
  * Settings (FR-UI-032). Unset follows the OS.
  */
+/** ui_prefs.theme (PROPOSED, proposals §16.6): Light, Dark, or Auto (follow the system). Unset = Auto. */
+export type ThemePref = 'light' | 'dark' | 'auto'
+
+/** The theme to show: the user's choice, or the system's when Auto. */
+export const effectiveTheme = (pref: ThemePref | undefined, osDark: boolean): 'light' | 'dark' =>
+  pref === 'light' || pref === 'dark' ? pref : osDark ? 'dark' : 'light'
+
 export function effectiveMotion(pref: MotionPref | undefined, osReduced: boolean): MotionPref {
   if (pref === 'off' || pref === 'reduced' || pref === 'full') return pref
   return osReduced ? 'reduced' : 'full'

@@ -6,29 +6,33 @@ import {
   DONE_HOLD_MS,
   INITIAL,
   effectiveMotion,
+  effectiveTheme,
   isIdle,
   progressOf,
   reduce,
   ringLength,
   type LockEvent,
   type MotionPref,
+  type ThemePref,
   type Step,
 } from './lock-state'
 
 /**
  * Boot preferences mirrored from ui_prefs, because the static lock has to decide before /me answers (skip the lock?
- * reduced motion?). Only a boolean, a number and a keyword, nothing personal or secret, so localStorage is
+ * reduced motion? dark?). Only a boolean, a number and two keywords, nothing personal or secret, so localStorage is
  * acceptable here (CLAUDE.md: nothing secret in localStorage). The server copy (ui_prefs) stays authoritative.
  */
 export interface BootPrefs {
   skip_lock: boolean
   idle_minutes: number | null
   motion?: MotionPref
+  theme?: ThemePref
 }
 const MIRROR_KEY = 'secep.boot'
 const DEFAULTS: BootPrefs = { skip_lock: false, idle_minutes: 15 }
 
 const OS_REDUCED = '(prefers-reduced-motion: reduce)'
+const OS_DARK = '(prefers-color-scheme: dark)'
 const SETTLE_MS = 300 // a little over the 250 ms enter transition
 
 let state = INITIAL
@@ -47,6 +51,7 @@ function readMirror(): BootPrefs {
       skip_lock: raw?.skip_lock === true,
       idle_minutes: raw?.idle_minutes === null || typeof raw?.idle_minutes === 'number' ? raw.idle_minutes : 15,
       motion: raw?.motion,
+      theme: raw?.theme === 'light' || raw?.theme === 'dark' ? raw.theme : 'auto',
     }
   } catch {
     return DEFAULTS // storage blocked or corrupt: fall back to the safe defaults
@@ -55,6 +60,14 @@ function readMirror(): BootPrefs {
 
 function applyMotion() {
   document.documentElement.dataset.motion = effectiveMotion(prefs.motion, matchMedia(OS_REDUCED).matches)
+}
+
+/**
+ * <html data-theme> for the app's colours (proposals §16.6). The lock screen and wallpaper keep their own look. Set
+ * from the mirror at boot, so a dark choice is there before the app paints, and again when ui_prefs arrive.
+ */
+function applyTheme() {
+  document.documentElement.dataset.theme = effectiveTheme(prefs.theme, matchMedia(OS_DARK).matches)
 }
 
 let settleTimer: ReturnType<typeof setTimeout> | undefined
@@ -144,12 +157,14 @@ export function initLock() {
   started = true
   prefs = readMirror()
   applyMotion()
+  applyTheme()
   state = reduce(state, { type: 'auto', auto: prefs.skip_lock || isPhone() })
 
   addEventListener('keydown', onKey, { capture: true })
   addEventListener('pointerdown', onPointerDown, { capture: true })
   for (const type of ['pointermove', 'wheel', 'touchstart'] as const) addEventListener(type, markActive, { passive: true })
   matchMedia(OS_REDUCED).addEventListener('change', applyMotion)
+  matchMedia(OS_DARK).addEventListener('change', applyTheme) // Auto follows the system as it changes
 
   setInterval(() => {
     if (state.view === 'open' && isIdle(lastActive, Date.now(), prefs.idle_minutes, isPhone())) dispatch({ type: 'idle' })
@@ -173,6 +188,7 @@ export const lock = {
       // Storage blocked: the next boot uses defaults, which is safe.
     }
     applyMotion()
+    applyTheme()
     dispatch({ type: 'auto', auto: next.skip_lock || isPhone() })
   },
 }
