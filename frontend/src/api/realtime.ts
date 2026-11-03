@@ -8,6 +8,7 @@
 //   `arrivals` below; the "↑ n new" pill and scroll preservation are the column widget's policy (FR-UI-024).
 import type { InfiniteData, QueryClient } from '@tanstack/react-query'
 import type { Socket } from 'socket.io-client'
+import { dueDateOfActions } from '../lib/due'
 import { currentAccessToken, refreshForSocket } from './client'
 import type { Action, AppNotification, EmailDetail, EmailListItem, LinkView, Page, SecurityFlag } from './types'
 
@@ -107,6 +108,50 @@ function listFields(patch: Partial<EmailDetail>): Partial<EmailListItem> {
   return item
 }
 
+/** The email as any list or the open detail holds it now, before an event patches it. */
+function cachedEmail(qc: QueryClient, id: string): Pick<EmailListItem, 'handled' | 'read'> | undefined {
+  const detail = qc.getQueryData<EmailDetail>(['email', id])
+  if (detail) return detail
+  for (const [, data] of qc.getQueriesData<ListData>({ queryKey: ['emails'] })) {
+    const hit = data && pagesOf(data).flatMap((p) => p.items).find((e) => e.id === id)
+    if (hit) return hit
+  }
+  return undefined
+}
+
+/**
+ * Whether a list's per-user state view admits an email: Handled lists only handled mail and every other view lists
+ * none (§10.3); the Unread view holds only unread mail (§12.3).
+ */
+export function stateAdmits(query: string, e: Pick<EmailListItem, 'handled' | 'read'>) {
+  const view = new URLSearchParams(query).get('view')?.split(',') ?? []
+  return view.includes('handled') === e.handled && !(view.includes('unread') && e.read)
+}
+
+/**
+ * Settles every cached list after the user's state for one email changed (handled §10.3, read §12.3), whether the
+ * change came from this tab's PATCH or from another session's `email.triaged`. It is decided from the new state
+ * alone, so the outcome never depends on whether the socket echo arrives before or after the response (F11):
+ * - a list the email no longer belongs to drops it: a deliberate removal, not a layout shift (item 9);
+ * - a list it now belongs to never gets it inserted (NFR-PERF-011). On screen, the list counts it in "↑ n new"; off
+ *   screen (a view not shown right now), the list is marked stale, so it reloads the next time it's shown. Lists
+ *   are otherwise never refetched (staleTime: Infinity), so without this a cached view would stay wrong.
+ */
+export function settleLists(qc: QueryClient, email: EmailListItem) {
+  for (const [key, data] of qc.getQueriesData<InfiniteData<Page<EmailListItem>, unknown>>({ queryKey: ['emails', 'list'] })) {
+    if (!data) continue
+    const held = data.pages.some((p) => p.items.some((e) => e.id === email.id))
+    const admits = stateAdmits(String(key[2] ?? ''), email)
+    if (held && !admits) {
+      qc.setQueryData(key, { ...data, pages: data.pages.map((p) => ({ ...p, items: p.items.filter((e) => e.id !== email.id) })) })
+    } else if (!held && admits) {
+      const onScreen = (qc.getQueryCache().find({ queryKey: key, exact: true })?.getObserversCount() ?? 0) > 0
+      if (onScreen) signalArrival(email)
+      else void qc.invalidateQueries({ queryKey: key, exact: true, refetchType: 'none' })
+    }
+  }
+}
+
 /** Replaces an action in place in action lists and in its email's open detail. Exported for mutations. */
 export function patchActionCache(qc: QueryClient, action: Action) {
   for (const [key, data] of qc.getQueriesData<Page<Action>>({ queryKey: ['actions'] })) {
@@ -133,8 +178,11 @@ function handle<E extends keyof Events>(qc: QueryClient, event: E, payload: Even
   switch (event) {
     case 'email.triaged': {
       const { email_id, email } = payload as Events['email.triaged']
+      const before = cachedEmail(qc, email_id)
       // Known email (e.g. relabelled): in place. Unknown: signal only.
       if (!patchEmailCache(qc, email_id, email) && !arrivalItems.has(email_id)) addArrival(email)
+      // Handled or read changed in another tab or session (§10.3, §12.3): the same list settling as a local PATCH.
+      if (before && (before.handled !== email.handled || before.read !== email.read)) settleLists(qc, email)
       break
     }
     case 'email.enriched': {
@@ -145,6 +193,9 @@ function handle<E extends keyof Events>(qc: QueryClient, event: E, payload: Even
         summary_short: p.summary_short,
         actions: p.actions,
         proposed_action_count: p.actions.filter((a) => a.status === 'proposed').length,
+        // The event has no due_date (§6.5): derive it from its actions with the §10.2 rule, so a Due tile can count
+        // an arrival whose due date only appears at enrichment (proposals §16.1).
+        due_date: dueDateOfActions(p.actions),
       })
       break
     }

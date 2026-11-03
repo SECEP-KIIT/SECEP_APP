@@ -29,25 +29,31 @@ export async function deliver(userId: string, template: number) {
     publish(userId, 'notification.new', { notification: wire })
   }
 
+  // After each wait the email is looked up again: another tab may have replaced the store meanwhile
+  // (src/mocks/tabsync.ts), and a reset drops it.
   await later(between(2000, 6000))
-  enrichArrival(index, email)
+  const enriching = db.emails.get(email.id)
+  if (!enriching) return
+  enrichArrival(index, enriching)
   changed()
   publish(userId, 'email.enriched', {
-    email_id: email.id,
-    status: email.status,
-    summary_one_line: email.summary?.one_line ?? null,
-    summary_short: email.summary?.short ?? null,
-    actions: [...db.actions.values()].filter((a) => a.email_id === email.id).map(toAction),
+    email_id: enriching.id,
+    status: enriching.status,
+    summary_one_line: enriching.summary?.one_line ?? null,
+    summary_short: enriching.summary?.short ?? null,
+    actions: [...db.actions.values()].filter((a) => a.email_id === enriching.id).map(toAction),
   })
 
   if (!TEMPLATES[template].links?.length) return
   await later(between(800, 2500))
-  scoreArrival(index, email)
+  const scoring = db.emails.get(email.id)
+  if (!scoring) return
+  scoreArrival(index, scoring)
   changed()
   publish(userId, 'email.flagged', {
-    email_id: email.id,
-    security_flag: email.security_flag,
-    links: db.urlChecks.filter((c) => c.email_id === email.id).map(toLink),
+    email_id: scoring.id,
+    security_flag: scoring.security_flag,
+    links: db.urlChecks.filter((c) => c.email_id === scoring.id).map(toLink),
   })
 }
 

@@ -328,3 +328,12 @@ interface EmailFilter {
 4. **Known browser limitation, for v1.3** (resolves §14.4): Ctrl+1…9 (FR-UI-007) can be reserved by the browser for tab switching and never reach the page. Ctrl+←/→, the dots and swipe always work. No change.
 5. **Over-limit layout saves:** a `PUT /layouts/:deviceClass` above the caps (9 pages, 24 widgets per page) gets `422 validation_failed` with the standard error body (`details.fields`). The server never trims silently. The client refuses the edit before saving ("A dashboard holds up to 9 pages", "This page is full"), so it never sends one.
 6. **Short phone screens: a deliberate exception to FR-UI-009's no-scroll rule.** With a screen (viewport) height **below 600 px**, a phone page shows 3 slot rows at a time and the 4th row is a snap-scroll away, rather than cramming 4 rows. At 600 px and taller, all 4 rows fill one screen with no vertical scroll. The layout data is the same 2 × 4 grid either way.
+
+## 16. QA pass 3 (3 Nov 2026): changes for v1.3
+
+Decided after the browser pass on QA pass 2, read-marking and tasks 8a–8c. Each item notes the commit that builds it.
+
+1. **`email.enriched` has no `due_date`** (commit 1, a gap in §10.2). The PROPOSED `due_date` is derived on the server, but the §6.5 `email.enriched` payload doesn't carry it. A Due tile could therefore never count an arrival whose due date appears only at enrichment.
+   - **For now:** the client applies the §10.2 rule (the earliest action `due_date` or calendar start date, rejected proposals excluded) to the event's `actions`. One rule in `src/lib/due.ts`, shared with the mock.
+   - **For v1.3:** add `due_date: string | null` to the `email.enriched` payload. The server knows the user's time zone; the client uses the browser's.
+2. **State changes are live in every session** (commit 1). When `PATCH /emails/:id` changes `handled`, `read`, `pinned` or `snoozed_until`, M6 sends `email.triaged` with the full `EmailListItem` to room `user:{id}`, so every other tab and device of that user settles its lists. The mock already did this, and the client now acts on it (F11 list settling). §6.5 describes `email.triaged` only as the triage result, so it needs one sentence: "also sent when the user's own state for the email changes".

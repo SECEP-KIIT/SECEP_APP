@@ -38,6 +38,29 @@ export function inDueBucket(dueDate: string | null, bucket: DueBucket, today: st
   }
 }
 
+/** Local calendar date of an ISO time (the mock runs in the browser; M6 needs the user's zone, proposals §10). */
+export const localDate = (iso: string) => {
+  const d = new Date(iso)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+/**
+ * PROPOSED due_date (proposals §10.2): the earliest action due_date or calendar start date, else null. Rejected
+ * proposals don't count. The mock derives list items with it, and the client applies it to the actions that
+ * `email.enriched` carries, which has no due_date of its own (proposals §16.1).
+ */
+export function dueDateOfActions(actions: readonly { status: string; payload: unknown }[]): string | null {
+  const dates = actions
+    .filter((a) => a.status !== 'rejected')
+    .flatMap((a) => {
+      const p = a.payload as { due_date?: string | null; start?: string | null }
+      return [p.due_date ?? null, p.start ? localDate(p.start) : null]
+    })
+    .filter((d): d is string => d !== null)
+    .sort()
+  return dates[0] ?? null
+}
+
 /** OR within the group (§6.4.1): any listed bucket matches. An empty list is no filter. */
 export const matchesDue = (dueDate: string | null, buckets: readonly DueBucket[], today: string) =>
   buckets.length === 0 || buckets.some((b) => inDueBucket(dueDate, b, today))

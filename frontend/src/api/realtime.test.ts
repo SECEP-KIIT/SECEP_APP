@@ -2,6 +2,8 @@ import { QueryClient, type InfiniteData } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createDb } from '../mocks/store/generate'
 import { toAction, toDetail, toListItem } from '../mocks/store/serialize'
+import { matchesColumn, parseColumnQuery } from '../inbox/cardModel'
+import { localDate } from '../lib/due'
 import { applyEvent, arrivals } from './realtime'
 import type { EmailDetail, EmailListItem, Page } from './types'
 
@@ -81,5 +83,33 @@ describe('realtime cache policy (task 5 refinement 1)', () => {
     expect(arrivals.get()[0].email.summary_one_line).toBe('Now summarised')
     expect(arrivals.get()[0].email).not.toHaveProperty('summary_short')
     expect(qc.getQueryData<InfiniteData<Page<EmailListItem>>>(key)!.pages.flatMap((p) => p.items)).toHaveLength(items.length)
+  })
+})
+
+describe('live updates reach dashboard tiles (QA pass 3, commit 1)', () => {
+  const action = (payload: Record<string, unknown>) => ({ ...toAction([...db.actions.values()][0]), status: 'proposed' as const, payload: { ...[...db.actions.values()][0].payload, due_date: null, start: null, ...payload } })
+
+  it('an arrival whose due date only appears at enrichment counts towards a Due today tile', () => {
+    const today = localDate(new Date().toISOString())
+    const fresh = { ...items[0], id: 'arrival-due', due_date: null, handled: false }
+    applyEvent(qc, 'email.triaged', { email_id: fresh.id, email: fresh })
+    const dueToday = parseColumnQuery('view=due_today').filters
+    expect(matchesColumn(arrivals.get()[0].email, dueToday, false)).toBe(false)
+
+    applyEvent(qc, 'email.enriched', { email_id: fresh.id, status: 'enriched', summary_one_line: 'x', summary_short: 'y', actions: [action({ due_date: today })] })
+    expect(arrivals.get()[0].email.due_date).toBe(today)
+    expect(matchesColumn(arrivals.get()[0].email, dueToday, false)).toBe(true)
+  })
+
+  it('handled in another tab or session (email.triaged) leaves lists it no longer belongs to', () => {
+    const key = ['emails', 'list', '']
+    qc.setQueryData<InfiniteData<Page<EmailListItem>>>(key, { pages: [{ items, next_cursor: null }], pageParams: [null] })
+    const target = { ...items[2], handled: true }
+    applyEvent(qc, 'email.triaged', { email_id: target.id, email: target })
+    const after = qc.getQueryData<InfiniteData<Page<EmailListItem>>>(key)!.pages[0].items
+    expect(after.map((e) => e.id)).toEqual(items.filter((e) => e.id !== target.id).map((e) => e.id))
+    // A plain relabel (no state change) still patches in place without removing anything.
+    applyEvent(qc, 'email.triaged', { email_id: items[1].id, email: { ...items[1], subject: 'Relabelled' } })
+    expect(qc.getQueryData<InfiniteData<Page<EmailListItem>>>(key)!.pages[0].items).toHaveLength(items.length - 1)
   })
 })

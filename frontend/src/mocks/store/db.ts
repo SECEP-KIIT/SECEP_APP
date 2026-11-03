@@ -87,14 +87,32 @@ export function initStore({ persistEnabled }: { persistEnabled: boolean }) {
   }
 }
 
-/** Call after any user-visible mutation; saves (debounced) when persistence is on. */
+const changeListeners = new Set<() => void>()
+
+/** Runs after every change made in this tab (the cross-tab sync, src/mocks/tabsync.ts). */
+export function onChanged(listener: () => void) {
+  changeListeners.add(listener)
+  return () => void changeListeners.delete(listener)
+}
+
+/** Call after any user-visible mutation; tells listeners, and saves (debounced) when persistence is on. */
 export function changed() {
+  for (const l of changeListeners) l()
   if (!persist) return
   clearTimeout(saveTimer)
   saveTimer = setTimeout(() => {
     const store = storage()
     if (store) save(store, db, SEED)
   }, 400)
+}
+
+/**
+ * Takes over the store another tab sent (a structured clone of its whole Db). Not saved here: the sending tab saves
+ * its own changes, and both tabs share one localStorage.
+ */
+export function adoptDb(next: Db) {
+  db = next
+  syncJiraSeq(db)
 }
 
 export function resetStore() {

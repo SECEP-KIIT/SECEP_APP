@@ -4,6 +4,7 @@ import { useEffect, useState, type CSSProperties } from 'react'
 import { api } from '../../api/client'
 import { queryClient } from '../../api/queries'
 import type { Me, PreferencesResponse, UiPrefs } from '../../api/types'
+import { tabs } from '../browser'
 import { control, setControl, type JiraMode } from '../control'
 import { runDemo, sendOne } from '../pipeline'
 import { currentSession, signIn, signOut } from '../session'
@@ -127,6 +128,7 @@ export function DevPanel() {
         <button
           style={{ ...btn, borderColor: '#c4554d' }}
           onClick={() => {
+            tabs.reset() // the other tabs reset and reload too, so none hands the old store back
             resetStore()
             location.reload()
           }}
