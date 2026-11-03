@@ -1,10 +1,8 @@
-import { useInfiniteQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query'
+import { useInfiniteQuery } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { ArrowDownUp, ArrowUp, CircleHelp, Rows3, X } from 'lucide-react'
-import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from 'react'
-import { emailListOptions, listRequestedAt } from '../api/queries'
-import { arrivals } from '../api/realtime'
-import type { EmailListItem, Page } from '../api/types'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
+import { emailListOptions } from '../api/queries'
 import { useFocused } from '../shell/focusMode'
 import { useMinuteClock } from '../shell/useMinuteClock'
 import {
@@ -14,7 +12,6 @@ import {
   filterChips,
   filterSummary,
   isFiltered,
-  matchesColumn,
   QUICK_VIEWS,
   toggleFilter,
   NO_FILTERS,
@@ -29,12 +26,11 @@ import {
   type SortKey,
 } from './cardModel'
 import { EmailCard } from './EmailCard'
+import { useNewPill } from './useNewPill'
 import { FilterPopover } from './FilterPopover'
 import { useInbox } from './inboxContext'
 import './inbox.css'
 
-/** How long cards brought in by the pill keep their accent tint (item 9). */
-const FRESH_MS = 2_000
 /** Start loading the next page this many rows before the end. */
 const PREFETCH_ROWS = 8
 const SKELETON_ROWS = 6
@@ -54,10 +50,9 @@ interface Props {
   /**
    * `tile`: a dashboard tile, a saved filter (QA pass 3). No quick chips or active-filter chips; the filter button is
    * a badge counting the whole filter, with it in words in the tooltip. The chip rows stay in the ⤢ full view.
-   * `stack`: a phone section. One card plus a peek, scrolling inside, with an n / N counter; the filter tools, quick
-   * chips and urgency bar stay in the full view.
+   * (Phones show widgets as sections instead: dashboard/PhoneSection.)
    */
-  variant?: 'full' | 'tile' | 'stack'
+  variant?: 'full' | 'tile'
 }
 
 /**
@@ -71,15 +66,13 @@ interface Props {
 export function Column({ title, state, onStateChange, initial, heading, tools, variant = 'full' }: Props) {
   const focused = useFocused()
   const now = useMinuteClock()
-  const qc = useQueryClient()
   const { showLegend } = useInbox()
   const titleId = useId()
   const [own, setOwn] = useState<ColumnState>(initial ?? DEFAULT_COLUMN_STATE)
   const current = state ?? own
   const { filters, sort } = current
-  const stack = variant === 'stack'
   const tile = variant === 'tile'
-  const density: Density = stack ? 'compact' : current.density
+  const density: Density = current.density
   // Setters read the latest state through a ref, so functional updates compose like useState's.
   const latest = useRef(current)
   latest.current = current
@@ -98,23 +91,14 @@ export function Column({ title, state, onStateChange, initial, heading, tools, v
   )
   const setSort = (s: SortKey) => change({ sort: s })
   const setDensity = (d: Density) => change({ density: d })
-  const [fresh, setFresh] = useState<ReadonlySet<string>>(new Set())
-
   const query = columnQuery(filters, sort, focused)
   const list = useInfiniteQuery({ ...emailListOptions(query ?? ''), enabled: query !== null })
   const items = useMemo(() => (query === null ? [] : (list.data?.pages.flatMap((p) => p.items) ?? [])), [query, list.data])
   const more = query !== null && list.hasNextPage
 
-  // "↑ n new": arrivals after this column's first page was requested that match its filters and aren't loaded.
-  const arrived = useSyncExternalStore(arrivals.subscribe, arrivals.get)
-  const pending = useMemo(() => {
-    if (query === null) return []
-    const since = listRequestedAt.get(query) ?? Infinity
-    const loaded = new Set(items.map((e) => e.id))
-    return arrived.filter((a) => a.at > since && !loaded.has(a.email.id) && matchesColumn(a.email, filters, focused)).map((a) => a.email.id)
-  }, [arrived, items, query, filters, focused])
-
+  // "↑ n new" (FR-UI-024): scroll to the top first, then reload page 1 only.
   const scrollRef = useRef<HTMLDivElement>(null)
+  const { pending, fresh, showNew } = useNewPill(query, items, filters, focused, () => scrollRef.current?.scrollTo({ top: 0 }))
   const pitch = ROW_PITCH[density]
   const showSkeleton = query !== null && list.isPending
   const rowCount = showSkeleton ? SKELETON_ROWS : items.length + (more ? 1 : 0)
@@ -138,22 +122,6 @@ export function Column({ title, state, onStateChange, initial, heading, tools, v
 
   const onFilter = useCallback((patch: FilterPatch) => setFilters((f) => addFilter(f, patch)), [setFilters])
 
-  // The pill: scroll to the top first, then reload page 1 only. The old cards stay on screen until it arrives (no
-  // skeleton flash), and the arrivals fade in with an accent tint.
-  const freshTimer = useRef(0)
-  useEffect(() => () => clearTimeout(freshTimer.current), [])
-  const showNew = () => {
-    if (query === null) return
-    const ids = new Set(pending)
-    scrollRef.current?.scrollTo({ top: 0 })
-    const key = emailListOptions(query).queryKey
-    qc.setQueryData<InfiniteData<Page<EmailListItem>, string | null>>(key, (d) => d && { pages: d.pages.slice(0, 1), pageParams: d.pageParams.slice(0, 1) })
-    void qc.refetchQueries({ queryKey: key, exact: true })
-    setFresh(ids)
-    clearTimeout(freshTimer.current)
-    freshTimer.current = window.setTimeout(() => setFresh(new Set()), FRESH_MS)
-  }
-
   const chips = filterChips(filters)
   const split = urgencySplit(items)
   const loadedCount = `${items.length}${more ? '+' : ''}`
@@ -173,9 +141,6 @@ export function Column({ title, state, onStateChange, initial, heading, tools, v
             {loadedCount}
             <span className="sr-only">{more ? ' emails loaded, more below' : ' emails'}</span>
           </span>
-          {stack ? (
-            <StackCounter scrollRef={scrollRef} pitch={pitch} loaded={items.length} more={more} />
-          ) : (
           <div className="col-tools">
             <FilterPopover filters={filters} onChange={setFilters} summary={tile ? filterSummary(filters) : undefined} />
             <label className="col-select" title="Sort" data-set={sort !== 'newest' || undefined}>
@@ -207,11 +172,8 @@ export function Column({ title, state, onStateChange, initial, heading, tools, v
               <span className="sr-only">Card symbols</span>
             </button>
           </div>
-          )}
           {tools}
         </div>
-        {!stack && (
-          <>
         <UrgencyBar split={split} total={items.length} />
         {focused && <p className="col-note">Focus mode: Critical and High only</p>}
         {!tile && (
@@ -241,8 +203,6 @@ export function Column({ title, state, onStateChange, initial, heading, tools, v
               </li>
             ))}
           </ul>
-        )}
-          </>
         )}
       </header>
 
@@ -298,28 +258,6 @@ export function Column({ title, state, onStateChange, initial, heading, tools, v
         </div>
       </div>
     </section>
-  )
-}
-
-/**
- * "n / N" for a stack column (FR-UI-009): the card at the top of the scroll area, of those loaded ("+" while more
- * pages exist). Updated on scroll; the list itself is the same virtualised list as the full column.
- */
-function StackCounter({ scrollRef, pitch, loaded, more }: { scrollRef: RefObject<HTMLDivElement | null>; pitch: number; loaded: number; more: boolean }) {
-  const [top, setTop] = useState(0)
-  useEffect(() => {
-    const el = scrollRef.current
-    if (!el) return
-    const onScroll = () => setTop(Math.round(el.scrollTop / pitch))
-    el.addEventListener('scroll', onScroll, { passive: true })
-    return () => el.removeEventListener('scroll', onScroll)
-  }, [scrollRef, pitch])
-  if (loaded === 0) return <span className="col-count" />
-  return (
-    <span className="col-count stack-counter" aria-live="off">
-      {Math.min(top + 1, loaded)} / {loaded}
-      {more ? '+' : ''}
-    </span>
   )
 }
 

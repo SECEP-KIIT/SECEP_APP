@@ -144,3 +144,12 @@ export function reorderWidget(page: LayoutPage, activeId: string, overId: string
   }
   return { ...page, widgets }
 }
+
+/** Phone edit sheet (proposals §16.4): a section dragged to another place in the list; the rest close up. */
+export function moveWidget(page: LayoutPage, from: number, to: number): LayoutPage {
+  if (from === to || from < 0 || to < 0 || from >= page.widgets.length || to >= page.widgets.length) return page
+  const widgets = [...page.widgets]
+  const [moved] = widgets.splice(from, 1)
+  widgets.splice(to, 0, moved)
+  return { ...page, widgets }
+}

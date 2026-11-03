@@ -354,3 +354,17 @@ Decided after the browser pass on QA pass 2, read-marking and tasks 8a–8c. Eac
      - `hidden: false`.
    - **Starters:** Today and Triage are three small tiles each (one row); Planning is Due this week (medium) and Needs my reply (small). Desktop and tablet share them.
    - **§15.6 is obsolete:** the phone no longer has slot rows, so the 600 px short-screen exception goes away. Commit 4 replaces the phone model and records the FR-UI-009 change.
+4. **Phone dashboard: sections, not slots (option A)** (commit 4). This changes FR-UI-009 ("2 × 4 slot pages, no scrolling").
+   - **Home on phone** is the page's widgets as stacked sections in one vertical scroll. Each section has:
+     - a title and count;
+     - its top 3 cards;
+     - "See all n →", which opens the full column (`/inbox` with the widget's filter and sort).
+   - Nothing scrolls inside a section, and new mail shows as "↑ n new" (FR-UI-024).
+   - **Page switcher:** a segmented control at the top (Today | Triage | Planning | +) replaces the dots and the swipe. Phones don't use a horizontal swipe for pages.
+   - **One slim header row:** the page switcher and Edit. There's no separate title or "Starter layout" row; the save state shows in the edit sheet.
+   - **Editing:** Edit opens a bottom sheet listing the page's sections. Each row has a drag handle to reorder it and a switch to show or hide it, plus Add widget, the page name and Delete page (with the 10 s undo). The 8b long-press / ghost-slot editor is gone.
+   - **Card actions on touch:** no hover bar. A tap opens the drawer; a long-press opens an action menu: Jira, Calendar, Done, Pin, Open.
+   - **Layout data:** phone layouts store order plus `hidden`, the §16.3 shape (no slots). `size` is ignored on phone.
+   - FR-UI-009 for v1.3: "On phones each dashboard page is a vertical list of sections, one per widget, each showing its top three items and a link to the full view; a segmented control switches pages; Edit opens a sheet to reorder, hide, add and remove sections; a long-press on a card opens its actions."
+   - §15.6 (the 600 px short-screen exception) no longer applies.
+5. **Lock screen on phone: the Loading box sits bottom centre** (commit 4). It's above the safe area and clear of the notifications, instead of right middle over them. Desktop keeps right middle. This changes FR-WP-003 for v1.3: "…a boxed Loading indicator at the right middle (bottom centre on phones)…"

@@ -19,6 +19,7 @@ import {
   updatePage,
 } from '../dashboard/layoutModel'
 import { isSideways, pageKeyAction, SWIPE_TOUCH_PX, SWIPE_WHEEL_PX } from '../dashboard/pageKeys'
+import { PhoneEditSheet } from '../dashboard/PhoneEditSheet'
 import { PhonePage } from '../dashboard/PhonePage'
 import { useLayout, type SaveState } from '../dashboard/useLayout'
 import { WidgetFrame, type WidgetActions } from '../dashboard/WidgetFrame'
@@ -51,8 +52,9 @@ function Dashboard() {
   const [direction, setDirection] = useState<-1 | 1>(1)
   const [editingState, setEditing] = useState(false)
   const [gallery, setGallery] = useState(false)
-  // Phones are read-only until their edit sheet (QA pass 3 commit 4).
+  // Phones edit in a sheet (PhoneEditSheet), not in place.
   const editing = editingState && !phone
+  const [sheet, setSheet] = useState(false)
 
   const sorted = pages ? sortedPages(pages) : []
   const index = Math.max(0, sorted.findIndex((p) => p.id === activeId))
@@ -112,8 +114,9 @@ function Dashboard() {
     return () => el.removeEventListener('wheel', onWheel)
   }, [ready])
   const touch = useRef<{ x: number; y: number } | null>(null)
+  // Phones switch pages with the segmented control only: no horizontal swipe there (proposals §16.4).
   const onPointerDown = (e: PointerEvent) => {
-    if (e.pointerType !== 'mouse' && !editing) touch.current = { x: e.clientX, y: e.clientY }
+    if (e.pointerType !== 'mouse' && !editing && !phone) touch.current = { x: e.clientX, y: e.clientY }
   }
   const onPointerUp = (e: PointerEvent) => {
     const start = touch.current
@@ -170,6 +173,7 @@ function Dashboard() {
   // takes its place on screen.
   const deletePage = () => {
     const removed = page
+    setSheet(false)
     setActiveId((sorted[index + 1] ?? sorted[index - 1])?.id ?? null)
     update((ps) => removePage(ps, removed.id))
     toast(`Deleted page “${removed.name}”.`, 'info', {
@@ -183,6 +187,15 @@ function Dashboard() {
 
   return (
     <div className="dash" data-editing={editing || undefined}>
+      {phone ? (
+        // Phone: one slim header row, the page switcher and Edit (proposals §16.4).
+        <div className="dash-bar phone-bar">
+          <PageSwitch pages={sorted} index={index} onGo={go} onAdd={newPage} />
+          <button type="button" className="ghost-button" onClick={() => setSheet(true)}>
+            <LayoutGrid size={14} aria-hidden="true" /> Edit
+          </button>
+        </div>
+      ) : (
       <div className="dash-bar">
         {editing ? (
           <div className="dash-page-tools">
@@ -227,6 +240,7 @@ function Dashboard() {
           </button>
         )}
       </div>
+      )}
 
       <div className="dash-pages" ref={pagesRef} onPointerDown={onPointerDown} onPointerUp={onPointerUp}>
         <div key={page.id} className="dash-page" data-direction={direction}>
@@ -243,6 +257,7 @@ function Dashboard() {
         </div>
       </div>
 
+      {!phone && (
       <nav className="page-dots" aria-label="Pages">
         {/* Hover or focus shows every page name, side by side in page order, above the dots (QA pass 3: pills
             placed over their own dots overlapped). Pointer users can click a name; the dots are the keyboard route. */}
@@ -264,6 +279,20 @@ function Dashboard() {
           <span className="sr-only">Add a page</span>
         </button>
       </nav>
+      )}
+
+      {phone && sheet && (
+        <PhoneEditSheet
+          page={page}
+          canDelete={sorted.length > 1}
+          status={saveText(state, isDefault)}
+          onChange={(next) => editPage(() => next)}
+          onRename={(name) => update((ps) => renamePage(ps, page.id, name))}
+          onAdd={() => setGallery(true)}
+          onDelete={deletePage}
+          onClose={() => setSheet(false)}
+        />
+      )}
 
       <Gallery
         open={gallery}
@@ -279,11 +308,38 @@ function Dashboard() {
   )
 }
 
+const saveText = (state: SaveState, isDefault: boolean) =>
+  isDefault && state === 'saved' ? 'Starter layout' : { saved: 'Saved', pending: 'Saving…', saving: 'Saving…', error: 'Not saved' }[state]
+
 function SaveStatus({ state, isDefault }: { state: SaveState; isDefault: boolean }) {
-  const text = isDefault && state === 'saved' ? 'Starter layout' : { saved: 'Saved', pending: 'Saving…', saving: 'Saving…', error: 'Not saved' }[state]
   return (
     <span className="dash-save" data-state={state} role="status">
-      {text}
+      {saveText(state, isDefault)}
     </span>
+  )
+}
+
+/**
+ * The phone's page switcher (proposals §16.4): a segmented control, Today | Triage | Planning | +, replacing the
+ * dots and swipe. The current page is pressed (filled, plus weight; not colour alone). It scrolls sideways when the
+ * names don't fit, keeping the current one in view.
+ */
+function PageSwitch({ pages, index, onGo, onAdd }: { pages: { id: string; name: string }[]; index: number; onGo: (i: number) => void; onAdd: () => void }) {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    ref.current?.querySelector<HTMLElement>('[aria-pressed="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }, [index])
+  return (
+    <div className="page-switch" role="group" aria-label="Pages" ref={ref}>
+      {pages.map((p, i) => (
+        <button key={p.id} type="button" className="page-seg" aria-pressed={i === index} onClick={() => onGo(i)}>
+          {p.name}
+        </button>
+      ))}
+      <button type="button" className="page-seg page-seg-add" onClick={onAdd} disabled={pages.length >= MAX_PAGES} title="Add a page">
+        <Plus size={14} aria-hidden="true" />
+        <span className="sr-only">Add a page</span>
+      </button>
+    </div>
   )
 }

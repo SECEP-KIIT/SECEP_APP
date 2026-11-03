@@ -2,8 +2,9 @@ import type { ReactNode } from 'react'
 import type { LayoutPage } from '../api/types'
 
 /**
- * Phone pages: the page's widgets in order, one under the other, in one vertical scroll (FR-UI-009 as changed in
- * proposals §16.3). Hidden widgets are left out. QA pass 3 commit 4 turns these into sections with an edit sheet.
+ * Phone pages (FR-UI-009 as changed in proposals §16.4, option A): the page's widgets in order as sections
+ * (PhoneSection: title and count, the top three cards, "See all") in one vertical scroll. Hidden ones are left out;
+ * the edit sheet (PhoneEditSheet) reorders and hides them.
  */
 export function PhonePage({ page, render }: { page: LayoutPage; render: (id: string) => ReactNode }) {
   return (
@@ -11,7 +12,7 @@ export function PhonePage({ page, render }: { page: LayoutPage; render: (id: str
       {page.widgets
         .filter((w) => !w.hidden)
         .map((w) => (
-          <div key={w.id} className="phone-section">
+          <div key={w.id} className="phone-item">
             {render(w.id)}
           </div>
         ))}

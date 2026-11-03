@@ -190,6 +190,15 @@ html[data-lock='open'] .lock {
   opacity: 0;
   transition: opacity var(--fade) ease-out;
 }
+/* Phone (proposals §16.5): bottom centre, above the safe area, clear of the notifications. Desktop keeps the right
+   middle (FR-WP-003). */
+html[data-device='phone'] .lock-loading {
+  top: auto;
+  right: auto;
+  bottom: calc(32px + env(safe-area-inset-bottom));
+  left: 50%;
+  margin: 0 0 0 -66px;
+}
 html[data-lock='waiting'] .lock-loading {
   opacity: 0.6;
 }

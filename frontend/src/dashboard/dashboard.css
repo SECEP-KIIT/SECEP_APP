@@ -498,19 +498,63 @@ html[data-motion='off'] .dash[data-editing] .widget > .column {
   color: var(--ink-muted);
 }
 
-/* Phone: denser chrome around the slots, so short screens give the slots every pixel they can. */
+/* ── Phone (proposals §16.4, option A) ─────────────────────────────────────────────────────────────────────
+   One slim header row (page switcher + Edit), then the page's widgets as sections in one vertical scroll. */
 html[data-device='phone'] .dash {
+  grid-template-rows: auto minmax(0, 1fr);
   gap: var(--space-2);
   margin: calc(-1 * var(--space-2));
 }
-html[data-device='phone'] .dash-bar {
-  min-height: 28px;
+.phone-bar {
+  gap: var(--space-2);
+  min-height: 0;
 }
-html[data-device='phone'] .page-dots {
-  min-height: 24px;
+/* Segmented control; the pressed page is filled and bold (not colour alone). Scrolls sideways if it must. */
+.page-switch {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--col-bg);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.page-switch::-webkit-scrollbar {
+  display: none;
+}
+.page-seg {
+  flex: none;
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--ink-muted);
+  font: inherit;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+.page-seg[aria-pressed='true'] {
+  background: var(--card-bg);
+  color: var(--ink);
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgb(20 24 38 / 0.15);
+}
+.page-seg:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+.page-seg-add {
+  display: grid;
+  place-items: center;
+  min-width: 32px;
+  padding: 0;
 }
 
-/* ── Phone: the page's widgets in order, one under the other (proposals §16.3) ───────────────────────────── */
 .phone-page {
   display: grid;
   align-content: start;
@@ -519,17 +563,222 @@ html[data-device='phone'] .page-dots {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior-y: contain;
+  padding-bottom: var(--space-3);
 }
+/* A section is as tall as its title row, three cards and "See all": nothing scrolls inside it. */
 .phone-section {
-  height: 300px;
-  min-height: 0;
+  height: auto;
 }
-.column[data-variant='stack'] .col-scroll {
-  scroll-snap-type: y mandatory;
+.phone-section .col-head {
+  border-bottom: 0;
+  padding-bottom: 0;
 }
-.column[data-variant='stack'] .col-row {
-  scroll-snap-align: start;
-}
-.stack-counter {
+.section-pill {
+  position: static;
+  transform: none;
+  height: 26px;
   margin-left: auto;
+}
+.section-cards {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+}
+.section-empty {
+  padding: var(--space-2) 0;
+}
+.section-all {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-1);
+  min-height: 40px;
+  padding: 0 var(--space-3) var(--space-2);
+  color: var(--accent);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+.section-all:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+
+/* ── Phone edit sheet and the touch action menu: bottom sheets (native modal dialogs) ────────────────────── */
+.edit-sheet,
+.action-sheet {
+  position: fixed;
+  inset: auto 0 0;
+  width: 100%;
+  max-width: none;
+  max-height: 85vh;
+  margin: 0;
+  padding: var(--space-4) var(--space-4) calc(var(--space-4) + env(safe-area-inset-bottom));
+  border: 0;
+  border-radius: 16px 16px 0 0;
+  background: var(--card-bg);
+  color: var(--ink);
+  overflow-y: auto;
+  animation: sheet-up var(--dur-menu) ease-out;
+}
+.edit-sheet::backdrop,
+.action-sheet::backdrop {
+  background: rgb(10 12 20 / 0.4);
+}
+@keyframes sheet-up {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+}
+html[data-motion='reduced'] .edit-sheet,
+html[data-motion='reduced'] .action-sheet {
+  animation-name: page-fade;
+}
+html[data-motion='off'] .edit-sheet,
+html[data-motion='off'] .action-sheet {
+  animation: none;
+}
+.edit-sheet {
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+}
+.edit-sheet:not([open]),
+.action-sheet:not([open]) {
+  display: none;
+}
+.edit-sheet-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.edit-sheet-head h2 {
+  margin-right: auto;
+  font-size: 1rem;
+}
+.edit-sheet-field {
+  display: grid;
+  gap: var(--space-1);
+  font-size: 0.8125rem;
+  color: var(--ink-muted);
+}
+.edit-sheet-sub {
+  font-size: 0.8125rem;
+  color: var(--ink-muted);
+}
+.edit-sheet-list {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.edit-sheet-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 48px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card-bg);
+}
+.edit-sheet-row[data-dragging] {
+  position: relative;
+  z-index: 1;
+  box-shadow: 0 8px 24px rgb(20 24 38 / 0.2);
+}
+.edit-sheet-row[data-hidden] .edit-sheet-name {
+  color: var(--ink-muted);
+  text-decoration: line-through;
+}
+.edit-sheet-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.drag-handle {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  background: none;
+  color: var(--ink-muted);
+  cursor: grab;
+  /* The handle drags; the rest of the sheet still scrolls. */
+  touch-action: none;
+}
+.drag-handle:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 40px;
+  font-size: 0.8125rem;
+}
+.switch input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent);
+}
+.switch-text {
+  min-width: 4.5em;
+}
+.edit-sheet-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.danger-button {
+  color: var(--tag-danger-fg);
+}
+
+.action-sheet-title {
+  margin-bottom: var(--space-2);
+  color: var(--ink-muted);
+  font-size: 0.8125rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.action-sheet-list {
+  display: grid;
+}
+.action-sheet-item,
+.action-sheet-cancel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 48px;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.9375rem;
+  text-align: left;
+}
+.action-sheet-done {
+  color: var(--tag-ok-fg);
+}
+.action-sheet-cancel {
+  justify-content: center;
+  margin-top: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-weight: 600;
+}
+.action-sheet-item:focus-visible,
+.action-sheet-cancel:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
 }

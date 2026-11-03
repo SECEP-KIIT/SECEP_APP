@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { cardTags, type FilterPatch } from './cardModel'
 import { CardActions } from './CardActions'
 import { CardBody, Tag } from './CardBody'
+import { TouchActions } from './TouchActions'
 import { LiftContext, placeLift, type LiftApi, type LiftPlace, type LiftTarget } from './liftContext'
 
 /** Hover intent before a card lifts (item 3, the same 150 ms as every hover reveal). */
@@ -27,17 +28,24 @@ const TABBABLE = 'a[href], button:not([disabled]), input:not([disabled]), select
  */
 export function CardLiftProvider({ children }: { children: ReactNode }) {
   const [lifted, setLifted] = useState<{ target: LiftTarget; rect: DOMRect } | null>(null)
+  const [menu, setMenu] = useState<LiftTarget | null>(null)
   const current = useRef<LiftTarget | null>(null)
   const showTimer = useRef(0)
   const hideTimer = useRef(0)
   const root = useRef<HTMLDivElement | null>(null)
 
-  const hide = useCallback(() => {
+  // Drops the hover lift only. Pointer and scroll timers use this, so they never close the touch menu.
+  const drop = useCallback(() => {
     clearTimeout(showTimer.current)
     clearTimeout(hideTimer.current)
     current.current = null
     setLifted(null)
   }, [])
+  // Drops the lift and the touch menu (opening the drawer, a new menu).
+  const hide = useCallback(() => {
+    drop()
+    setMenu(null)
+  }, [drop])
   const show = useCallback((target: LiftTarget) => {
     clearTimeout(showTimer.current)
     clearTimeout(hideTimer.current)
@@ -57,12 +65,12 @@ export function CardLiftProvider({ children }: { children: ReactNode }) {
       leave() {
         clearTimeout(showTimer.current)
         clearTimeout(hideTimer.current)
-        hideTimer.current = window.setTimeout(hide, LEAVE_GRACE_MS)
+        hideTimer.current = window.setTimeout(drop, LEAVE_GRACE_MS)
       },
       focus: show,
       blur(id, next) {
         if (current.current?.email.id !== id || (next instanceof Node && root.current?.contains(next))) return
-        hide()
+        drop()
       },
       refresh(target) {
         if (current.current?.email.id !== target.email.id) return
@@ -70,6 +78,10 @@ export function CardLiftProvider({ children }: { children: ReactNode }) {
         setLifted((l) => l && { ...l, target })
       },
       isLifted: (id) => current.current?.email.id === id,
+      menu(target) {
+        hide()
+        setMenu(target)
+      },
       enterBar() {
         const first = root.current?.querySelector<HTMLElement>('.lift-bar button:not([disabled])')
         first?.focus()
@@ -77,23 +89,23 @@ export function CardLiftProvider({ children }: { children: ReactNode }) {
       },
       hide,
     }),
-    [hide, show],
+    [hide, drop, show],
   )
 
   // The lift is placed for one scroll position and one window size.
   useEffect(() => {
     if (!lifted) return
-    const drop = (e: Event) => {
+    const onMove = (e: Event) => {
       if (e.type === 'scroll' && e.target instanceof Node && root.current?.contains(e.target)) return
-      hide()
+      drop()
     }
-    addEventListener('scroll', drop, true)
-    addEventListener('resize', drop)
+    addEventListener('scroll', onMove, true)
+    addEventListener('resize', onMove)
     return () => {
-      removeEventListener('scroll', drop, true)
-      removeEventListener('resize', drop)
+      removeEventListener('scroll', onMove, true)
+      removeEventListener('resize', onMove)
     }
-  }, [lifted, hide])
+  }, [lifted, drop])
 
   return (
     <LiftContext.Provider value={api}>
@@ -111,6 +123,7 @@ export function CardLiftProvider({ children }: { children: ReactNode }) {
           />,
           document.body,
         )}
+      {menu && <TouchActions key={menu.email.id} target={menu} onClose={() => setMenu(null)} />}
     </LiftContext.Provider>
   )
 }

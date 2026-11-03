@@ -25,6 +25,7 @@ import {
   MAX_PAGES,
   MAX_WIDGETS,
   movePage,
+  moveWidget,
   removePage,
   reorderWidget,
   restorePage,
@@ -95,6 +96,15 @@ describe('layout edits', () => {
     expect(ids(reorderWidget(page, d.id, b.id))).toEqual([a.id, d.id, b.id, c.id]) // large onto medium: insert
     expect(ids(reorderWidget(page, a.id, d.id))).toEqual([b.id, c.id, d.id, a.id]) // small onto large, later in order
     expect(reorderWidget(page, a.id, a.id)).toBe(page) // its own place: nothing to save
+  })
+
+  it('phone sheet: a section moves to another place and the rest close up; hiding keeps its place', () => {
+    const [a, b, c] = [widget({ title: 'A' }), widget({ title: 'B' }), widget({ title: 'C' })]
+    const page = pageOf([a, b, c])
+    expect(moveWidget(page, 0, 2).widgets.map((w) => w.title)).toEqual(['B', 'C', 'A'])
+    expect(moveWidget(page, 2, 0).widgets.map((w) => w.title)).toEqual(['C', 'A', 'B'])
+    expect(moveWidget(page, 1, 1)).toBe(page)
+    expect(moveWidget(page, 0, 5)).toBe(page)
   })
 
   it('adding and duplicating append in order, up to the cap', () => {

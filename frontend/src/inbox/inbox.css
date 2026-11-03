@@ -790,6 +790,14 @@ html[data-device='phone'] .column {
 .card {
   cursor: pointer;
 }
+/* Touch: a long-press opens the card's action menu, so the browser's own callout and text selection stay out. */
+@media (hover: none) {
+  .card {
+    -webkit-touch-callout: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+}
 .card-lift {
   position: fixed;
   z-index: 40;

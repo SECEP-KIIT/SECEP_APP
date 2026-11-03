@@ -13,7 +13,9 @@ const latestUpdate = (cache: QueryCache) => Math.max(0, ...cache.getAll().map((q
 function useLastSync() {
   const cache = useQueryClient().getQueryCache()
   const [last, setLast] = useState(() => latestUpdate(cache))
-  useEffect(() => cache.subscribe(() => setLast(latestUpdate(cache))), [cache])
+  // Deferred: the cache also reports queries added while another component renders (a new column or section), and
+  // React forbids updating this component in the middle of that render.
+  useEffect(() => cache.subscribe(() => queueMicrotask(() => setLast(latestUpdate(cache)))), [cache])
   return last
 }
 

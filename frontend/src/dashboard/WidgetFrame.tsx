@@ -7,6 +7,7 @@ import { filterQuery, parseColumnQuery, sortKeyOf, type ColumnState } from '../i
 import { Column } from '../inbox/Column'
 import { PortalContainer } from '../inbox/portal'
 import { useDragHandle } from './dragHandle'
+import { PhoneSection } from './PhoneSection'
 import { SIZES } from './grid'
 import { BUILT_TYPES, fullViewHref, ICONS, SWATCHES, widgetTitle } from './layoutModel'
 
@@ -106,8 +107,10 @@ export function WidgetFrame({ widget, device, editing, actions }: { widget: Widg
 
   return (
     <div className="widget" data-swatch={widget.colour ?? undefined} data-editing={editing || undefined}>
-      {widget.type === 'inbox_column' ? (
-        <ColumnWidget widget={widget} title={title} heading={heading} tools={tools} stack={stack} onChange={actions.patch} />
+      {widget.type === 'inbox_column' && stack ? (
+        <PhoneSection widget={widget} heading={heading} tools={tools} />
+      ) : widget.type === 'inbox_column' ? (
+        <ColumnWidget widget={widget} title={title} heading={heading} tools={tools} onChange={actions.patch} />
       ) : (
         <section className="column widget-placeholder" aria-label={title}>
           <header className="col-head">
@@ -124,12 +127,11 @@ export function WidgetFrame({ widget, device, editing, actions }: { widget: Widg
 }
 
 /** The column's filter, sort and density live in the widget, so every change is saved with the layout. */
-function ColumnWidget({ widget, title, heading, tools, stack, onChange }: {
+function ColumnWidget({ widget, title, heading, tools, onChange }: {
   widget: Widget
   title: string
   heading: (titleId: string) => ReactNode
   tools: ReactNode
-  stack: boolean
   onChange: WidgetActions['patch']
 }) {
   const state = useMemo<ColumnState>(
@@ -143,7 +145,7 @@ function ColumnWidget({ widget, title, heading, tools, stack, onChange }: {
       onStateChange={(s) => onChange({ filter: filterQuery(s.filters), sort: s.sort, density: s.density })}
       heading={heading}
       tools={tools}
-      variant={stack ? 'stack' : 'tile'}
+      variant="tile"
     />
   )
 }

@@ -25,6 +25,8 @@ export interface LiftApi {
   /** The card re-rendered (a live update): the lift shows the new data. */
   refresh: (target: LiftTarget) => void
   isLifted: (id: string) => boolean
+  /** Long-press on touch: the card's action menu (TouchActions). */
+  menu: (target: LiftTarget) => void
   /** Moves focus to the bar's first button; false if there is none. */
   enterBar: () => boolean
   hide: () => void
