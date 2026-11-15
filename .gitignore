@@ -1,0 +1,14 @@
+node_modules/
+dist/
+build/
+.env
+.env.*
+!.env.example
+secrets/
+__pycache__/
+*.pyc
+venv/
+.venv/
+.vscode/
+*.log
+.claude/settings.local.json

@@ -1,0 +1,43 @@
+﻿<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SECEP</title>
+    <!-- Static lock screen and wallpaper: paints before any JavaScript (FR-WP-002). -->
+    <link rel="stylesheet" href="/src/boot/lock.css" />
+    <!-- The only script: a small external module, no inline scripts (CSP, NFR-SEC-008). It loads the app itself. -->
+    <script type="module" src="/src/boot/boot.ts"></script>
+  </head>
+  <body>
+    <div class="wallpaper" aria-hidden="true">
+      <div class="wp-back"></div>
+      <div class="wp-front"></div>
+      <div class="wp-dim"></div>
+    </div>
+
+    <div id="lock" class="lock" role="dialog" aria-modal="true" aria-label="SECEP lock screen" tabindex="-1">
+      <div class="lock-center">
+        <time id="lock-time" class="lock-time"></time>
+        <p class="lock-date"><span id="lock-date"></span> <span id="lock-weather" class="lock-weather"></span></p>
+        <p id="lock-glance" class="lock-glance"></p>
+        <ul id="lock-notes" class="lock-notes"></ul>
+      </div>
+      <p class="sr-only">Press any key or click to open SECEP.</p>
+      <div class="lock-loading" aria-hidden="true">
+        <svg width="132" height="44">
+          <rect class="ring-track" x="1" y="1" width="130" height="42" rx="10" pathLength="100" />
+          <rect id="lock-ring" class="ring-seg" x="1" y="1" width="130" height="42" rx="10" pathLength="100" />
+        </svg>
+        <span class="lock-loading-label">Loading</span>
+        <svg class="lock-tick" width="20" height="20" viewBox="0 0 20 20">
+          <path d="M4 10.5l4 4 8-9" pathLength="100" />
+        </svg>
+      </div>
+      <p id="lock-status" class="sr-only" role="status"></p>
+    </div>
+
+    <div id="root"></div>
+  </body>
+</html>
