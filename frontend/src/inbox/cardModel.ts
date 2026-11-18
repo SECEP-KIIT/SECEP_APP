@@ -37,7 +37,7 @@ export function cardTime(iso: string, now: Date, locale?: string): string {
 
 // ── Tags (item 4, FR-UI-013/014) ───────────────────────────────────────────────────────────────────────────────
 
-export type TagKind = 'security' | 'due' | 'project' | 'action' | 'sentiment' | 'attachments' | 'replies' | 'duplicates' | 'masked' | 'snoozed'
+export type TagKind = 'security' | 'due' | 'project' | 'action' | 'sentiment' | 'attachments' | 'notes' | 'replies' | 'duplicates' | 'masked' | 'snoozed'
 
 export interface CardTag {
   kind: TagKind
@@ -96,6 +96,9 @@ export function cardTags(email: EmailListItem, now: Date): CardTag[] {
   }
   if (email.attachment_count > 0) {
     tags.push({ kind: 'attachments', text: String(email.attachment_count), label: plural(email.attachment_count, 'attachment'), tone: 'muted', filter: null })
+  }
+  if (email.note_count > 0) {
+    tags.push({ kind: 'notes', text: email.note_count > 1 ? String(email.note_count) : '', label: plural(email.note_count, 'note'), tone: 'muted', filter: null })
   }
   if (email.reply_count > 0) {
     tags.push({ kind: 'replies', text: String(email.reply_count), label: plural(email.reply_count, 'reply', 'replies'), tone: 'muted', filter: null })

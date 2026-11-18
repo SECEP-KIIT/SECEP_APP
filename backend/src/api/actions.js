@@ -167,6 +167,7 @@ route(actions, 'delete', '/actions/:id', 'user', async (req, user) => {
   await tx(async (c) => {
     const a = own(await mine(c, user.id, id), 'Action');
     if (!isUserCard(a)) throw new Fail(409, 'conflict', 'Only cards you made can be deleted');
+    await c.query("DELETE FROM notes WHERE target_type = 'card' AND target_id = $1", [id]);
     await c.query('DELETE FROM actions WHERE id = $1', [id]);
     if (a.board_column) await renumber(c, user.id, a.board_column);
     await audit(c, { tenantId: user.tenant_id, actorId: user.id, event: 'action.delete', target: id, details: { type: a.type } });

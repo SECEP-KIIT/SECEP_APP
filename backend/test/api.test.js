@@ -212,6 +212,28 @@ describe('M6 API', { skip: !reachable && 'no test database' }, () => {
     assert.ok(!(await api('/actions?status=done&column=todo&limit=50')).body.items.some((a) => a.id === card.id));
   });
 
+  test('notes: masked on save with type-only secret rows, scoped lists, note_count, 404 for others, 422s', async () => {
+    const email = (await api('/emails?limit=1')).body.items[0];
+    const made = await api('/notes', { method: 'POST', body: JSON.stringify({ target_type: 'email', target_id: email.id, body: 'VPN password: hunter2\n- [ ] book room' }) });
+    assert.equal(made.status, 201);
+    assert.equal(made.body.body, 'VPN password: [MASKED:password]\n- [ ] book room');
+    const { pool } = await import('../src/services/db.js');
+    const secrets = (await pool.query('SELECT secret_type FROM masked_secrets WHERE note_id = $1', [made.body.id])).rows;
+    assert.deepEqual(secrets, [{ secret_type: 'password' }]);
+    assert.equal((await api(`/emails/${email.id}`)).body.note_count, 1);
+    const loose = (await api('/notes', { method: 'POST', body: JSON.stringify({ body: 'standalone' }) })).body;
+    assert.deepEqual((await api('/notes?target_type=none')).body.items.map((n) => n.id), [loose.id]);
+    assert.deepEqual((await api(`/notes?target_type=email&target_id=${email.id}`)).body.items.map((n) => n.id), [made.body.id]);
+    assert.equal((await api('/notes', { method: 'POST', body: JSON.stringify({ target_type: 'email', body: 'x' }) })).status, 422);
+    assert.equal((await api('/notes', { method: 'POST', body: JSON.stringify({ target_type: 'project', target_id: '00000000-0000-4000-8000-000000000000', body: 'x' }) })).status, 404);
+    const patched = await api(`/notes/${made.body.id}`, { method: 'PATCH', body: JSON.stringify({ body: 'OTP 123456' }) });
+    assert.equal(patched.body.body, 'OTP [MASKED:otp]');
+    assert.deepEqual((await pool.query('SELECT secret_type FROM masked_secrets WHERE note_id = $1', [made.body.id])).rows, [{ secret_type: 'otp' }]);
+    assert.equal((await api(`/notes/${made.body.id}`, { method: 'DELETE' })).status, 204);
+    assert.equal((await api(`/emails/${email.id}`)).body.note_count, 0);
+    assert.equal((await api(`/notes/${made.body.id}`, { method: 'DELETE' })).status, 404);
+  });
+
   test('layouts: starter by default; full replace; stale save 409; bad stack 422', async () => {
     const start = (await api('/layouts/desktop')).body;
     assert.equal(start.is_default, true);

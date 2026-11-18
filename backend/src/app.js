@@ -5,6 +5,7 @@ import { auth } from './api/auth.js';
 import { emails } from './api/emails.js';
 import { layouts } from './api/layouts.js';
 import { me } from './api/me.js';
+import { notes } from './api/notes.js';
 import { projects } from './api/projects.js';
 import { secrets } from './api/secrets.js';
 import { errorBody, errorHandler } from './http.js';
@@ -22,7 +23,7 @@ app.use('/api', (req, res, next) => {
   next();
 });
 app.use(routes);
-app.use('/api/v1', auth, me, emails, actions, layouts, projects, secrets);
+app.use('/api/v1', auth, me, emails, actions, layouts, projects, notes, secrets);
 
 // Deny by default: any other /api/v1 path is a 404 in the §6.4.1 envelope.
 app.use('/api', (req, res) => res.status(404).json(errorBody('not_found', 'No such route')));

@@ -173,6 +173,16 @@ export interface ProjectItemRow {
   added_at: string
 }
 
+export interface NoteRow {
+  id: string
+  owner_user_id: string
+  target_type: 'email' | 'card' | 'project' | null
+  target_id: string | null
+  body: string
+  created_at: string
+  updated_at: string
+}
+
 export interface Db {
   users: UserRow[]
   threads: Map<string, ThreadRow>
@@ -189,6 +199,8 @@ export interface Db {
   projects: ProjectRow[]
   /** Emails and cards in projects (FR-UI-017). */
   projectItems: ProjectItemRow[]
+  /** Notes (FR-CNT-003), masked on save. */
+  notes: NoteRow[]
   /** Read state per user (proposal §1: per recipient, not a column on the email). */
   reads: Map<string, Set<string>>
   /** Handled state per user: email id → handled_at (proposals §10.3, email_states for M6). */

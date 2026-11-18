@@ -5,8 +5,9 @@ import { adminRoutes } from './routes/admin'
 import { emailRoutes } from './routes/emails'
 import { layoutRoutes } from './routes/layouts'
 import { meRoutes } from './routes/me'
+import { noteRoutes } from './routes/notes'
 import { projectRoutes } from './routes/projects'
 import { secretRoutes } from './routes/secrets'
 import { socketHandler } from './socketio'
 
-export const handlers = [...meRoutes, ...emailRoutes, ...actionRoutes, ...secretRoutes, ...adminRoutes, ...layoutRoutes, ...projectRoutes, socketHandler, fallback]
+export const handlers = [...meRoutes, ...emailRoutes, ...actionRoutes, ...secretRoutes, ...adminRoutes, ...layoutRoutes, ...projectRoutes, ...noteRoutes, socketHandler, fallback]

@@ -1,7 +1,7 @@
 import * as Popover from '@radix-ui/react-popover'
 import { Board } from '../board/Board'
 import { Copy, Ellipsis, Layers, Maximize2, Pencil, SquareSplitVertical, Trash2 } from 'lucide-react'
-import { useContext, useMemo, useRef, useState, type MouseEvent, type PointerEvent, type ReactNode } from 'react'
+import { lazy, Suspense, useContext, useMemo, useRef, useState, type MouseEvent, type PointerEvent, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import type { LayoutDeviceClass, Widget, WidgetSize } from '../api/types'
 import { filterQuery, parseColumnQuery, QUICK_VIEWS, sortKeyOf, toggleFilter, type ColumnState } from '../inbox/cardModel'
@@ -11,6 +11,9 @@ import { useDragHandle } from './dragHandle'
 import { PhoneSection } from './PhoneSection'
 import { SIZES } from './grid'
 import { BUILT_TYPES, fullViewHref, ICONS, SWATCHES, widgetTitle } from './layoutModel'
+
+// Standalone notes (FR-CNT-003): their own chunk, loaded when a Notes widget is on the page.
+const NotesPanel = lazy(() => import('../notes/NotesPanel').then((m) => ({ default: m.NotesPanel })))
 
 const LONG_PRESS_MS = 500
 
@@ -127,6 +130,20 @@ export function WidgetFrame({ widget, device, editing, actions }: { widget: Widg
           </header>
           <div className="col-body" ref={(n) => n && (n.inert = editing)}>
             <Board variant="tile" label={title} />
+          </div>
+        </section>
+      ) : widget.type === 'notes' ? (
+        <section className="column notes-widget" aria-labelledby={`w-${widget.id}`}>
+          <header className="col-head">
+            <div className="col-title-row">
+              {heading(`w-${widget.id}`)}
+              {tools}
+            </div>
+          </header>
+          <div className="col-body" ref={(n) => n && (n.inert = editing)}>
+            <Suspense fallback={<p className="col-state">Loading notes…</p>}>
+              <NotesPanel scope={null} />
+            </Suspense>
           </div>
         </section>
       ) : (

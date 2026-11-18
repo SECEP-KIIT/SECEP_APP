@@ -5,6 +5,7 @@ import { ApiError } from '../api/client'
 import { boardOptions, createCard, deleteCard, isCard, patchCard, setCardsInProject, useProjects } from '../api/queries'
 import type { Action, Urgency, UserCardPayload } from '../api/types'
 import { shellToast } from '../lib/toastBus'
+import { NotesPanel } from '../notes/NotesPanel'
 import { onOpenCard, settled } from './cardBus'
 import { SOURCES } from './sourceIcon'
 
@@ -212,6 +213,11 @@ function CardForm({ card, titleId, onClose, extra }: { card: Card; titleId: stri
             })}
           {projects.data?.items.length === 0 && <span className="pd-hint">No projects yet.</span>}
         </div>
+      </section>
+
+      <section className="cs-section" aria-labelledby={`${id}-notes`}>
+        <h3 id={`${id}-notes`}>Notes</h3>
+        <NotesPanel scope={{ type: 'card', id: card.id }} />
       </section>
 
       {extra}

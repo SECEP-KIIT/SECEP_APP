@@ -29,6 +29,8 @@ const ITEM_SELECT = `
                      ORDER BY ep.is_primary DESC, ep.added_at)
                      FROM email_projects ep JOIN projects pr ON pr.id = ep.project_id
                     WHERE ep.email_id = e.id AND pr.owner_user_id = $1), '[]'::json) AS projects,
+         -- PROPOSED (proposals §19.2): the 📝 count.
+         (SELECT count(*)::int FROM notes n WHERE n.target_type = 'email' AND n.target_id = e.id AND n.owner_user_id = $1) AS note_count,
          (SELECT count(*)::int FROM actions a WHERE a.email_id = e.id AND a.user_id = $1 AND a.status = 'proposed') AS proposed_action_count,
          (SELECT a.external_ref FROM actions a WHERE a.email_id = e.id AND a.user_id = $1 AND a.type = 'create_jira_issue'
            AND a.external_ref IS NOT NULL ORDER BY a.updated_at DESC LIMIT 1) AS jira_key
@@ -80,6 +82,7 @@ export function toListItem(r) {
     read: r.read,
     projects: r.projects,
     tags: [],
+    note_count: r.note_count,
   };
 }
 
