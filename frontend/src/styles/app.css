@@ -420,6 +420,13 @@ html[data-motion='off'] .glow.pulse {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+.topbar-context:empty {
+  display: none;
+}
+/* With cards selected, the selection bar takes the search pill's place (item 1, contextual mode). */
+.topbar-context:not(:empty) + .search-pill {
+  display: none;
+}
 .search-pill {
   display: flex;
   align-items: center;

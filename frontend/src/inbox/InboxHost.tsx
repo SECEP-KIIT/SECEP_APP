@@ -1,7 +1,11 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { isTypingTarget } from '../shell/focusKeys'
+import type { EmailListItem } from '../api/types'
+import { anyLayerOpen, isTypingTarget } from '../shell/focusKeys'
 import { CardLiftProvider } from './CardLift'
+import { CardMenu } from './CardMenu'
 import { InboxContext, useToasts, type InboxApi, type OpenOptions } from './inboxContext'
+import { SelectionBar } from './SelectionBar'
+import { selectRange, SelectionContext, type SelectionApi } from './selection'
 import { Legend } from './Legend'
 import { Toaster } from './Toaster'
 
@@ -15,7 +19,31 @@ const EmailDrawer = lazy(() => import('../drawer/EmailDrawer'))
 export function InboxHost({ children }: { children: ReactNode }) {
   const [legend, setLegend] = useState(false)
   const [drawer, setDrawer] = useState<({ id: string } & OpenOptions) | null>(null)
-  const { toasts, push, dismiss } = useToasts()
+  const { toasts, push, dismiss, undo } = useToasts()
+  const [menuAt, setMenuAt] = useState<{ email: EmailListItem; x: number; y: number } | null>(null)
+  // Selection (FR-UI-027): ids only; bulk actions fetch what they need.
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
+  const anchor = useRef<string | null>(null)
+  const selection = useMemo<SelectionApi>(
+    () => ({
+      selected,
+      toggle: (id) => {
+        anchor.current = id
+        setSelected((s) => {
+          const next = new Set(s)
+          if (!next.delete(id)) next.add(id)
+          return next
+        })
+      },
+      range: (id, order) => setSelected((s) => selectRange(s, anchor.current, id, order)),
+      set: (ids) => setSelected(new Set(ids)),
+      clear: () => {
+        anchor.current = null
+        setSelected((s) => (s.size ? new Set() : s))
+      },
+    }),
+    [selected],
+  )
   // The dialog returns focus to its opener on close. If the drawer's own change removed that card (Mark handled,
   // read in the Unread view), focus goes to the opener's column title instead of being lost to <body>.
   const opener = useRef<{ el: HTMLElement | null; column: HTMLElement | null }>({ el: null, column: null })
@@ -28,6 +56,7 @@ export function InboxHost({ children }: { children: ReactNode }) {
       },
       toast: push,
       showLegend: () => setLegend(true),
+      menu: (email, x, y) => setMenuAt({ email, x, y }),
     }),
     [push],
   )
@@ -50,12 +79,33 @@ export function InboxHost({ children }: { children: ReactNode }) {
     return () => removeEventListener('keydown', onKey)
   }, [])
 
+  // Ctrl/⌘+Z undoes the latest undoable action still offered (FR-UI-029). Esc clears a selection before it reaches
+  // Focus mode (capture phase, defaultPrevented), but never while a dialog or popover owns the keys.
+  const hasSelection = selected.size > 0
+  const clearSelection = selection.clear
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || isTypingTarget(e.target)) return
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') {
+        if (undo()) e.preventDefault()
+      } else if (e.key === 'Escape' && hasSelection && !anyLayerOpen()) {
+        e.preventDefault()
+        clearSelection()
+      }
+    }
+    addEventListener('keydown', onKey, true)
+    return () => removeEventListener('keydown', onKey, true)
+  }, [undo, hasSelection, clearSelection])
+
   return (
     <InboxContext.Provider value={api}>
+      <SelectionContext.Provider value={selection}>
       <p id="card-hint" className="sr-only">
-        Enter or Space opens the details.
+        Enter or Space opens the details. Ctrl or Command click, or X, selects. Shift+F10 opens the actions menu.
       </p>
       <CardLiftProvider>{children}</CardLiftProvider>
+      <SelectionBar />
+      {menuAt && <CardMenu key={`${menuAt.email.id}-${menuAt.x}-${menuAt.y}`} at={menuAt} onClose={() => setMenuAt(null)} />}
       <Legend open={legend} onClose={() => setLegend(false)} />
       {drawer && (
         <Suspense fallback={null}>
@@ -63,6 +113,7 @@ export function InboxHost({ children }: { children: ReactNode }) {
         </Suspense>
       )}
       <Toaster toasts={toasts} onDismiss={dismiss} />
+      </SelectionContext.Provider>
     </InboxContext.Provider>
   )
 }

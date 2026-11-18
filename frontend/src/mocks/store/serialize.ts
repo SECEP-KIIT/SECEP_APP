@@ -6,7 +6,8 @@ import { SENDERS } from './templates'
 import type { ActionRow, Db, EmailRow, ModelRow, ProjectRow, SettingsRow, UrlCheckRow, UserRow } from './types'
 
 export function toAction(a: ActionRow): Action {
-  const { user_id: _owner, ...action } = a
+  // undo_until is server state (§6.6), not part of the §6.4.1 Action shape.
+  const { user_id: _owner, undo_until: _undo, ...action } = a
   return { ...action, payload: { ...action.payload } }
 }
 

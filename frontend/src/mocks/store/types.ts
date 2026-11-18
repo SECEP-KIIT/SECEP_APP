@@ -96,6 +96,8 @@ export interface SecretRow {
 
 export interface ActionRow extends Action {
   user_id: string
+  /** §6.6 v1.1 `actions.undo_until`: until when POST /actions/:id/undo may delete the created issue or event. */
+  undo_until?: string | null
 }
 
 export interface CorrectionRow {

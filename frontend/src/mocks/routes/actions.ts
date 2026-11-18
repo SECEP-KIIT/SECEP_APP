@@ -16,6 +16,9 @@ const COLUMNS: BoardColumn[] = ['todo', 'in_progress', 'done']
 const PRIORITIES: JiraPriority[] = ['Highest', 'High', 'Medium', 'Low']
 const PAYLOAD_KEYS = ['title', 'description', 'priority', 'due_date', 'start', 'end', 'attendees'] as const
 
+/** FR-UI-029: "about 10 s" in the UI; the server allows a little more for the round trip. */
+const UNDO_WINDOW_MS = 12_000
+
 /** FR-ORC-004: urgency → Jira priority. */
 export const PRIORITY_FOR: Record<Urgency, JiraPriority> = { Critical: 'Highest', High: 'High', Medium: 'Medium', Low: 'Low' }
 
@@ -72,6 +75,7 @@ async function execute(a: ActionRow, user: UserRow): Promise<Response | ActionRo
     }
     a.status = 'done'
     a.error = null
+    a.undo_until = new Date(Date.now() + UNDO_WINDOW_MS).toISOString()
     placeOnBoard(a, 'todo') // FR-ORC-007: accepted cards and created Jira issues land in To do
     await audit(user.id, 'action.execute', a.id, { type: a.type, outcome: 'done', external_ref: a.external_ref })
     return a
@@ -90,6 +94,18 @@ async function execute(a: ActionRow, user: UserRow): Promise<Response | ActionRo
     changed()
     emitUpdated(a)
   }
+}
+
+/** Takes a card off the board and closes the gap it leaves. */
+function removeFromBoard(a: ActionRow) {
+  const from = a.board_column
+  a.board_column = null
+  a.board_position = null
+  if (!from) return
+  ;[...db.actions.values()]
+    .filter((x) => x.user_id === a.user_id && x.board_column === from)
+    .sort((x, y) => (x.board_position ?? 0) - (y.board_position ?? 0))
+    .forEach((c, i) => (c.board_position = i))
 }
 
 function boardMove(a: ActionRow, column: BoardColumn, position: number) {
@@ -192,6 +208,26 @@ export const actionRoutes = [
 
     const result = await execute(a, user)
     return result instanceof Response ? result : toAction(result)
+  }),
+
+  // FR-UI-029 / §6.5: within the undo window, delete the created Jira issue or Calendar event (simulated) and put the
+  // action back to proposed, off the board. Audited without content.
+  route<{ id: string }>('post', '/actions/:id/undo', 'user', async ({ user, params }) => {
+    const a = own(db.actions.get(params.id), user, 'Action')
+    if (a.status !== 'done' || !a.undo_until || Date.parse(a.undo_until) < Date.now()) {
+      throw new Fail(409, 'conflict', 'This action can no longer be undone')
+    }
+    const ref = a.external_ref
+    removeFromBoard(a)
+    a.status = 'proposed'
+    a.external_ref = null
+    a.external_status = null
+    a.undo_until = null
+    a.updated_at = now()
+    await audit(user.id, 'action.undo', a.id, { type: a.type, external_ref: ref })
+    changed()
+    emitUpdated(a)
+    return toAction(a)
   }),
 
   route<{ id: string }>('post', '/actions/:id/reject', 'user', ({ user, params }) => {

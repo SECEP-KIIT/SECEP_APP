@@ -29,6 +29,8 @@ import { EmailCard } from './EmailCard'
 import { useNewPill } from './useNewPill'
 import { FilterPopover } from './FilterPopover'
 import { useInbox } from './inboxContext'
+import { useSelection } from './selection'
+import { isTypingTarget } from '../shell/focusKeys'
 import './inbox.css'
 
 /** Start loading the next page this many rows before the end. */
@@ -67,6 +69,7 @@ export function Column({ title, state, onStateChange, initial, heading, tools, v
   const focused = useFocused()
   const now = useMinuteClock()
   const { showLegend } = useInbox()
+  const selection = useSelection()
   const titleId = useId()
   const [own, setOwn] = useState<ColumnState>(initial ?? DEFAULT_COLUMN_STATE)
   const current = state ?? own
@@ -127,7 +130,19 @@ export function Column({ title, state, onStateChange, initial, heading, tools, v
   const loadedCount = `${items.length}${more ? '+' : ''}`
 
   return (
-    <section className="column" aria-labelledby={titleId} data-density={density} data-variant={variant}>
+    <section
+      className="column"
+      aria-labelledby={titleId}
+      data-density={density}
+      data-variant={variant}
+      onKeyDown={(e) => {
+        // Ctrl/⌘+A selects every loaded card in this column (FR-UI-027).
+        if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'a' && !isTypingTarget(e.target) && items.length) {
+          e.preventDefault()
+          selection.set(items.map((i) => i.id))
+        }
+      }}
+    >
       <header className="col-head">
         <div className="col-title-row">
           {heading ? (
@@ -244,6 +259,8 @@ export function Column({ title, state, onStateChange, initial, heading, tools, v
                     role={showSkeleton ? undefined : 'listitem'}
                     aria-setsize={showSkeleton || !email ? undefined : more ? -1 : items.length}
                     aria-posinset={showSkeleton || !email ? undefined : row.index + 1}
+                    data-email-id={showSkeleton ? undefined : email?.id}
+                    data-pos={row.index}
                     style={{ transform: `translateY(${row.start}px)`, height: pitch }}
                   >
                     {email && !showSkeleton ? (
