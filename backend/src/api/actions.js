@@ -1,10 +1,10 @@
 // Actions (§6.5, FR-ORC-001–007, FR-UI-029): proposals execute only after the owner accepts, only allow-listed
 // types with valid payloads, one Jira issue per action (FR-ORC-005).
 import { Router } from 'express';
-import { Fail, Fields, UUID, csv, idParam, isDate, isDateTime, isEmail, isInt, isOptStr, object, own, pageParams, route, searchParams, toPage } from '../http.js';
+import { Fail, Fields, UUID, csv, idParam, isDate, isDateTime, isEmail, isInt, isOptStr, isStr, object, own, pageParams, route, searchParams, toPage } from '../http.js';
 import { audit } from '../services/audit.js';
 import { query, tx } from '../services/db.js';
-import { listItem, toAction } from '../services/emails.js';
+import { CARD_PROJECTS, listItem, toAction } from '../services/emails.js';
 import { publish } from '../services/events.js';
 import { JiraError, createIssue, deleteIssue } from '../services/jira.js';
 
@@ -42,7 +42,26 @@ function checkTypeRules(type, p, f) {
   }
 }
 
-const mine = async (db, userId, id) => (await db.query('SELECT * FROM actions WHERE id = $1 AND user_id = $2', [id, userId])).rows[0];
+const mine = async (db, userId, id) => (await db.query(`SELECT a.*, ${CARD_PROJECTS} FROM actions a WHERE a.id = $1 AND a.user_id = $2`, [id, userId])).rows[0];
+
+const URGENCIES = ['Critical', 'High', 'Medium', 'Low'];
+const SOURCES = ['in_person', 'call', 'chat'];
+const CARD_KEYS = ['title', 'description', 'due_date', 'due_time', 'urgency', 'checklist', 'source', 'person'];
+const isUserCard = (a) => a.origin === 'user' && a.email_id === null && a.type === 'add_board_card';
+
+/** User-card payload rules (§6.4 FR-CNT-002, proposals §19.1), for a whole payload or a partial edit. */
+function checkCardPayload(f, p, partial) {
+  for (const k of Object.keys(p)) if (!CARD_KEYS.includes(k)) f.add(`payload.${k}`, 'Unknown field');
+  if ((!partial || 'title' in p) && !(isStr(p.title, 120) && p.title.trim())) f.add('payload.title', 'Required, at most 120 characters');
+  if ('description' in p && !isOptStr(p.description, 2000)) f.add('payload.description', 'At most 2000 characters');
+  if ('due_date' in p && p.due_date !== null && !isDate(p.due_date)) f.add('payload.due_date', 'Must be YYYY-MM-DD');
+  if ('due_time' in p && p.due_time !== null && !(typeof p.due_time === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(p.due_time))) f.add('payload.due_time', 'Must be HH:MM');
+  if ('urgency' in p && p.urgency !== null && !URGENCIES.includes(p.urgency)) f.add('payload.urgency', 'Not an urgency');
+  const item = (i) => i && typeof i === 'object' && isStr(i.text, 200) && i.text.trim() && typeof i.done === 'boolean' && Object.keys(i).length === 2;
+  if ('checklist' in p && !(Array.isArray(p.checklist) && p.checklist.length <= 50 && p.checklist.every(item))) f.add('payload.checklist', 'Up to 50 items of {text, done}');
+  if ('source' in p && p.source !== null && !SOURCES.includes(p.source)) f.add('payload.source', 'Must be in_person, call or chat');
+  if ('person' in p && !isOptStr(p.person, 120)) f.add('payload.person', 'At most 120 characters');
+}
 
 /** action.updated, and the card's counts (proposed actions, Jira key, due date) in place. */
 async function emitUpdated(a) {
@@ -85,7 +104,7 @@ route(actions, 'get', '/actions', 'user', async (req, user) => {
     own((await query('SELECT id FROM projects WHERE id = $1 AND owner_user_id = $2', [project, user.id])).rows[0], 'Project');
   }
   const { rows } = await query(
-    `SELECT * FROM actions a WHERE user_id = $1 AND ($2::text[] IS NULL OR board_column = ANY($2)) AND ($3::text IS NULL OR status = $3)
+    `SELECT a.*, ${CARD_PROJECTS} FROM actions a WHERE user_id = $1 AND ($2::text[] IS NULL OR board_column = ANY($2)) AND ($3::text IS NULL OR status = $3)
        AND ($6::uuid IS NULL OR a.email_id IN (SELECT email_id FROM email_projects WHERE project_id = $6)
             OR a.id IN (SELECT action_id FROM card_projects WHERE project_id = $6))
       ORDER BY board_position NULLS LAST, created_at DESC LIMIT $4 OFFSET $5`,
@@ -115,6 +134,44 @@ route(actions, 'post', '/emails/:id/actions', 'user', async (req, user) => {
   await emitUpdated(a);
   return toAction(a);
 }, { status: 201 });
+
+// User card (FR-CNT-002, proposals §19.1): no email, done, at the end of To do.
+route(actions, 'post', '/actions', 'user', async (req, user) => {
+  const f = object(req.body).only(['type', 'payload']);
+  if (f.body.type !== 'add_board_card') f.add('type', 'Only add_board_card');
+  const p = f.body.payload ?? {};
+  if (typeof p !== 'object' || Array.isArray(p) || p === null) f.add('payload', 'Must be an object');
+  else checkCardPayload(f, p, false);
+  f.done();
+  if (p.due_time && !p.due_date) f.add('payload.due_time', 'Needs a due date');
+  f.done();
+  const payload = {
+    title: p.title.trim(), description: p.description ?? null, due_date: p.due_date ?? null, due_time: p.due_time ?? null,
+    urgency: p.urgency ?? null, checklist: p.checklist ?? [], source: p.source ?? null, person: p.person ?? null,
+  };
+  const row = await tx(async (c) => {
+    const a = (await c.query(
+      `INSERT INTO actions (tenant_id, email_id, user_id, type, payload, origin, status) VALUES ($1, NULL, $2, 'add_board_card', $3, 'user', 'done') RETURNING *`,
+      [user.tenant_id, user.id, payload],
+    )).rows[0];
+    await boardMove(c, a, 'todo', Number.MAX_SAFE_INTEGER); // as an accepted action lands (FR-ORC-007)
+    return mine(c, user.id, a.id);
+  });
+  await emitUpdated(row);
+  return toAction(row);
+}, { status: 201 });
+
+// PROPOSED (proposals §19.1): delete a user card; the client's Undo re-creates it.
+route(actions, 'delete', '/actions/:id', 'user', async (req, user) => {
+  const id = idParam(req, 'Action');
+  await tx(async (c) => {
+    const a = own(await mine(c, user.id, id), 'Action');
+    if (!isUserCard(a)) throw new Fail(409, 'conflict', 'Only cards you made can be deleted');
+    await c.query('DELETE FROM actions WHERE id = $1', [id]);
+    if (a.board_column) await renumber(c, user.id, a.board_column);
+    await audit(c, { tenantId: user.tenant_id, actorId: user.id, event: 'action.delete', target: id, details: { type: a.type } });
+  });
+});
 
 /**
  * Runs an accepted action (FR-ORC-003/010). Jira 400/401: the action fails with Jira's message and the caller
@@ -237,17 +294,36 @@ route(actions, 'post', '/actions/:id/undo', 'user', async (req, user) => {
   return toAction(row);
 });
 
-// Board moves (FR-ORC-007).
+// Board moves (FR-ORC-007) and, for user cards, payload edits (v1.1, proposals §19.1).
 route(actions, 'patch', '/actions/:id', 'user', async (req, user) => {
   const id = idParam(req, 'Action');
-  const f = object(req.body).only(['board_column', 'board_position']);
-  if (!COLUMNS.includes(f.body.board_column)) f.add('board_column', 'Must be todo, in_progress or done');
-  if (!isInt(f.body.board_position, 0, 10_000)) f.add('board_position', 'Must be a non-negative integer');
+  const f = object(req.body).only(['board_column', 'board_position', 'payload']);
+  const move = 'board_column' in f.body || 'board_position' in f.body;
+  const edit = f.body.payload;
+  if (!move && edit === undefined) f.add('payload', 'Nothing to change');
+  if (move) {
+    if (!COLUMNS.includes(f.body.board_column)) f.add('board_column', 'Must be todo, in_progress or done');
+    if (!isInt(f.body.board_position, 0, 10_000)) f.add('board_position', 'Must be a non-negative integer');
+  }
+  if (edit !== undefined) {
+    if (!edit || typeof edit !== 'object' || Array.isArray(edit)) f.add('payload', 'Must be an object');
+    else checkCardPayload(f, edit, true);
+  }
   f.done();
   const row = await tx(async (c) => {
     const a = own(await mine(c, user.id, id), 'Action');
-    if (a.status !== 'done') throw new Fail(409, 'conflict', 'Only cards on the board can move');
-    await boardMove(c, a, f.body.board_column, f.body.board_position);
+    if (edit !== undefined) {
+      if (!isUserCard(a)) throw new Fail(409, 'conflict', 'Only cards you made can be edited here');
+      const next = { ...a.payload, ...edit };
+      if (next.due_time && !next.due_date) f.add('payload.due_time', 'Needs a due date');
+      f.done();
+      next.title = next.title.trim();
+      await c.query('UPDATE actions SET payload = $2 WHERE id = $1', [id, next]);
+    }
+    if (move) {
+      if (a.status !== 'done') throw new Fail(409, 'conflict', 'Only cards on the board can move');
+      await boardMove(c, a, f.body.board_column, f.body.board_position);
+    }
     await c.query('UPDATE actions SET updated_at = now() WHERE id = $1', [id]);
     return mine(c, user.id, id);
   });

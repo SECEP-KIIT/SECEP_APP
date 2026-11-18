@@ -80,6 +80,8 @@ export interface Action {
   error: string | null
   created_at: string
   updated_at: string
+  /** PROPOSED (proposals §19.1): a user card's projects, primary first; [] for an email's actions. */
+  projects: EmailProjectRef[]
 }
 
 export interface EmailListItem {

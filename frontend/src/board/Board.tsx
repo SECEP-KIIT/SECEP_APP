@@ -14,10 +14,12 @@ import {
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useQuery } from '@tanstack/react-query'
-import { CalendarPlus, SquareCheck, Zap } from 'lucide-react'
+import { CalendarPlus, ListChecks, SquareCheck, Zap } from 'lucide-react'
 import { memo, useMemo, useState, type ReactNode } from 'react'
-import { boardOptions, boardPosition, moveCard } from '../api/queries'
+import { boardOptions, boardPosition, isCard, moveCard } from '../api/queries'
 import type { Action, BoardColumn } from '../api/types'
+import { openCard } from '../cards/cardBus'
+import { SOURCE_ICON } from '../cards/sourceIcon'
 import { dueTag } from '../inbox/cardModel'
 import { errorText, useInbox } from '../inbox/inboxContext'
 import { BOARD_COLUMNS, byColumn, cardDue } from '../projects/projectModel'
@@ -156,6 +158,8 @@ function BoardLane({ column, title, count, empty, children }: { column: BoardCol
 function SortableCard({ action, column, dragging }: { action: Action; column: BoardColumn; dragging: boolean }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: action.id })
   const { open } = useInbox()
+  // An email's card opens the email; a user card opens its sheet (FR-CNT-002).
+  const openAction = (a: Action) => (a.email_id ? open(a.email_id) : isCard(a) ? openCard(a.id) : undefined)
   return (
     <li
       ref={setNodeRef}
@@ -165,10 +169,10 @@ function SortableCard({ action, column, dragging }: { action: Action; column: Bo
       {...attributes}
       {...listeners}
       aria-roledescription="Board card"
-      onClick={() => action.email_id && open(action.email_id)}
+      onClick={() => openAction(action)}
       onKeyDown={(e) => {
         listeners?.onKeyDown?.(e)
-        if (!e.defaultPrevented && e.key === 'Enter' && action.email_id) open(action.email_id)
+        if (!e.defaultPrevented && e.key === 'Enter') openAction(action)
       }}
     >
       <CardFace action={action} column={column} />
@@ -185,18 +189,36 @@ const TYPE: Record<Action['type'], { icon: typeof Zap; label: string }> = {
 /** One card's face: type and Jira key, title, due date. The same in the list and while dragged. */
 const CardFace = memo(function CardFace({ action, column, lifted = false }: { action: Action; column: BoardColumn; lifted?: boolean }) {
   const now = useMinuteClock()
-  const { icon: Icon, label } = TYPE[action.type]
+  const user = isCard(action) ? action.payload : null
+  const source = user?.source ? SOURCE_ICON[user.source] : null
+  const { icon: Icon, label } = source ?? TYPE[action.type]
   const due = column === 'done' ? null : dueTag(cardDue(action), now)
+  const list = user?.checklist ?? []
   return (
     <div className="board-card" data-lifted={lifted || undefined}>
       <span className="board-card-type">
         <Icon size={13} aria-hidden="true" />
-        {action.external_ref ?? label}
+        {action.external_ref ?? (user ? `${label}${user.person ? ` · ${user.person}` : ''}` : label)}
       </span>
       <span className="board-card-title">{action.payload.title ?? 'Untitled card'}</span>
-      {due && (
-        <span className="tag" data-tone={due.tone} title={due.label}>
-          {due.text}
+      {(due || list.length > 0 || user?.urgency) && (
+        <span className="board-card-tags">
+          {due && (
+            <span className="tag" data-tone={due.tone} title={due.label}>
+              {due.text}
+            </span>
+          )}
+          {user?.urgency && (user.urgency === 'Critical' || user.urgency === 'High') && (
+            <span className="tag" data-tone={user.urgency === 'Critical' ? 'danger' : 'warn'}>
+              {user.urgency}
+            </span>
+          )}
+          {list.length > 0 && (
+            <span className="tag" data-tone="muted" title="Checklist">
+              <ListChecks size={12} aria-hidden="true" />
+              {list.filter((i) => i.done).length}/{list.length}
+            </span>
+          )}
         </span>
       )}
     </div>

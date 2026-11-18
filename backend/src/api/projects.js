@@ -4,7 +4,7 @@
 import { Router } from 'express';
 import { Fail, UUID, idParam, isDateTime, isOptStr, isStr, object, own, pageParams, route, searchParams, toPage } from '../http.js';
 import { query, tx } from '../services/db.js';
-import { listItem, toAction } from '../services/emails.js';
+import { CARD_PROJECTS, listItem, toAction } from '../services/emails.js';
 import { publish } from '../services/events.js';
 
 export const projects = Router();
@@ -54,7 +54,7 @@ function checkFields(f, partial) {
 async function emitItem(userId, { email_id, action_id }) {
   if (email_id) publish(userId, 'email.triaged', { email_id, email: await listItem(userId, email_id) });
   if (action_id) {
-    const a = (await query('SELECT * FROM actions WHERE id = $1', [action_id])).rows[0];
+    const a = (await query(`SELECT a.*, ${CARD_PROJECTS} FROM actions a WHERE a.id = $1`, [action_id])).rows[0];
     if (a) publish(userId, 'action.updated', { action: toAction(a) });
   }
 }

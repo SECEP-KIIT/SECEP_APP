@@ -64,7 +64,7 @@ const LIST_KEYS = ['id', 'thread_id', 'from', 'to', 'cc', 'recipient_position', 
 const DETAIL_KEYS = [...LIST_KEYS, 'body_text', 'summary_short', 'actions', 'links', 'attachments', 'masked_secrets', 'open_url', 'auth_results', 'thread']
 const TRIAGE_KEYS = ['email_type', 'urgency', 'sentiment', 'needs_review', 'model_version', 'processed_at']
 const LINK_KEYS = ['check_id', 'anchor_text', 'host', 'verdict', 'go_url']
-const ACTION_KEYS = ['id', 'email_id', 'type', 'origin', 'status', 'payload', 'board_column', 'board_position', 'external_ref', 'external_status', 'error', 'created_at', 'updated_at']
+const ACTION_KEYS = ['id', 'email_id', 'type', 'origin', 'status', 'payload', 'board_column', 'board_position', 'external_ref', 'external_status', 'error', 'created_at', 'updated_at', 'projects']
 const ME_KEYS = ['id', 'email', 'display_name', 'role_category', 'is_admin', 'permissions', 'mailbox', 'ui_prefs']
 const ERROR_KEYS = ['code', 'message', 'details', 'request_id']
 
@@ -658,5 +658,42 @@ describe('ui_prefs.theme (PROPOSED, proposals §16.6)', () => {
     expect((await call('GET', '/me', { token })).json.ui_prefs.theme).toBe('dark')
     expect((await call('PATCH', '/me/preferences', { token, body: { theme: 'auto' } })).json.ui_prefs.theme).toBe('auto')
     expect((await call('PATCH', '/me/preferences', { token, body: { theme: 'sepia' } })).status).toBe(422)
+  })
+})
+
+describe('user cards (FR-CNT-002, proposals §19.1)', () => {
+  it('creates, edits, files, deletes; rejects bad payloads and edits to email actions', async () => {
+    const t = await login('demo')
+    const bad = await call('POST', '/actions', { token: t, body: { type: 'add_board_card', payload: { title: '', urgency: 'Huge', due_time: '25:00', checklist: [{ text: 'x' }] } } })
+    expect(bad.status).toBe(422)
+    expect(Object.keys((bad.json!.error as Json).details!.fields as Json).sort()).toEqual(['payload.checklist', 'payload.due_time', 'payload.title', 'payload.urgency'])
+    expect((await call('POST', '/actions', { token: t, body: { type: 'add_board_card', payload: { title: 'x', due_time: '10:00' } } })).status).toBe(422)
+
+    const made = await call('POST', '/actions', { token: t, body: { type: 'add_board_card', payload: { title: ' Call the bank ', source: 'call', checklist: [{ text: 'IBAN', done: false }] } } })
+    expect(made.status).toBe(201)
+    const card = made.json as Json
+    expect(card).toMatchObject({ origin: 'user', status: 'done', board_column: 'todo', email_id: null, projects: [] })
+    expect((card.payload as Json).title).toBe('Call the bank')
+
+    const edited = await call('PATCH', `/actions/${card.id}`, { token: t, body: { payload: { urgency: 'High', due_date: '2026-12-01', due_time: '09:30' } } })
+    expect(edited.status).toBe(200)
+    expect(edited.json!.payload).toMatchObject({ title: 'Call the bank', urgency: 'High', due_time: '09:30', source: 'call' })
+    expect((await call('PATCH', `/actions/${card.id}`, { token: t, body: { payload: { colour: 'red' } } })).status).toBe(422)
+
+    const project = (await call('POST', '/projects', { token: t, body: { name: 'Bank', colour: '#336699' } })).json!
+    expect((await call('POST', `/projects/${project.id}/items`, { token: t, body: { action_id: card.id } })).status).toBe(200)
+    const listed = (await call('GET', `/actions?project=${project.id}`, { token: t })).json!.items as Json[]
+    expect(listed.map((a) => a.id)).toEqual([card.id])
+    expect(listed[0].projects).toEqual([{ id: project.id, name: 'Bank', colour: '#336699', is_primary: true }])
+
+    const emailAction = [...db.actions.values()].find((a) => a.user_id === db.users[0].id && a.email_id)!
+    expect((await call('PATCH', `/actions/${emailAction.id}`, { token: t, body: { payload: { title: 'x' } } })).status).toBe(409)
+    expect((await call('DELETE', `/actions/${emailAction.id}`, { token: t })).status).toBe(409)
+
+    const sam = await login('sam')
+    expect((await call('DELETE', `/actions/${card.id}`, { token: sam })).status).toBe(404)
+    expect((await call('DELETE', `/actions/${card.id}`, { token: t })).status).toBe(204)
+    expect(db.actions.has(card.id as string)).toBe(false)
+    expect(db.projectItems.some((i) => i.action_id === card.id)).toBe(false)
   })
 })

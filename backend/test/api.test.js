@@ -184,6 +184,34 @@ describe('M6 API', { skip: !reachable && 'no test database' }, () => {
     assert.equal((await api('/projects/00000000-0000-4000-8000-000000000000')).status, 404);
   });
 
+  test('user cards: create 201 in To do, 422s, edit payload, file in a project, 409 on email actions, delete 204', async () => {
+    const bad = await api('/actions', { method: 'POST', body: JSON.stringify({ type: 'add_board_card', payload: { title: '', urgency: 'Huge', due_time: '25:00' } }) });
+    assert.equal(bad.status, 422);
+    assert.deepEqual(Object.keys(bad.body.error.details.fields).sort(), ['payload.due_time', 'payload.title', 'payload.urgency']);
+    const made = await api('/actions', { method: 'POST', body: JSON.stringify({ type: 'add_board_card', payload: { title: ' Call the bank ', source: 'call' } }) });
+    assert.equal(made.status, 201);
+    const card = made.body;
+    assert.equal(card.board_column, 'todo');
+    assert.equal(card.payload.title, 'Call the bank');
+    assert.deepEqual(card.projects, []);
+    const todo = (await api('/actions?status=done&column=todo&limit=50')).body.items;
+    assert.equal(todo.at(-1).id, card.id);
+    const edited = await api(`/actions/${card.id}`, { method: 'PATCH', body: JSON.stringify({ payload: { urgency: 'High', due_date: '2026-12-01', due_time: '09:30' } }) });
+    assert.equal(edited.status, 200);
+    assert.equal(edited.body.payload.source, 'call');
+    assert.equal(edited.body.payload.due_time, '09:30');
+    const project = (await api('/projects', { method: 'POST', body: JSON.stringify({ name: 'Bank', colour: '#336699' }) })).body;
+    await api(`/projects/${project.id}/items`, { method: 'POST', body: JSON.stringify({ action_id: card.id }) });
+    const inProject = (await api(`/actions?project=${project.id}`)).body.items;
+    assert.deepEqual(inProject.map((a) => a.id), [card.id]);
+    assert.deepEqual(inProject[0].projects, [{ id: project.id, name: 'Bank', colour: '#336699', is_primary: true }]);
+    const emailAction = (await api('/actions?limit=50')).body.items.find((a) => a.email_id);
+    assert.equal((await api(`/actions/${emailAction.id}`, { method: 'PATCH', body: JSON.stringify({ payload: { title: 'x' } }) })).status, 409);
+    assert.equal((await api(`/actions/${emailAction.id}`, { method: 'DELETE' })).status, 409);
+    assert.equal((await api(`/actions/${card.id}`, { method: 'DELETE' })).status, 204);
+    assert.ok(!(await api('/actions?status=done&column=todo&limit=50')).body.items.some((a) => a.id === card.id));
+  });
+
   test('layouts: starter by default; full replace; stale save 409; bad stack 422', async () => {
     const start = (await api('/layouts/desktop')).body;
     assert.equal(start.is_default, true);

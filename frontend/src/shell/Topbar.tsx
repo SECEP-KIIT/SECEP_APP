@@ -1,7 +1,8 @@
 import { useQueryClient, type QueryCache } from '@tanstack/react-query'
 import { Bell, Plus, Search } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { useMatches } from 'react-router'
+import { useMatch, useMatches } from 'react-router'
+import { openQuickAdd } from '../cards/cardBus'
 import { useMinuteClock } from './useMinuteClock'
 
 const timeFmt = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' })
@@ -46,10 +47,11 @@ function SyncIndicator() {
 }
 
 // FR-UI-001 topbar: title + clock | search pill | sync, bell, quick-add. The weather chip comes with FR-WP-009
-// (task 16). The pill, bell and quick-add are laid out now so nothing shifts later; they are enabled in tasks 11,
-// 13 and 12.
+// (task 16). The pill and bell are laid out now so nothing shifts later; they are enabled in tasks 11 and 13.
+// Quick-add (task 12) opens the quick-add dialog, filed into the open project.
 export function Topbar() {
   const now = useMinuteClock()
+  const project = useMatch('/projects/:id')?.params.id
   const title = useMatches()
     .map((m) => (m.handle as { title?: string } | undefined)?.title)
     .findLast(Boolean)
@@ -76,7 +78,7 @@ export function Topbar() {
         <button type="button" className="icon-button" disabled aria-label="Notifications">
           <Bell aria-hidden="true" size={18} />
         </button>
-        <button type="button" className="icon-button" disabled aria-label="Quick add">
+        <button type="button" className="icon-button" aria-label="Quick add a card" title="Quick add (N)" onClick={() => openQuickAdd({ projectId: project })}>
           <Plus aria-hidden="true" size={18} />
         </button>
       </div>

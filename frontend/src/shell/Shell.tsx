@@ -1,10 +1,12 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
-import { Outlet, useNavigate } from 'react-router'
+import { Outlet, useMatch, useNavigate } from 'react-router'
+import { onAnyCardRequest, openQuickAdd } from '../cards/cardBus'
 import { onGoTo } from '../lib/navigate'
 import { shellToast } from '../lib/toastBus'
 import { onProjectDialog } from '../projects/dialogBus'
 import { useSignedOut } from '../api/session'
 import { SignIn } from './SignIn'
+import { anyLayerOpen, isTypingTarget } from './focusKeys'
 import { FocusContext, useFocusMode } from './focusMode'
 import { LockSlots } from './LockSlots'
 import { useApplyPrefs, usePrefs } from './prefs'
@@ -55,6 +57,7 @@ function SignedInShell() {
       </div>
       <LockSlots />
       <ProjectDialogSlot />
+      <CardsSlot />
       <p className="sr-only" aria-live="polite">
         {announcement}
       </p>
@@ -71,6 +74,43 @@ function ProjectDialogSlot() {
   return wanted ? (
     <Suspense fallback={null}>
       <ProjectDialogHost onToast={(m) => shellToast(m)} />
+    </Suspense>
+  ) : null
+}
+
+// Quick-add and the card sheet (FR-CNT-001/002): their own chunk, fetched on the first + / n / paste / card click.
+const CardsHost = lazy(() => import('../cards/CardsHost').then((m) => ({ default: m.CardsHost })))
+
+function CardsSlot() {
+  const [wanted, setWanted] = useState(false)
+  const project = useMatch('/projects/:id')?.params.id
+  useEffect(() => onAnyCardRequest(() => setWanted(true)), [])
+  useEffect(() => {
+    // n: quick-add (decisions item 11), never while typing or with a dialog open.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'n' || e.ctrlKey || e.metaKey || e.altKey || isTypingTarget(e.target) || anyLayerOpen()) return
+      e.preventDefault()
+      openQuickAdd({ projectId: project })
+    }
+    // FR-UI-030: pasting text or a file outside a field creates a card.
+    const onPaste = (e: ClipboardEvent) => {
+      if (isTypingTarget(e.target) || anyLayerOpen() || !e.clipboardData) return
+      const files = [...e.clipboardData.files]
+      const text = e.clipboardData.getData('text/plain').trim().split('\n')[0]?.slice(0, 300) ?? ''
+      if (!files.length && !text) return
+      e.preventDefault()
+      openQuickAdd({ text: text || files[0]?.name || '', projectId: project, files: files.length ? files : undefined })
+    }
+    addEventListener('keydown', onKey)
+    addEventListener('paste', onPaste)
+    return () => {
+      removeEventListener('keydown', onKey)
+      removeEventListener('paste', onPaste)
+    }
+  }, [project])
+  return wanted ? (
+    <Suspense fallback={null}>
+      <CardsHost />
     </Suspense>
   ) : null
 }

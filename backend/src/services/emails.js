@@ -83,6 +83,13 @@ export function toListItem(r) {
   };
 }
 
+/**
+ * PROPOSED (proposals §19.1): a user card's projects, primary first. Select it as `a.*, ${CARD_PROJECTS}` from
+ * `actions a`; rows without it serialise with [] (an email's actions: the email carries its projects).
+ */
+export const CARD_PROJECTS = `(SELECT coalesce(jsonb_agg(jsonb_build_object('id', p.id, 'name', p.name, 'colour', p.colour, 'is_primary', cp.is_primary)
+    ORDER BY cp.is_primary DESC, cp.added_at), '[]'::jsonb) FROM card_projects cp JOIN projects p ON p.id = cp.project_id WHERE cp.action_id = a.id) AS projects`;
+
 export const toAction = (a) => ({
   id: a.id,
   email_id: a.email_id,
@@ -97,6 +104,7 @@ export const toAction = (a) => ({
   error: a.error,
   created_at: a.created_at.toISOString(),
   updated_at: a.updated_at.toISOString(),
+  projects: a.projects ?? [],
 });
 
 export const toLink = (c) => ({

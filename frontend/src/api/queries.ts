@@ -26,6 +26,7 @@ import type {
   ProjectItem,
   ProjectPatch,
   UiPrefs,
+  UserCardPayload,
 } from './types'
 
 export const queryClient = new QueryClient({
@@ -374,3 +375,68 @@ export const layoutOptions = (device: LayoutDeviceClass) =>
 /** PUT /layouts/:deviceClass: a full replace, based on the version the edit started from (409 if it moved on). */
 export const putLayout = (device: LayoutDeviceClass, body: LayoutPut) =>
   api<Layout>(`/layouts/${device}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+
+// ── User cards (FR-CNT-002, proposals §19.1) ───────────────────────────────────────────────────────────────────
+
+export const isCard = (a: Action): a is Action & { payload: UserCardPayload } => a.origin === 'user' && a.email_id === null && a.type === 'add_board_card'
+
+/** A card the client holds (every board copy). There is no GET /actions/:id, so this reads the cache. */
+export function findCard(id: string): (Action & { payload: UserCardPayload }) | null {
+  for (const [, data] of queryClient.getQueriesData<Page<Action>>({ queryKey: ['actions'] })) {
+    const hit = data?.items.find((a) => a.id === id)
+    if (hit && isCard(hit)) return hit
+  }
+  return null
+}
+
+const refreshProjects = () => {
+  void queryClient.invalidateQueries({ queryKey: ['projects'] })
+  void queryClient.invalidateQueries({ queryKey: ['project'] })
+  void queryClient.invalidateQueries({ queryKey: ['actions', 'board'] })
+}
+
+/** POST /actions, then files the card into its projects (POST /projects/:id/items {action_id}). */
+export async function createCard(payload: Partial<UserCardPayload> & { title: string }, projectIds: readonly string[] = []) {
+  const card = await api<Action>('/actions', json({ type: 'add_board_card', payload }))
+  patchActionCache(queryClient, card)
+  if (projectIds.length) {
+    await Promise.all(projectIds.map((p) => api<ProjectItem>(`/projects/${p}/items`, json({ action_id: card.id }))))
+    refreshProjects()
+  }
+  return card
+}
+
+/** PATCH /actions/:id {payload}: a partial edit of a user card, applied to every cached copy first. */
+export async function patchCard(card: Action, payload: Partial<UserCardPayload>) {
+  const optimistic = { ...card, payload: { ...card.payload, ...payload } } as Action
+  patchActionCache(queryClient, optimistic)
+  try {
+    const updated = await api<Action>(`/actions/${card.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ payload }),
+    })
+    patchActionCache(queryClient, updated)
+    return updated
+  } catch (err) {
+    patchActionCache(queryClient, card)
+    throw err
+  }
+}
+
+/** DELETE /actions/:id (proposals §19.1): gone from every board. Undo re-creates it with createCard. */
+export async function deleteCard(card: Action) {
+  await api<void>(`/actions/${card.id}`, { method: 'DELETE' })
+  for (const [key, data] of queryClient.getQueriesData<Page<Action>>({ queryKey: ['actions'] })) {
+    if (data?.items.some((a) => a.id === card.id)) queryClient.setQueryData(key, { ...data, items: data.items.filter((a) => a.id !== card.id) })
+  }
+  refreshProjects()
+}
+
+/** Files cards into a project, or takes them out. */
+export async function setCardsInProject(projectId: string, ids: readonly string[], add: boolean) {
+  await Promise.all(
+    ids.map((id) => (add ? api<ProjectItem>(`/projects/${projectId}/items`, json({ action_id: id })) : api<void>(`/projects/${projectId}/items/${id}`, { method: 'DELETE' }))),
+  )
+  refreshProjects()
+}
