@@ -139,6 +139,17 @@ export interface Note {
 }
 export type NoteTarget = 'email' | 'card' | 'project'
 
+/** PROPOSED (proposals §21): a manual reminder ("Remind me", FR-REM-002). Fires once as a notification at fire_at. */
+export interface Reminder {
+  id: string
+  kind: 'manual'
+  target: { type: 'email' | 'card'; id: string } | null
+  title: string
+  fire_at: string
+  status: 'scheduled' | 'fired' | 'cancelled'
+  fired_at: string | null
+}
+
 /** PROPOSED (proposals §19.3): an uploaded file (FR-CNT-006). Download with GET /files/:id. */
 export interface FileRef {
   id: string

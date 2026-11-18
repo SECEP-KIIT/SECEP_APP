@@ -53,7 +53,7 @@ function dueItems(): Due[] {
   return out
 }
 
-function notify(userId: string, title: string, target: Due['target']) {
+function notify(userId: string, title: string, target: AppNotification['target']) {
   const id = Math.max(0, ...db.notifications.map((n) => Number(n.id))) + 1
   const n = { ...buildNotification(id, { kind: 'reminder', title }, target, new Date().toISOString()), user_id: userId }
   db.notifications.push(n)
@@ -74,6 +74,14 @@ export function tickReminders(now = new Date()) {
       notify(item.user_id, item.title, item.target)
       count++
     }
+  }
+  // Manual reminders ("Remind me"): each fires once when its time has come, whatever the age.
+  for (const r of db.reminders) {
+    if (r.status !== 'scheduled' || Date.parse(r.fire_at) > now.getTime()) continue
+    r.status = 'fired'
+    r.fired_at = now.toISOString()
+    notify(r.user_id, r.title, r.target)
+    count++
   }
   return count
 }

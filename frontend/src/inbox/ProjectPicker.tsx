@@ -6,6 +6,8 @@ import type { Project } from '../api/types'
 import { errorText, useInbox } from './inboxContext'
 
 export interface PickerAt {
+  /** SnoozePicker only: set a reminder instead of snoozing (the email stays where it is). */
+  remind?: boolean
   ids: readonly string[]
   x: number
   y: number

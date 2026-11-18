@@ -23,13 +23,14 @@ describe('snoozeChoices', () => {
 describe('splitSnoozed', () => {
   const now = local(2026, 11, 19, 12)
   const items = [
-    { id: 1, snoozed_until: null },
-    { id: 2, snoozed_until: local(2026, 11, 19, 15).toISOString() },
-    { id: 3, snoozed_until: local(2026, 11, 19, 9).toISOString() },
+    { id: 1, snoozed_until: null, handled: false },
+    { id: 2, snoozed_until: local(2026, 11, 19, 15).toISOString(), handled: false },
+    { id: 3, snoozed_until: local(2026, 11, 19, 9).toISOString(), handled: false },
+    { id: 4, snoozed_until: local(2026, 11, 19, 15).toISOString(), handled: true },
   ]
   it('puts future snoozes last and keeps order; a past snooze counts as back', () => {
     const { active, snoozed } = splitSnoozed(items, now)
-    expect(active.map((i) => i.id)).toEqual([1, 3])
+    expect(active.map((i) => i.id)).toEqual([1, 3, 4]) // 4 is handled: done, not snoozed
     expect(snoozed.map((i) => i.id)).toEqual([2])
     expect(isSnoozed(items[2], now)).toBe(false)
   })

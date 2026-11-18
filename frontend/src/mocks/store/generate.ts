@@ -281,6 +281,7 @@ export function createDb(now: number, seed = SEED): Db {
     projects: [],
     projectItems: [],
     notes: [],
+    reminders: [],
     files: [],
     layouts: new Map(),
     reads: new Map(USERS.map((u) => [u.id, new Set<string>()])),

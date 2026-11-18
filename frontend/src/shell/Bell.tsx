@@ -4,9 +4,7 @@ import { useState } from 'react'
 import { useLocation } from 'react-router'
 import { markNotificationsRead, useNotifications } from '../api/queries'
 import type { AppNotification, NotificationKind } from '../api/types'
-import { openCard } from '../cards/cardBus'
-import { goTo } from '../lib/navigate'
-import { openEmail } from '../lib/openEmail'
+import { openNotificationTarget } from '../lib/openTarget'
 import { useMinuteClock } from './useMinuteClock'
 
 const ICON: Record<NotificationKind, typeof Mail> = {
@@ -40,11 +38,7 @@ export function Bell() {
   const open = (n: AppNotification) => {
     setOpen(false)
     if (n.read_at === null) void markNotificationsRead([n.id]).catch(() => {})
-    if (n.target?.type === 'email') {
-      openEmail(n.target.id, pathname === '/inbox')
-      if (pathname !== '/inbox') goTo('/inbox')
-    } else if (n.target?.type === 'card') openCard(n.target.id)
-    else if (n.target?.type === 'event') goTo('/calendar')
+    openNotificationTarget(n.target, pathname)
   }
 
   return (
@@ -53,7 +47,7 @@ export function Bell() {
         <button type="button" className="icon-button bell" aria-label={unread ? `Notifications, ${unread} unread` : 'Notifications'}>
           <BellIcon aria-hidden="true" size={18} />
           {unread > 0 && (
-            <span className="bell-badge" aria-hidden="true">
+            <span key={unread} className="bell-badge" aria-hidden="true">
               {unread > 9 ? '9+' : unread}
             </span>
           )}

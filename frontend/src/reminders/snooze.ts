@@ -29,11 +29,11 @@ export function snoozeChoices(now: Date): SnoozeChoice[] {
   return out
 }
 
-/** Snoozed until a time still ahead. */
-export const isSnoozed = (e: Pick<EmailListItem, 'snoozed_until'>, now: Date) => !!e.snoozed_until && Date.parse(e.snoozed_until) > now.getTime()
+/** Snoozed until a time still ahead. Handled mail is done, not snoozed: it never sinks or dims on the Handled page. */
+export const isSnoozed = (e: Pick<EmailListItem, 'snoozed_until' | 'handled'>, now: Date) => !e.handled && !!e.snoozed_until && Date.parse(e.snoozed_until) > now.getTime()
 
 /** The loaded cards in their normal order, then the snoozed ones (FR-REM-002: they sink to the bottom of the column). */
-export function splitSnoozed<T extends Pick<EmailListItem, 'snoozed_until'>>(items: readonly T[], now: Date) {
+export function splitSnoozed<T extends Pick<EmailListItem, 'snoozed_until' | 'handled'>>(items: readonly T[], now: Date) {
   const active: T[] = []
   const snoozed: T[] = []
   for (const e of items) (isSnoozed(e, now) ? snoozed : active).push(e)

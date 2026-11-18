@@ -699,6 +699,34 @@ describe('user cards (FR-CNT-002, proposals §19.1)', () => {
   })
 })
 
+describe('manual reminders (FR-REM-002, proposals §21)', () => {
+  it('creates on an email, lists, reschedules, fires once as a notification, deletes; validates and guards', async () => {
+    const t = await login('demo')
+    const email = [...db.emails.values()].find((e) => e.user_id === db.users[0].id)!
+    const soon = new Date(Date.now() + 3_600_000).toISOString()
+    const made = await call('POST', '/reminders', { token: t, body: { target: { type: 'email', id: email.id }, title: 'Call back', fire_at: soon } })
+    expect(made.status).toBe(201)
+    expect(made.json).toMatchObject({ kind: 'manual', status: 'scheduled', target: { type: 'email', id: email.id }, title: 'Call back', fired_at: null })
+    expect(Object.keys(made.json!).sort()).toEqual(['fire_at', 'fired_at', 'id', 'kind', 'status', 'target', 'title'])
+    expect(((await call('GET', '/reminders?status=scheduled', { token: t })).json!.items as Json[]).map((r) => r.id)).toEqual([made.json!.id])
+    const later = new Date(Date.now() + 7_200_000).toISOString()
+    expect((await call('PATCH', `/reminders/${made.json!.id}`, { token: t, body: { fire_at: later } })).json!.fire_at).toBe(later)
+    for (const bad of [{ title: '', fire_at: soon }, { title: 'x', fire_at: '2001-01-01T00:00:00Z' }]) expect((await call('POST', '/reminders', { token: t, body: bad })).status).toBe(422)
+    expect((await call('POST', '/reminders', { token: t, body: { target: { type: 'email', id: 'nope' }, title: 'x', fire_at: soon } })).status).toBe(404)
+    // Time passes: it fires exactly once, with a generic title and the email as the target.
+    const events: Json[] = []
+    const off = subscribe((_u, event, payload) => event === 'notification.new' && events.push(payload as Json))
+    const after = new Date(Date.parse(later) + 1000)
+    expect(tickReminders(after)).toBeGreaterThanOrEqual(1)
+    expect(tickReminders(after)).toBe(0)
+    off()
+    expect(events.map((e) => e.notification as Json).find((n) => n.body === 'Call back')).toMatchObject({ kind: 'reminder', title: 'Reminder due', target: { type: 'email', id: email.id } })
+    expect(((await call('GET', '/reminders?status=fired', { token: t })).json!.items as Json[]).length).toBe(1)
+    expect((await call('DELETE', `/reminders/${made.json!.id}`, { token: t })).status).toBe(204)
+    expect((await call('DELETE', `/reminders/${made.json!.id}`, { token: t })).status).toBe(404)
+  })
+})
+
 describe('notes (FR-CNT-003, proposals §19.2)', () => {
   it('stores as typed, scopes by target, counts on the email, guards ownership', async () => {
     const t = await login('demo')

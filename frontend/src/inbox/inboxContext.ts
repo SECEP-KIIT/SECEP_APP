@@ -29,7 +29,7 @@ export interface InboxApi {
   /** The project picker (FR-UI-017), one per page, for these emails at a point on screen. */
   pickProject: (ids: readonly string[], x: number, y: number) => void
   /** Snooze / "Remind me" picker (FR-REM-002). */
-  pickSnooze: (ids: readonly string[], x: number, y: number) => void
+  pickSnooze: (ids: readonly string[], x: number, y: number, remind?: boolean) => void
   /** The `?` legend (FR-UI-014), one per page however many columns it has. */
   showLegend: () => void
   /** The card right-click menu (FR-UI-028), one per page, at a point on screen. */

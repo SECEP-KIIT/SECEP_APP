@@ -1,5 +1,5 @@
 import * as Popover from '@radix-ui/react-popover'
-import { AlarmClock, CalendarPlus, ChevronRight, CircleCheck, Copy, ExternalLink, FolderPlus, Mail, MailOpen, Pin, PinOff, SquareCheck, Undo2, X, Zap } from 'lucide-react'
+import { AlarmClock, BellRing, CalendarPlus, ChevronRight, CircleCheck, Copy, ExternalLink, FolderPlus, Mail, MailOpen, Pin, PinOff, SquareCheck, Undo2, X, Zap } from 'lucide-react'
 import { useRef, type KeyboardEvent, type ReactNode } from 'react'
 import type { EmailListItem } from '../api/types'
 import { copySummary } from './cardKeys'
@@ -78,6 +78,7 @@ function SingleItems({ at, onClose }: { at: { email: EmailListItem; x: number; y
       <Item icon={<CalendarPlus size={14} />} label="Add to Calendar" keys="⇧C" onSelect={run(() => send('add_calendar_event'))} />
       <Item icon={<FolderPlus size={14} />} label="Add to project" keys="P" more onSelect={() => pickProject([email.id], at.x, at.y)} />
       <Item icon={<AlarmClock size={14} />} label="Snooze" keys="H" more onSelect={() => pickSnooze([email.id], at.x, at.y)} />
+      <Item icon={<BellRing size={14} />} label="Remind me" keys="R" more onSelect={() => pickSnooze([email.id], at.x, at.y, true)} />
       <Item
         icon={email.handled ? <Undo2 size={14} /> : <CircleCheck size={14} />}
         label={email.handled ? 'Restore to inbox' : 'Mark as handled'}

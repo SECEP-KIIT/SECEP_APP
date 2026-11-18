@@ -1,11 +1,13 @@
 import { useQuery } from '@tanstack/react-query'
-import { Plus, Trash2 } from 'lucide-react'
+import { Paperclip, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { createNote, deleteNote, notesOptions, patchNote, type NoteScope } from '../api/queries'
+import { createNote, deleteNote, MAX_FILE_BYTES, notesOptions, patchNote, uploadFile, type FileScope, type NoteScope } from '../api/queries'
 import type { Note } from '../api/types'
 import { shellToast } from '../lib/toastBus'
 import { useMinuteClock } from '../shell/useMinuteClock'
 import { Markdown } from './markdown'
+import { NoteFile } from './NoteFile'
+import { NoteFilesContext } from './noteFilesContext'
 import { toggleTask } from './markdownModel'
 import './notes.css'
 
@@ -59,6 +61,9 @@ function ago(iso: string, now: Date) {
   if (h < 24) return `edited ${h} h ago`
   return `edited ${new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`
 }
+
+/** The `[file:<id>]` tokens in a note body, in order, once each. */
+const fileIds = (text: string) => [...new Set([...text.matchAll(/\[file:([0-9a-f-]{36})\]/g)].map((m) => m[1]))]
 
 export function NoteEditor({
   scope,
@@ -142,6 +147,31 @@ export function NoteEditor({
     timer.current = window.setTimeout(() => void save(v), SAVE_DELAY)
   }
 
+  // A file attached inside this note is stored on the note's own email, card or project and referenced as [file:<id>].
+  const fileScope: FileScope | null = scope ? { type: scope.type, id: scope.id } : null
+  const input = useRef<HTMLInputElement>(null)
+  const [attachError, setAttachError] = useState<string | null>(null)
+  const attach = async (list: FileList | null) => {
+    if (!fileScope || !list?.length) return
+    setAttachError(null)
+    const tokens: string[] = []
+    for (const f of list) {
+      if (f.size > MAX_FILE_BYTES) {
+        setAttachError('Over 25 MB')
+        continue
+      }
+      try {
+        tokens.push(`[file:${(await uploadFile(fileScope, f)).id}]`)
+      } catch {
+        setAttachError("Couldn't attach")
+      }
+    }
+    if (!tokens.length) return
+    const next = `${latest.current}${latest.current && !latest.current.endsWith('\n') ? '\n' : ''}${tokens.join(' ')}`
+    setText(next)
+    void save(next)
+  }
+
   const remove = async () => {
     if (!note) {
       onSettled?.()
@@ -154,8 +184,10 @@ export function NoteEditor({
   }
 
   return (
+    <NoteFilesContext.Provider value={fileScope}>
     <article className="note" data-editing={editing || undefined}>
       {editing ? (
+        <>
         <textarea
           ref={area}
           className="note-input"
@@ -177,6 +209,14 @@ export function NoteEditor({
             }
           }}
         />
+        {fileIds(text).length > 0 && (
+          <div className="note-files">
+            {fileIds(text).map((id) => (
+              <NoteFile key={id} id={id} />
+            ))}
+          </div>
+        )}
+        </>
       ) : (
         <div
           className="note-view"
@@ -202,7 +242,16 @@ export function NoteEditor({
         </div>
       )}
       <footer className="note-foot">
+        {fileScope && (
+          <>
+            <button type="button" className="icon-button" aria-label="Attach a file to this note" title="Attach a file to this note" onMouseDown={(e) => e.preventDefault()} onClick={() => input.current?.click()}>
+              <Paperclip size={13} aria-hidden="true" />
+            </button>
+            <input ref={input} type="file" multiple hidden onChange={(e) => { void attach(e.target.files); e.target.value = '' }} />
+          </>
+        )}
         <span className="drawer-muted" aria-live="polite">
+          {attachError ? `${attachError}. ` : ''}
           {status === 'saving' ? 'Saving…' : status === 'error' ? "Couldn't save. It will retry when you edit." : savedAt ? ago(savedAt, now) : 'Not saved yet'}
         </span>
         <button type="button" className="icon-button" aria-label="Delete note" onMouseDown={(e) => e.preventDefault()} onClick={() => void remove()}>
@@ -210,5 +259,6 @@ export function NoteEditor({
         </button>
       </footer>
     </article>
+    </NoteFilesContext.Provider>
   )
 }
