@@ -1,36 +1,13 @@
 import { acceptAction, createAction, createCard, undoAction } from '../api/queries'
-import type { EmailDetail, Person } from '../api/types'
+import type { EmailDetail } from '../api/types'
 import { openCard } from '../cards/cardBus'
 import { shellToast } from '../lib/toastBus'
-import { NotesPanel } from './NotesPanel'
-
-const who = (p: Person) => (p.name ? `${p.name} <${p.address}>` : p.address)
-
-/** FR-CNT-004: a new note on a Meeting email starts with its attendees and agenda. */
-function meetingTemplate(email: EmailDetail) {
-  const people = [email.from, ...email.to, ...email.cc]
-  const seen = new Set<string>()
-  const attendees = people.filter((p) => !seen.has(p.address.toLowerCase()) && seen.add(p.address.toLowerCase()))
-  return [
-    `## ${email.subject ?? 'Meeting'}`,
-    '',
-    '### Attendees',
-    ...attendees.map((p) => `- ${who(p)}`),
-    '',
-    '### Agenda',
-    `- ${email.summary_short ?? email.summary_one_line ?? ''}`.trimEnd(),
-    '',
-    '### Action items',
-    '- [ ] ',
-  ].join('\n')
-}
+import { NotesAttach } from './NotesAttach'
 
 /**
- * Notes in the email drawer (FR-CNT-003/004). On a Meeting email a new note starts from the template, and every open
- * `- [ ]` line offers → Card (a user card, filed in the email's projects) and → Jira (an issue from this email).
+ * Notes and attachments in the email drawer (FR-CNT-003/006). Every open `- [ ]` line offers → Card (a user card, filed in the email's projects) and → Jira (an issue from this email).
  */
 export function EmailNotes({ email }: { email: EmailDetail }) {
-  const meeting = email.triage?.email_type.label === 'Meeting'
   const toCard = async (title: string) => {
     try {
       const card = await createCard({ title: title.slice(0, 120) }, email.projects.map((p) => p.id))
@@ -49,10 +26,8 @@ export function EmailNotes({ email }: { email: EmailDetail }) {
     }
   }
   return (
-    <NotesPanel
-      scope={{ type: 'email', id: email.id }}
-      template={meeting ? () => meetingTemplate(email) : undefined}
-      newLabel={meeting ? 'Add meeting notes' : 'Add a note'}
+    <NotesAttach
+      target={{ type: 'email', id: email.id }}
       taskTools={(text) => (
         <>
           <button type="button" onClick={() => void toCard(text)} title="Make a card from this line">

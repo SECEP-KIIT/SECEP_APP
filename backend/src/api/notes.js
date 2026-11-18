@@ -1,13 +1,10 @@
-// Notes (FR-CNT-003/005, proposals §19.2): on an email, card or project, or standalone; masked on save. Each secret
-// found gets a masked_secrets row with its type; the value is never kept (§18.4: an encrypted placeholder until
-// value_enc is nullable). Note bodies are never logged.
+// Notes (FR-CNT-003, proposals §19.2): on an email, card or project, or standalone; stored as typed (no masking).
+// Note bodies are never logged.
 import { Router } from 'express';
 import { Fail, UUID, idParam, isStr, object, own, pageParams, route, searchParams, toPage } from '../http.js';
-import { encrypt } from '../services/crypto.js';
-import { query, tx } from '../services/db.js';
+import { query } from '../services/db.js';
 import { listItem } from '../services/emails.js';
 import { publish } from '../services/events.js';
-import { maskSecrets } from '../services/mask.js';
 
 export const notes = Router();
 
@@ -32,16 +29,6 @@ async function checkTarget(user, type, id) {
     project: 'SELECT id FROM projects WHERE id = $1 AND owner_user_id = $2',
   }[type];
   own((await query(sql, [id, user.id])).rows[0], type === 'card' ? 'Card' : type === 'email' ? 'Email' : 'Project');
-}
-
-/** Masks the body and replaces the note's masked_secrets rows (types only). */
-async function store(c, user, noteId, body) {
-  const { masked_text, secrets } = maskSecrets(body);
-  await c.query('DELETE FROM masked_secrets WHERE note_id = $1', [noteId]);
-  for (const s of secrets) {
-    await c.query('INSERT INTO masked_secrets (note_id, owner_user_id, secret_type, value_enc) VALUES ($1, $2, $3, $4)', [noteId, user.id, s.type, encrypt('[omitted]')]);
-  }
-  return masked_text;
 }
 
 async function emitEmail(user, n) {
@@ -74,11 +61,7 @@ route(notes, 'post', '/notes', 'user', async (req, user) => {
   if (!isStr(f.body.body, MAX)) f.add('body', `Text, at most ${MAX} characters`);
   f.done();
   if (type) await checkTarget(user, type, id);
-  const row = await tx(async (c) => {
-    const n = (await c.query('INSERT INTO notes (tenant_id, owner_user_id, target_type, target_id, body) VALUES ($1, $2, $3, $4, $5) RETURNING id', [user.tenant_id, user.id, type, id, ''])).rows[0];
-    const body = await store(c, user, n.id, f.body.body);
-    return (await c.query('UPDATE notes SET body = $2 WHERE id = $1 RETURNING *', [n.id, body])).rows[0];
-  });
+  const row = (await query('INSERT INTO notes (tenant_id, owner_user_id, target_type, target_id, body) VALUES ($1, $2, $3, $4, $5) RETURNING *', [user.tenant_id, user.id, type, id, f.body.body])).rows[0];
   await emitEmail(user, row);
   return toNote(row);
 }, { status: 201 });
@@ -88,11 +71,7 @@ route(notes, 'patch', '/notes/:id', 'user', async (req, user) => {
   const f = object(req.body).only(['body']);
   if (!isStr(f.body.body, MAX)) f.add('body', `Text, at most ${MAX} characters`);
   f.done();
-  const row = await tx(async (c) => {
-    own((await c.query('SELECT id FROM notes WHERE id = $1 AND owner_user_id = $2 FOR UPDATE', [id, user.id])).rows[0], 'Note');
-    const body = await store(c, user, id, f.body.body);
-    return (await c.query('UPDATE notes SET body = $2, updated_at = now() WHERE id = $1 RETURNING *', [id, body])).rows[0];
-  });
+  const row = own((await query('UPDATE notes SET body = $3, updated_at = now() WHERE id = $1 AND owner_user_id = $2 RETURNING *', [id, user.id, f.body.body])).rows[0], 'Note');
   return toNote(row);
 });
 

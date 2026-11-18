@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { NavLink } from 'react-router'
 import { emailProjects, setEmailsInProject, useProjects } from '../api/queries'
 import type { Project } from '../api/types'
+import { hasFiles, uploadAll } from '../files/upload'
 import { carriesEmails, droppedEmails } from '../lib/dragEmails'
 import { shellToast } from '../lib/toastBus'
 import { openProjectDialog } from '../projects/dialogBus'
@@ -72,6 +73,14 @@ function ProjectLink({ project: p, now }: { project: Project; now: Date }) {
     }
   }
 
+  const dropFiles = async (files: File[]) => {
+    if (!files.length) return
+    const failed = await uploadAll({ type: 'project', id: p.id }, files)
+    const ok = files.length - failed
+    if (ok) shellToast(`Attached ${ok === 1 ? files[0].name : `${ok} files`} to ${p.name}`)
+    if (failed) shellToast(failed === 1 ? "Couldn't attach one file (25 MB limit, or your quota)" : `Couldn't attach ${failed} files`, 'error')
+  }
+
   return (
     <li>
       <NavLink
@@ -80,14 +89,21 @@ function ProjectLink({ project: p, now }: { project: Project; now: Date }) {
         data-drop={over || undefined}
         data-archived={p.archived_at ? '' : undefined}
         onDragOver={(e) => {
-          if (!canDrop || !carriesEmails(e)) return
+          if (!canDrop || !(carriesEmails(e) || hasFiles(e))) return
           e.preventDefault()
           e.dataTransfer.dropEffect = 'copy'
           setOver(true)
         }}
         onDragLeave={() => setOver(false)}
         onDrop={(e) => {
-          if (!canDrop || !carriesEmails(e)) return
+          if (!canDrop) return
+          if (hasFiles(e)) {
+            e.preventDefault()
+            setOver(false)
+            void dropFiles([...e.dataTransfer.files])
+            return
+          }
+          if (!carriesEmails(e)) return
           e.preventDefault()
           setOver(false)
           void drop(droppedEmails(e))

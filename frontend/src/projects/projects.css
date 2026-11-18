@@ -183,10 +183,18 @@
   min-height: 0;
 }
 .project-side {
-  display: grid;
-  align-content: start;
-  gap: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
   min-height: 0;
+}
+.project-side > .project-section:first-child {
+  flex: 1;
+  overflow: auto;
+}
+.project-notes {
+  flex: none;
+  max-height: 45%;
   overflow: auto;
 }
 .project-section {

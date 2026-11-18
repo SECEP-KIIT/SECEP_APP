@@ -1,8 +1,6 @@
 // Markdown-lite (FR-CNT-003, decisions item 11): # headings, **bold**, *italics* / _italics_, `code`, - and 1. lists,
-// - [ ] / - [x] checkboxes, [links](https://…). Rendered as React elements, never as HTML strings. [MASKED:<type>]
-// tokens show as the masked chip. Only http(s) and mailto links are made clickable.
+// - [ ] / - [x] checkboxes, [links](https://…). Rendered as React elements, never as HTML strings. Only http(s) and mailto links are made clickable.
 import { Fragment, type ReactNode } from 'react'
-import { MaskedText } from '../components/MaskedText'
 import { parseBlocks, type Block } from './markdownModel'
 
 const INLINE = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^)\s]+\)|(?<![\w*])\*[^*\s][^*]*\*(?!\w)|(?<!\w)_[^_\s][^_]*_(?!\w))/g
@@ -11,7 +9,7 @@ function inline(text: string): ReactNode[] {
   const out: ReactNode[] = []
   let last = 0
   for (const m of text.matchAll(INLINE)) {
-    if (m.index > last) out.push(<MaskedText key={`t${last}`} text={text.slice(last, m.index)} />)
+    if (m.index > last) out.push(text.slice(last, m.index))
     const t = m[0]
     const k = `m${m.index}`
     if (t.startsWith('**')) out.push(<strong key={k}>{inline(t.slice(2, -2))}</strong>)
@@ -30,7 +28,7 @@ function inline(text: string): ReactNode[] {
     } else out.push(<em key={k}>{inline(t.slice(1, -1))}</em>)
     last = m.index + t.length
   }
-  if (last < text.length) out.push(<MaskedText key={`t${last}`} text={text.slice(last)} />)
+  if (last < text.length) out.push(text.slice(last))
   return out
 }
 

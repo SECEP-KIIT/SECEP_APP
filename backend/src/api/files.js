@@ -15,7 +15,7 @@ export const files = Router();
 
 const MAX_BYTES = 25 * 1024 * 1024;
 const DEFAULT_QUOTA_MB = 500;
-const TARGETS = ['card', 'project'];
+const TARGETS = ['email', 'card', 'project'];
 const PREVIEW = /^(image\/(png|jpeg|gif|webp)|application\/pdf)$/;
 
 const toRef = (f) => ({
@@ -33,10 +33,12 @@ export const removeStored = (keys) => Promise.all(keys.map((k) => rm(join(root()
 
 async function checkTarget(user, type, id) {
   if (!UUID.test(id ?? '')) throw new Fail(404, 'not_found', 'Target not found');
-  const sql = type === 'card'
-    ? 'SELECT id FROM actions WHERE id = $1 AND user_id = $2 AND email_id IS NULL'
-    : 'SELECT id FROM projects WHERE id = $1 AND owner_user_id = $2';
-  own((await query(sql, [id, user.id])).rows[0], type === 'card' ? 'Card' : 'Project');
+  const sql = {
+    email: 'SELECT e.id FROM emails e JOIN mailboxes m ON m.id = e.mailbox_id WHERE e.id = $1 AND m.user_id = $2',
+    card: 'SELECT id FROM actions WHERE id = $1 AND user_id = $2 AND email_id IS NULL',
+    project: 'SELECT id FROM projects WHERE id = $1 AND owner_user_id = $2',
+  }[type];
+  own((await query(sql, [id, user.id])).rows[0], type === 'card' ? 'Card' : type === 'email' ? 'Email' : 'Project');
 }
 
 /** FR-CNT-008 headers on every download. */
@@ -91,7 +93,7 @@ route(files, 'get', '/files', 'user', async (req, user) => {
   const p = pageParams(params);
   const type = params.get('target_type');
   const id = params.get('target_id');
-  if (!TARGETS.includes(type) || !id) throw new Fail(400, 'bad_request', 'target_type (card or project) and target_id are required');
+  if (!TARGETS.includes(type) || !id) throw new Fail(400, 'bad_request', 'target_type (email, card or project) and target_id are required');
   await checkTarget(user, type, id);
   const { rows } = await query(
     'SELECT * FROM files WHERE owner_user_id = $1 AND target_type = $2 AND target_id = $3 ORDER BY created_at DESC LIMIT $4 OFFSET $5',
@@ -109,7 +111,7 @@ route(files, 'post', '/files', 'user', async (req, user) => {
   try {
     const { fields, file } = await receive(req, tmp);
     const bad = {};
-    if (!TARGETS.includes(fields.target_type)) bad.target_type = 'Must be card or project';
+    if (!TARGETS.includes(fields.target_type)) bad.target_type = 'Must be email, card or project';
     if (!fields.target_id) bad.target_id = 'Required';
     if (!file) bad.file = 'Required';
     if (Object.keys(bad).length) throw new Fail(422, 'validation_failed', 'Some fields are invalid', { fields: bad });

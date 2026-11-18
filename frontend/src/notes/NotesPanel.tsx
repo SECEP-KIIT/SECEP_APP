@@ -13,19 +13,15 @@ const SAVE_DELAY = 800
 
 interface Props {
   scope: NoteScope
-  /** The first text of a new note (the meeting template, FR-CNT-004). */
-  template?: () => string
-  newLabel?: string
   /** → Card / → Jira on each open checkbox line. */
   taskTools?: (text: string) => ReactNode
 }
 
 /**
  * The notes on an email, card or project, or the standalone ones (FR-CNT-003). Markdown-lite, rendered until
- * clicked, autosaved while typing (debounced) and on leaving the field, with "edited 2 min ago". Saved text comes back
- * masked (FR-CNT-005).
+ * clicked, autosaved while typing (debounced) and on leaving the field, with "edited 2 min ago".
  */
-export function NotesPanel({ scope, template, newLabel = 'Add a note', taskTools }: Props) {
+export function NotesPanel({ scope, taskTools }: Props) {
   const notes = useQuery(notesOptions(scope))
   const [draft, setDraft] = useState<string | null>(null)
 
@@ -41,16 +37,16 @@ export function NotesPanel({ scope, template, newLabel = 'Add a note', taskTools
     )
   return (
     <div className="notes">
+      {draft === null && (
+        <button type="button" className="ghost-button notes-add" onClick={() => setDraft('')}>
+          <Plus size={14} aria-hidden="true" />
+          Add a note
+        </button>
+      )}
       {draft !== null && <NoteEditor key="draft" scope={scope} note={null} initial={draft} autoFocus onSettled={() => setDraft(null)} taskTools={taskTools} />}
       {notes.data.map((n) => (
         <NoteEditor key={n.id} scope={scope} note={n} initial={n.body} taskTools={taskTools} />
       ))}
-      {draft === null && (
-        <button type="button" className="ghost-button notes-add" onClick={() => setDraft(template?.() ?? '')}>
-          <Plus size={14} aria-hidden="true" />
-          {newLabel}
-        </button>
-      )}
     </div>
   )
 }
@@ -64,7 +60,7 @@ function ago(iso: string, now: Date) {
   return `edited ${new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`
 }
 
-function NoteEditor({
+export function NoteEditor({
   scope,
   note,
   initial,
@@ -101,30 +97,38 @@ function NoteEditor({
     if (!editing) setText(note.body)
   }
 
-  const save = useCallback(
-    async (body: string) => {
-      window.clearTimeout(timer.current)
+  // Saves run one after another, so a second save never creates the note twice while the first is in flight.
+  const scopeRef = useRef(scope)
+  const settledRef = useRef(onSettled)
+  useEffect(() => {
+    scopeRef.current = scope
+    settledRef.current = onSettled
+  })
+  const chain = useRef<Promise<void>>(Promise.resolve())
+  const save = useCallback((body: string) => {
+    window.clearTimeout(timer.current)
+    const run = async () => {
       if (body === sent.current && id.current) return
       if (!id.current && !body.trim()) return
       setStatus('saving')
       sent.current = body
       try {
-        const saved = id.current ? await patchNote(scope, id.current, body) : await createNote(scope, body)
+        const saved = id.current ? await patchNote(scopeRef.current, id.current, body) : await createNote(scopeRef.current, body)
         const wasNew = !id.current
         id.current = saved.id
         sent.current = saved.body
         setSavedAt(saved.updated_at)
-        // Masking changed what was sent, and nothing was typed since: show the masked text.
-        if (saved.body !== body && latest.current === body) setText(saved.body)
         setStatus('idle')
-        if (wasNew) onSettled?.()
+        if (wasNew) settledRef.current?.()
       } catch {
         sent.current = ''
         setStatus('error')
       }
-    },
-    [scope, onSettled],
-  )
+    }
+    const p = chain.current.then(run)
+    chain.current = p
+    return p
+  }, [])
 
   useEffect(() => {
     if (editing) area.current?.focus()
@@ -145,6 +149,7 @@ function NoteEditor({
     }
     const body = text
     await deleteNote(scope, note).catch(() => setStatus('error'))
+    onSettled?.()
     shellToast('Note deleted', 'info', { label: 'Undo', run: () => void createNote(scope, body) })
   }
 
@@ -158,7 +163,7 @@ function NoteEditor({
           rows={Math.min(14, Math.max(4, text.split('\n').length + 1))}
           maxLength={20_000}
           aria-label="Note"
-          placeholder="Write a note. **bold**, *italics*, - lists, - [ ] tasks, [links](https://…)"
+          placeholder="Jot down what you want to see before the meeting…"
           onChange={(e) => onChange(e.target.value)}
           onBlur={() => {
             void save(text)

@@ -11,7 +11,7 @@ import type { FileRow, UserRow } from '../store/types'
 const MAX_BYTES = 25 * 1024 * 1024
 /** FR-ADM-008's per-user quota; the mock has no admin field for it, so the documented default. */
 const QUOTA_BYTES = 500 * 1024 * 1024
-const TARGETS = ['card', 'project'] as const
+const TARGETS = ['email', 'card', 'project'] as const
 
 /** The bytes, in memory only: localStorage can't hold them. */
 const blobs = new Map<string, Blob>()
@@ -25,7 +25,8 @@ export const safeName = (name: string) =>
   (name.split(/[\\/]/).pop() ?? '').replace(/[\u0000-\u001f\u007f"]/g, '').trim().slice(0, 200) || 'file'
 
 function checkTarget(user: UserRow, type: string, id: string) {
-  if (type === 'card') {
+  if (type === 'email') own(db.emails.get(id), user, 'Email')
+  else if (type === 'card') {
     const a = own(db.actions.get(id), user, 'Card')
     if (a.email_id !== null) throw new Fail(404, 'not_found', 'Card not found')
   } else own(db.projects.find((p) => p.id === id), user, 'Project')
@@ -54,7 +55,7 @@ export const fileRoutes = [
   route('get', '/files', 'user', ({ user, url }) => {
     const type = url.searchParams.get('target_type') ?? ''
     const id = url.searchParams.get('target_id') ?? ''
-    if (!(TARGETS as readonly string[]).includes(type) || !id) throw new Fail(400, 'bad_request', 'target_type (card or project) and target_id are required')
+    if (!(TARGETS as readonly string[]).includes(type) || !id) throw new Fail(400, 'bad_request', 'target_type (email, card or project) and target_id are required')
     checkTarget(user, type, id)
     const items = db.files.filter((f) => f.owner_user_id === user.id && f.target_type === type && f.target_id === id && blobs.has(f.id))
     return page(url, items.sort((a, b) => b.created_at.localeCompare(a.created_at)).map(toRef))
@@ -71,7 +72,7 @@ export const fileRoutes = [
     const id = String(form.get('target_id') ?? '')
     const file = form.get('file')
     const fields: Record<string, string> = {}
-    if (!(TARGETS as readonly string[]).includes(type)) fields.target_type = 'Must be card or project'
+    if (!(TARGETS as readonly string[]).includes(type)) fields.target_type = 'Must be email, card or project'
     if (!id) fields.target_id = 'Required'
     if (!(file instanceof File)) fields.file = 'Required'
     if (Object.keys(fields).length) throw new Fail(422, 'validation_failed', 'Some fields are invalid', { fields })

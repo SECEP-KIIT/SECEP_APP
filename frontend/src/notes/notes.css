@@ -133,3 +133,79 @@
   background: var(--tag-muted-bg);
   color: var(--tag-danger-fg);
 }
+
+/* Notes & attachments box: notes and files as pills (task 13 rework). */
+.na {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px dashed var(--line);
+  border-radius: var(--tile-radius);
+}
+.na[data-over] {
+  border-color: var(--accent);
+  background: var(--tag-muted-bg);
+}
+.na-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.75rem;
+}
+.na-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.na-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 260px;
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--card-bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.8125rem;
+}
+button.na-pill {
+  cursor: pointer;
+}
+.na-pill[data-on] {
+  border-color: var(--accent);
+}
+.na-pill[data-error] {
+  color: var(--tag-danger-fg);
+}
+.na-pill > span,
+.na-pill-main > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.na-pill-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.notes {
+  padding: var(--space-2);
+}
+.na .icon-button {
+  color: var(--ink);
+  opacity: 0.8;
+}
