@@ -1,6 +1,7 @@
 import { LogIn } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { startSignIn } from '../api/session'
+import { lock } from '../boot/lock'
 
 /**
  * The sign-in screen (NFR-SEC-003; F5): shown when there is no session, at boot or after Sign out, instead of a
@@ -8,6 +9,10 @@ import { startSignIn } from '../api/session'
  */
 export function SignIn() {
   const [busy, setBusy] = useState(false)
+  // Signed out, the app's boot steps never run: finish them so the lock screen can open onto this page.
+  useEffect(() => {
+    for (const step of ['app', 'me', 'emails', 'layout', 'socket'] as const) lock.step(step)
+  }, [])
   return (
     <main className="signin" aria-labelledby="signin-title">
       <div className="signin-card">
