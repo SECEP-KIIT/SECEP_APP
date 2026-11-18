@@ -10,6 +10,7 @@ import type {
   DecoderActionPayload,
   EmailDetail,
   EmailPatch,
+  FileRef,
   GoResponse,
   EmailListItem,
   Glance,
@@ -485,4 +486,51 @@ export async function patchNote(scope: NoteScope, id: string, body: string) {
 export async function deleteNote(scope: NoteScope, note: Note) {
   await api<void>(`/notes/${note.id}`, { method: 'DELETE' })
   storeNote(scope, note, true)
+}
+
+// ── Files (FR-CNT-006–008, proposals §19.3) ────────────────────────────────────────────────────────────────────
+
+export type FileScope = { type: 'card' | 'project'; id: string }
+export const MAX_FILE_BYTES = 25 * 1024 * 1024
+
+export const filesOptions = (scope: FileScope) =>
+  queryOptions({
+    queryKey: ['files', scope.type, scope.id],
+    queryFn: ({ signal }) => fetchAll<FileRef>(`/files?target_type=${scope.type}&target_id=${scope.id}`, signal),
+    staleTime: 30_000,
+  })
+
+/** POST /files (multipart): target first, then the file, so the server can check the target before the bytes. */
+export async function uploadFile(scope: FileScope, file: File) {
+  const form = new FormData()
+  form.append('target_type', scope.type)
+  form.append('target_id', scope.id)
+  form.append('file', file, file.name)
+  const ref = await api<FileRef>('/files', { method: 'POST', body: form })
+  const key = filesOptions(scope).queryKey
+  const list = queryClient.getQueryData<FileRef[]>(key)
+  if (list) queryClient.setQueryData<FileRef[]>(key, [ref, ...list.filter((f) => f.id !== ref.id)])
+  else void queryClient.invalidateQueries({ queryKey: key })
+  return ref
+}
+
+export async function deleteFile(scope: FileScope, file: FileRef) {
+  await api<void>(`/files/${file.id}`, { method: 'DELETE' })
+  const key = filesOptions(scope).queryKey
+  const list = queryClient.getQueryData<FileRef[]>(key)
+  if (list) queryClient.setQueryData<FileRef[]>(key, list.filter((f) => f.id !== file.id))
+}
+
+/** A file's bytes with the bearer token (never a bare URL: downloads need auth, FR-CNT-008). */
+export const fileBlob = (path: string, inline = false) => apiBlob(`${path}${inline ? '?inline=1' : ''}`)
+
+/** Saves a blob under its name, through a temporary object URL. */
+export function saveBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.rel = 'noopener'
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(url), 10_000)
 }

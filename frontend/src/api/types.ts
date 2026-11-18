@@ -139,6 +139,17 @@ export interface Note {
 }
 export type NoteTarget = 'email' | 'card' | 'project'
 
+/** PROPOSED (proposals §19.3): an uploaded file (FR-CNT-006). Download with GET /files/:id. */
+export interface FileRef {
+  id: string
+  target_type: NoteTarget
+  target_id: string
+  filename: string
+  mime: string
+  size: number
+  created_at: string
+}
+
 export interface EmailDetail extends EmailListItem {
   /** Sanitized, masked plain text. Never auto-link URLs in it; only `links` are clickable. */
   body_text: string
@@ -244,6 +255,9 @@ export type ErrorCode =
   | 'rate_limited'
   | 'upstream_error'
   | 'unavailable'
+  /** PROPOSED (proposals §19.3): 413 over 25 MB, or over the user's file quota. */
+  | 'file_too_large'
+  | 'quota_exceeded'
 
 export interface ApiErrorBody {
   error: { code: ErrorCode; message: string; details: unknown; request_id: string }

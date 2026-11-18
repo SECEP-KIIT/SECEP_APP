@@ -183,6 +183,17 @@ export interface NoteRow {
   updated_at: string
 }
 
+export interface FileRow {
+  id: string
+  owner_user_id: string
+  target_type: 'email' | 'card' | 'project'
+  target_id: string
+  filename: string
+  mime: string
+  size: number
+  created_at: string
+}
+
 export interface Db {
   users: UserRow[]
   threads: Map<string, ThreadRow>
@@ -201,6 +212,8 @@ export interface Db {
   projectItems: ProjectItemRow[]
   /** Notes (FR-CNT-003), masked on save. */
   notes: NoteRow[]
+  /** Uploaded files (FR-CNT-006). The bytes live in memory only (files.ts), so they last until a reload. */
+  files: FileRow[]
   /** Read state per user (proposal §1: per recipient, not a column on the email). */
   reads: Map<string, Set<string>>
   /** Handled state per user: email id → handled_at (proposals §10.3, email_states for M6). */

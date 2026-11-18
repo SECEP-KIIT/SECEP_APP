@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Outlet, useMatch, useNavigate } from 'react-router'
 import { onAnyCardRequest, openQuickAdd } from '../cards/cardBus'
+import { PREVIEW_EVENT } from '../files/preview'
 import { onGoTo } from '../lib/navigate'
 import { shellToast } from '../lib/toastBus'
 import { onProjectDialog } from '../projects/dialogBus'
@@ -58,6 +59,7 @@ function SignedInShell() {
       <LockSlots />
       <ProjectDialogSlot />
       <CardsSlot />
+      <PreviewSlot />
       <p className="sr-only" aria-live="polite">
         {announcement}
       </p>
@@ -111,6 +113,23 @@ function CardsSlot() {
   return wanted ? (
     <Suspense fallback={null}>
       <CardsHost />
+    </Suspense>
+  ) : null
+}
+
+// The file preview (FR-CNT-008): its own chunk, fetched on the first Preview.
+const FilePreviewHost = lazy(() => import('../files/FilePreview').then((m) => ({ default: m.FilePreviewHost })))
+
+function PreviewSlot() {
+  const [wanted, setWanted] = useState(false)
+  useEffect(() => {
+    const on = () => setWanted(true)
+    addEventListener(PREVIEW_EVENT, on)
+    return () => removeEventListener(PREVIEW_EVENT, on)
+  }, [])
+  return wanted ? (
+    <Suspense fallback={null}>
+      <FilePreviewHost />
     </Suspense>
   ) : null
 }

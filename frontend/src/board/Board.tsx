@@ -15,10 +15,11 @@ import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalList
 import { CSS } from '@dnd-kit/utilities'
 import { useQuery } from '@tanstack/react-query'
 import { CalendarPlus, ListChecks, SquareCheck, Zap } from 'lucide-react'
-import { memo, useMemo, useState, type ReactNode } from 'react'
+import { memo, useMemo, useState, type DragEvent, type ReactNode } from 'react'
 import { boardOptions, boardPosition, isCard, moveCard } from '../api/queries'
 import type { Action, BoardColumn } from '../api/types'
 import { openCard } from '../cards/cardBus'
+import { hasFiles, uploadAll } from '../files/upload'
 import { SOURCE_ICON } from '../cards/sourceIcon'
 import { dueTag } from '../inbox/cardModel'
 import { errorText, useInbox } from '../inbox/inboxContext'
@@ -157,11 +158,34 @@ function BoardLane({ column, title, count, empty, children }: { column: BoardCol
 
 function SortableCard({ action, column, dragging }: { action: Action; column: BoardColumn; dragging: boolean }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: action.id })
-  const { open } = useInbox()
+  const { open, toast } = useInbox()
   // An email's card opens the email; a user card opens its sheet (FR-CNT-002).
   const openAction = (a: Action) => (a.email_id ? open(a.email_id) : isCard(a) ? openCard(a.id) : undefined)
+  // FR-UI-028: files dropped from the desktop onto a card you made are attached to it.
+  const [fileOver, setFileOver] = useState(false)
+  const fileDrop = isCard(action)
+    ? {
+        onDragOver: (e: DragEvent) => {
+          if (!hasFiles(e)) return
+          e.preventDefault()
+          setFileOver(true)
+        },
+        onDragLeave: () => setFileOver(false),
+        onDrop: (e: DragEvent) => {
+          if (!hasFiles(e)) return
+          e.preventDefault()
+          setFileOver(false)
+          const files = [...e.dataTransfer.files]
+          void uploadAll({ type: 'card', id: action.id }, files).then((failed) =>
+            toast(failed ? `${failed} of ${files.length} files couldn't be attached` : `Attached ${files.length === 1 ? files[0].name : `${files.length} files`}`, failed ? 'error' : 'info'),
+          )
+        },
+      }
+    : {}
   return (
     <li
+      {...fileDrop}
+      data-file-over={fileOver || undefined}
       ref={setNodeRef}
       className="board-item"
       data-dragging={dragging || undefined}

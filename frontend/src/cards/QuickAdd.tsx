@@ -2,6 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'rea
 import { ApiError } from '../api/client'
 import { createCard, useProjects } from '../api/queries'
 import { shellToast } from '../lib/toastBus'
+import { uploadAll } from '../files/upload'
 import { onQuickAdd, openCard, settled, type QuickAddRequest } from './cardBus'
 import { matchProject, parseQuickAdd } from './parseQuickAdd'
 import { SOURCES, type Source } from './sourceIcon'
@@ -66,8 +67,16 @@ export function QuickAddHost() {
         { title: parsed.title.slice(0, 120), due_date: parsed.due_date, due_time: parsed.due_time, urgency: parsed.urgency, source, person: parsed.person },
         targets,
       )
+      const files = req?.files ?? []
       close()
-      shellToast(`Added "${card.payload.title}" to To do`, 'info', { label: 'Open', run: () => openCard(card.id) })
+      // FR-UI-030: pasted or dropped files go on the new card.
+      const failed = files.length ? await uploadAll({ type: 'card', id: card.id }, files) : 0
+      const attached = files.length - failed
+      shellToast(
+        `Added "${card.payload.title}" to To do${attached ? ` with ${attached === 1 ? '1 file' : `${attached} files`}` : ''}${failed ? `; ${failed} file${failed === 1 ? '' : 's'} couldn't be attached` : ''}`,
+        failed ? 'error' : 'info',
+        { label: 'Open', run: () => openCard(card.id) },
+      )
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't add the card")
       setBusy(false)
@@ -103,7 +112,8 @@ export function QuickAddHost() {
                 </span>
               )
             })}
-            {!parsed.chips.length && !fixed && <span className="qa-hint">Try a date, a time, #project, !high or @person</span>}
+            {req.files?.length ? <span className="qa-chip">📎 {req.files.length === 1 ? req.files[0].name : `${req.files.length} files`}</span> : null}
+            {!parsed.chips.length && !fixed && !req.files?.length && <span className="qa-hint">Try a date, a time, #project, !high or @person</span>}
           </div>
           <div className="qa-foot">
             <div className="qa-sources" role="radiogroup" aria-label="Where it came from">

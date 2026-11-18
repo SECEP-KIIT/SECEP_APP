@@ -40,4 +40,6 @@ export const config = {
   /** Simulate Jira and Calendar when the tenant has no Jira settings (demo). */
   simulateIntegrations: process.env.SIMULATE_INTEGRATIONS !== '0',
   secureCookies: process.env.NODE_ENV === 'production',
+  /** Uploaded files (FR-CNT-006): the `files` volume in Docker (§6.8). */
+  filesDir: process.env.FILES_DIR || './data/files',
 };

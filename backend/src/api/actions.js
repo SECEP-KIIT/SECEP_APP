@@ -2,6 +2,7 @@
 // types with valid payloads, one Jira issue per action (FR-ORC-005).
 import { Router } from 'express';
 import { Fail, Fields, UUID, csv, idParam, isDate, isDateTime, isEmail, isInt, isOptStr, isStr, object, own, pageParams, route, searchParams, toPage } from '../http.js';
+import { removeStored } from './files.js';
 import { audit } from '../services/audit.js';
 import { query, tx } from '../services/db.js';
 import { CARD_PROJECTS, listItem, toAction } from '../services/emails.js';
@@ -164,14 +165,17 @@ route(actions, 'post', '/actions', 'user', async (req, user) => {
 // PROPOSED (proposals §19.1): delete a user card; the client's Undo re-creates it.
 route(actions, 'delete', '/actions/:id', 'user', async (req, user) => {
   const id = idParam(req, 'Action');
-  await tx(async (c) => {
+  const stored = await tx(async (c) => {
     const a = own(await mine(c, user.id, id), 'Action');
     if (!isUserCard(a)) throw new Fail(409, 'conflict', 'Only cards you made can be deleted');
+    const keys = (await c.query("DELETE FROM files WHERE target_type = 'card' AND target_id = $1 RETURNING storage_key", [id])).rows.map((r) => r.storage_key);
     await c.query("DELETE FROM notes WHERE target_type = 'card' AND target_id = $1", [id]);
     await c.query('DELETE FROM actions WHERE id = $1', [id]);
     if (a.board_column) await renumber(c, user.id, a.board_column);
     await audit(c, { tenantId: user.tenant_id, actorId: user.id, event: 'action.delete', target: id, details: { type: a.type } });
+    return keys;
   });
+  await removeStored(stored);
 });
 
 /**

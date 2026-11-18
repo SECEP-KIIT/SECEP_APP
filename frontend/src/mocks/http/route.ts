@@ -71,7 +71,7 @@ export function route<P extends PathParams = PathParams>(
   path: string,
   access: Access,
   handler: (ctx: Ctx<P>) => Result | Promise<Result>,
-  { status = 200 }: { status?: number } = {},
+  { status = 200, raw = false }: { status?: number; raw?: boolean } = {},
 ) {
   registry.push({ method, path, access })
   return http[method]<P, DefaultBodyType>(`${API}${path}`, async ({ request, params }) => {
@@ -85,7 +85,8 @@ export function route<P extends PathParams = PathParams>(
       if (user) authorize(user, access)
 
       let body: unknown = undefined
-      if (method !== 'get' && method !== 'delete' && request.headers.get('Content-Length') !== '0') {
+      // raw: the handler reads the body itself (multipart uploads).
+      if (!raw && method !== 'get' && method !== 'delete' && request.headers.get('Content-Length') !== '0') {
         const text = await request.text()
         if (text) {
           try {

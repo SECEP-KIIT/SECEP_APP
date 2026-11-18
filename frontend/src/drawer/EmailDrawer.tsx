@@ -10,6 +10,7 @@ import { errorText, useInbox, type OpenOptions } from '../inbox/inboxContext'
 import { setHandled } from '../inbox/quickActions'
 import { TypeIcon, UrgencyMark } from '../inbox/marks'
 import { PortalContainer } from '../inbox/portal'
+import { AttachmentTools } from '../files/AttachmentTools'
 import { EmailNotes } from '../notes/EmailNotes'
 import { ActionList } from './ActionList'
 import { LinkList } from './LinkList'
@@ -278,6 +279,7 @@ function DrawerBody({ email, compose, onClose }: { email: EmailDetail; compose?:
                 <span className="drawer-muted">
                   {a.mime} · {formatSize(a.size)}
                 </span>
+                <AttachmentTools emailId={email.id} attachment={a} />
               </li>
             ))}
           </ul>
