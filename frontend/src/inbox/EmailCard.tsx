@@ -33,7 +33,7 @@ interface Props {
 export const EmailCard = memo(function EmailCard({ email, now, density, fresh, onFilter }: Props) {
   // Per card instance: the same email can sit in several columns on one dashboard page.
   const subjectId = useId()
-  const { open, menu, toast } = useInbox()
+  const { open, menu, toast, pickProject } = useInbox()
   const lift = useLift()
   const ref = useRef<HTMLElement>(null)
   const [leaving, setLeaving] = useState(false)
@@ -82,6 +82,11 @@ export const EmailCard = memo(function EmailCard({ email, now, density, fresh, o
       else if (key === 'jira') void quick.send('create_jira_issue')
       else if (key === 'calendar') void quick.send('add_calendar_event')
       else if (key === 'copy') copySummary(email, toast)
+      else if (key === 'project') {
+        const r = ref.current?.getBoundingClientRect()
+        const ids = selection.selected.has(email.id) ? [...selection.selected] : [email.id]
+        if (r) pickProject(ids, r.left + 16, r.top + 24)
+      }
       else openMenuAtCard()
       return
     }

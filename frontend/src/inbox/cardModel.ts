@@ -37,7 +37,7 @@ export function cardTime(iso: string, now: Date, locale?: string): string {
 
 // ── Tags (item 4, FR-UI-013/014) ───────────────────────────────────────────────────────────────────────────────
 
-export type TagKind = 'security' | 'due' | 'action' | 'sentiment' | 'attachments' | 'replies' | 'duplicates' | 'masked' | 'snoozed'
+export type TagKind = 'security' | 'due' | 'project' | 'action' | 'sentiment' | 'attachments' | 'replies' | 'duplicates' | 'masked' | 'snoozed'
 
 export interface CardTag {
   kind: TagKind
@@ -48,6 +48,8 @@ export interface CardTag {
   tone: 'danger' | 'warn' | 'ok' | 'muted'
   /** Clicking the tag applies this filter to the column. Only tags with a §6.5 query parameter have one. */
   filter: FilterPatch | null
+  /** project only: the projects' colours, primary first, for the split dot (FR-UI-017). */
+  colours?: string[]
 }
 
 export type FilterPatch =
@@ -63,7 +65,7 @@ export const MAX_VISIBLE_TAGS = 5
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 
 /**
- * All tags in display priority: security → due → (project: not built) → action status → the rest (item 4).
+ * All tags in display priority: security → due → project → action status → the rest (item 4).
  * Sentiment shows only when Negative or Frustrated. Clean mail shows no shield.
  */
 export function cardTags(email: EmailListItem, now: Date): CardTag[] {
@@ -80,6 +82,8 @@ export function cardTags(email: EmailListItem, now: Date): CardTag[] {
   }
   const due = dueTag(email.due_date, now)
   if (due) tags.push(due)
+  const project = projectTag(email.projects)
+  if (project) tags.push(project)
   if (email.jira_key) {
     tags.push({ kind: 'action', text: email.jira_key, label: `Jira issue ${email.jira_key}`, tone: 'ok', filter: null })
   } else if (email.proposed_action_count > 0) {
@@ -106,6 +110,32 @@ export function cardTags(email: EmailListItem, now: Date): CardTag[] {
     tags.push({ kind: 'snoozed', text: '', label: `Snoozed until ${new Date(email.snoozed_until).toLocaleString()}`, tone: 'muted', filter: null })
   }
   return tags
+}
+
+/**
+ * Projects (FR-UI-017, item 5): one split dot (a slice per project, at most 4; 5 or more show a numbered ring) and
+ * the chip "Name +n", named after the primary project. The label lists them all, so colour never carries it alone.
+ */
+export function projectTag(projects: EmailListItem['projects']): CardTag | null {
+  if (!projects.length) return null
+  const [first, ...rest] = projects
+  const names = projects.map((p) => (p.is_primary && projects.length > 1 ? `${p.name} (primary)` : p.name))
+  return {
+    kind: 'project',
+    text: rest.length ? `${first.name} +${rest.length}` : first.name,
+    label: `${projects.length === 1 ? 'Project' : 'Projects'}: ${names.join(', ')}`,
+    tone: 'muted',
+    filter: null,
+    colours: projects.map((p) => p.colour),
+  }
+}
+
+/** The split dot's background: equal conic slices, primary first (left), at most 4. */
+export function splitDot(colours: readonly string[]): string {
+  if (colours.length <= 1) return colours[0] ?? 'transparent'
+  const slices = colours.slice(0, 4)
+  const step = 100 / slices.length
+  return `conic-gradient(${slices.map((c, i) => `${c} ${i * step}% ${(i + 1) * step}%`).join(', ')})`
 }
 
 // ── Due dates (FR-UI-013; PROPOSED due_date, proposals §10.2) ──────────────────────────────────────────────

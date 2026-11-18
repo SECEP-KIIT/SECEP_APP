@@ -2,7 +2,7 @@
 import type { EmailListItem } from '../api/types'
 import type { InboxApi } from './inboxContext'
 
-export type CardKey = 'next' | 'prev' | 'select' | 'done' | 'jira' | 'calendar' | 'copy' | 'menu' | null
+export type CardKey = 'next' | 'prev' | 'select' | 'done' | 'jira' | 'calendar' | 'copy' | 'menu' | 'project' | null
 
 interface KeyLike {
   key: string
@@ -12,7 +12,7 @@ interface KeyLike {
   altKey: boolean
 }
 
-/** j/k move, x selects, e handles, ⇧J/⇧C send, Ctrl/⌘+C copies, Shift+F10 or the menu key opens the menu. */
+/** j/k move, x selects, e handles, p files in a project, ⇧J/⇧C send, Ctrl/⌘+C copies, Shift+F10 or the menu key opens the menu. */
 export function cardKeyAction(e: KeyLike): CardKey {
   const mod = e.ctrlKey || e.metaKey
   if (mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'c') return 'copy'
@@ -29,6 +29,8 @@ export function cardKeyAction(e: KeyLike): CardKey {
       return 'select'
     case 'e':
       return 'done'
+    case 'p':
+      return 'project'
     case 'J':
       return 'jira'
     case 'C':

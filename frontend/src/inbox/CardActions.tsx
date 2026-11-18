@@ -1,15 +1,17 @@
-import { CalendarPlus, CircleCheck, Ellipsis, Undo2, Zap } from 'lucide-react'
+import { CalendarPlus, CircleCheck, Ellipsis, FolderPlus, Undo2, Zap } from 'lucide-react'
 import type { EmailListItem } from '../api/types'
+import { useInbox } from './inboxContext'
 import { useQuickActions } from './quickActions'
 
 /**
- * Card layer 2 (FR-UI-011, item 3): Jira · Calendar · Done · ⋯, in the bar above a lifted card (CardLift, QA pass 3),
+ * Card layer 2 (FR-UI-011, item 3): Jira · Calendar · Project · Done · ⋯, in the bar above a lifted card (CardLift, QA pass 3),
  * never changing the card's height. Touch has the long-press menu instead (TouchActions).
  *
  * Jira and Calendar send the decoder's proposal as is (FR-ORC-012); Shift+click opens the drawer's composer first.
  */
 export function CardActions({ email, onLeave }: { email: EmailListItem; onLeave: (leaving: boolean) => void }) {
   const { busy, send, toggleHandled, open } = useQuickActions(email, onLeave)
+  const { pickProject } = useInbox()
 
   return (
     <div className="card-actions" role="group" aria-label="Quick actions">
@@ -41,6 +43,21 @@ export function CardActions({ email, onLeave }: { email: EmailListItem; onLeave:
       >
         <CalendarPlus size={14} aria-hidden="true" />
         Calendar
+      </button>
+      <button
+        type="button"
+        className="card-action"
+        disabled={busy !== null}
+        title="Add to project (P)"
+        aria-haspopup="menu"
+        onClick={(e) => {
+          e.stopPropagation()
+          const r = e.currentTarget.getBoundingClientRect()
+          pickProject([email.id], r.left, r.bottom)
+        }}
+      >
+        <FolderPlus size={14} aria-hidden="true" />
+        Project
       </button>
       <button
         type="button"

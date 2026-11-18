@@ -1,4 +1,4 @@
-// Auth, the caller's profile and preferences, glance, notifications, projects, mailbox (§6.5, §6.4.1 + PROPOSED).
+// Auth, the caller's profile and preferences, glance, notifications, mailbox (§6.5, §6.4.1 + PROPOSED).
 import type { PreferencesResponse, RefreshResponse, UiPrefs } from '../../api/types'
 import { computeGlance } from '../glance'
 import { page } from '../http/cursor'
@@ -6,7 +6,7 @@ import { Fail, route } from '../http/route'
 import { object, isInt } from '../http/validate'
 import { issueToken, signOut } from '../session'
 import { changed, db } from '../store/db'
-import { toMe, toProject } from '../store/serialize'
+import { toMe } from '../store/serialize'
 
 const PREF_CHECKS: Record<keyof UiPrefs, (v: unknown) => boolean> = {
   motion: (v) => v === 'full' || v === 'reduced' || v === 'off',
@@ -56,10 +56,6 @@ export const meRoutes = [
         .sort((a, b) => b.created_at.localeCompare(a.created_at))
         .map(({ user_id: _owner, ...n }) => n),
     ),
-  ),
-
-  route('get', '/projects', 'user', ({ user, url }) =>
-    page(url, db.projects.filter((p) => p.user_id === user.id).map(toProject)),
   ),
 
   // FR-ADM-007: revoke the Google token and stop polling (the mock pipeline skips revoked mailboxes).

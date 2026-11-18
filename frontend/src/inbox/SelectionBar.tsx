@@ -1,16 +1,18 @@
-import { CalendarPlus, CircleCheck, X, Zap } from 'lucide-react'
+import { CalendarPlus, ChevronRight, CircleCheck, FolderPlus, X, Zap } from 'lucide-react'
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useBulk } from './bulk'
+import { useInbox } from './inboxContext'
 import { useSelection } from './selection'
 
 /**
  * The topbar's contextual mode (FR-UI-001, item 1): with cards selected, the centre reads
- * `3 selected · Jira · Calendar · Done · ✕` instead of the search pill. Rendered into the topbar's slot.
+ * `3 selected · Jira · Calendar · Project ▸ · Done · ✕` instead of the search pill. Rendered into the topbar's slot.
  */
 export function SelectionBar() {
   const { selected, clear } = useSelection()
   const bulk = useBulk()
+  const { pickProject } = useInbox()
   const [busy, setBusy] = useState(false)
   const slot = document.getElementById('topbar-context')
   if (!slot || selected.size === 0) return null
@@ -32,6 +34,19 @@ export function SelectionBar() {
       </button>
       <button type="button" className="selection-action" disabled={busy} onClick={run(() => bulk.send('add_calendar_event'))} title="A separate event for each">
         <CalendarPlus size={14} aria-hidden="true" /> Calendar
+      </button>
+      <button
+        type="button"
+        className="selection-action"
+        disabled={busy}
+        aria-haspopup="menu"
+        title="Add every selected email to a project"
+        onClick={(e) => {
+          const r = e.currentTarget.getBoundingClientRect()
+          pickProject([...selected], r.left, r.bottom)
+        }}
+      >
+        <FolderPlus size={14} aria-hidden="true" /> Project <ChevronRight size={12} aria-hidden="true" />
       </button>
       <button type="button" className="selection-action" disabled={busy} onClick={run(bulk.done)}>
         <CircleCheck size={14} aria-hidden="true" /> Done

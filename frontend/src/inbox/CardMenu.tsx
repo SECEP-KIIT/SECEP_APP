@@ -1,5 +1,5 @@
 import * as Popover from '@radix-ui/react-popover'
-import { CalendarPlus, CircleCheck, Copy, ExternalLink, Mail, MailOpen, Pin, PinOff, SquareCheck, Undo2, X, Zap } from 'lucide-react'
+import { CalendarPlus, ChevronRight, CircleCheck, Copy, ExternalLink, FolderPlus, Mail, MailOpen, Pin, PinOff, SquareCheck, Undo2, X, Zap } from 'lucide-react'
 import { useRef, type KeyboardEvent, type ReactNode } from 'react'
 import type { EmailListItem } from '../api/types'
 import { copySummary } from './cardKeys'
@@ -50,15 +50,16 @@ export function CardMenu({ at, onClose }: { at: { email: EmailListItem; x: numbe
             ref.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus()
           }}
         >
-          {bulk ? <BulkItems onClose={onClose} /> : <SingleItems email={at.email} onClose={onClose} />}
+          {bulk ? <BulkItems at={at} onClose={onClose} /> : <SingleItems at={at} onClose={onClose} />}
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
   )
 }
 
-function SingleItems({ email, onClose }: { email: EmailListItem; onClose: () => void }) {
-  const { toast } = useInbox()
+function SingleItems({ at, onClose }: { at: { email: EmailListItem; x: number; y: number }; onClose: () => void }) {
+  const email = at.email
+  const { toast, pickProject } = useInbox()
   const { selected, toggle } = useSelection()
   const { send, toggleHandled, togglePin, toggleRead, open } = useQuickActions(email, () => {})
   const run = (fn: () => unknown) => () => {
@@ -75,6 +76,7 @@ function SingleItems({ email, onClose }: { email: EmailListItem; onClose: () => 
         <Item icon={<Zap size={14} />} label="Send to Jira" keys="⇧J" onSelect={run(() => send('create_jira_issue'))} />
       )}
       <Item icon={<CalendarPlus size={14} />} label="Add to Calendar" keys="⇧C" onSelect={run(() => send('add_calendar_event'))} />
+      <Item icon={<FolderPlus size={14} />} label="Add to project" keys="P" more onSelect={() => pickProject([email.id], at.x, at.y)} />
       <Item
         icon={email.handled ? <Undo2 size={14} /> : <CircleCheck size={14} />}
         label={email.handled ? 'Restore to inbox' : 'Mark as handled'}
@@ -90,8 +92,9 @@ function SingleItems({ email, onClose }: { email: EmailListItem; onClose: () => 
   )
 }
 
-function BulkItems({ onClose }: { onClose: () => void }) {
+function BulkItems({ at, onClose }: { at: { x: number; y: number }; onClose: () => void }) {
   const { selected, clear } = useSelection()
+  const { pickProject } = useInbox()
   const bulk = useBulk()
   const run = (fn: () => unknown) => () => {
     onClose()
@@ -102,6 +105,7 @@ function BulkItems({ onClose }: { onClose: () => void }) {
       <p className="menu-title">{selected.size} selected</p>
       <Item icon={<Zap size={14} />} label="Send each to Jira" onSelect={run(() => bulk.send('create_jira_issue'))} />
       <Item icon={<CalendarPlus size={14} />} label="Add each to Calendar" onSelect={run(() => bulk.send('add_calendar_event'))} />
+      <Item icon={<FolderPlus size={14} />} label="Add all to project" more onSelect={() => pickProject([...selected], at.x, at.y)} />
       <Item icon={<CircleCheck size={14} />} label="Mark all as handled" onSelect={run(() => bulk.done())} />
       <hr className="menu-sep" />
       <Item icon={<X size={14} />} label="Clear selection" keys="Esc" onSelect={run(clear)} />
@@ -109,12 +113,13 @@ function BulkItems({ onClose }: { onClose: () => void }) {
   )
 }
 
-function Item({ icon, label, keys, disabled, onSelect }: { icon: ReactNode; label: string; keys?: string; disabled?: boolean; onSelect?: () => void }) {
+function Item({ icon, label, keys, disabled, more, onSelect }: { icon: ReactNode; label: string; keys?: string; disabled?: boolean; more?: boolean; onSelect?: () => void }) {
   return (
-    <button type="button" role="menuitem" className="menu-item" disabled={disabled} onClick={onSelect}>
+    <button type="button" role="menuitem" className="menu-item" disabled={disabled} onClick={onSelect} aria-haspopup={more ? 'menu' : undefined}>
       <span aria-hidden="true">{icon}</span>
       <span className="menu-label">{label}</span>
       {keys && <kbd className="menu-keys">{keys}</kbd>}
+      {more && <ChevronRight size={14} aria-hidden="true" />}
     </button>
   )
 }

@@ -107,7 +107,9 @@ await tx(async (c) => {
     // created_at keeps the token order in the body (detail lists secrets in that order).
     await c.query(
       `INSERT INTO masked_secrets (id, email_id, owner_user_id, secret_type, value_enc, created_at) VALUES ($1,$2,$3,$4,$5, now() + make_interval(secs => $6))`,
-      [s.id, s.email_id, s.owner_user_id, s.secret_type, encrypt(s.value), n++ / 1000],
+      // The value is never kept for SECEP (proposals §18.4): the pipeline drops it. value_enc is NOT NULL in 001_init,
+      // so a fixed placeholder fills it until M7 makes the column optional.
+      [s.id, s.email_id, s.owner_user_id, s.secret_type, encrypt('[omitted]'), n++ / 1000],
     );
   }
   for (const [userId, ids] of Object.entries(d.reads)) {
@@ -123,6 +125,16 @@ await tx(async (c) => {
       [p.id, t.id, p.user_id, p.name, p.colour, p.icon, p.description, p.deadline, p.jira_project_key, p.jira_epic, p.archived_at, p.created_at],
     );
   }
+  // Some of the demo mailbox already filed (FR-UI-016), as in the mock: the board deck and the Pune trip by subject.
+  const file = async (project, match) => {
+    if (!project) return;
+    for (const e of d.emails.filter((x) => x.user_id === project.user_id && match.test(x.subject ?? ''))) {
+      const has = (await c.query('SELECT 1 FROM email_projects WHERE email_id = $1', [e.id])).rows[0];
+      await c.query('INSERT INTO email_projects (email_id, project_id, is_primary, added_at) VALUES ($1,$2,$3,$4)', [e.id, project.id, !has, e.received_at]);
+    }
+  };
+  await file(d.projects[0], /Q3 board|board deck/i);
+  await file(d.projects[1], /Pune/i);
 });
 console.log(`Seeded ${TENANT}: ${seed.emails.length} emails for ${seed.users.length} users. Sign in as demo@northwind.example (DEV_LOGIN=1).`);
 await pool.end();

@@ -93,7 +93,7 @@ function parseFilters(url: URL) {
 }
 
 /** The parameters a saved column filter may hold: GET /emails filters only, no sort, cursor, limit or q. */
-export const FILTER_PARAMS = ['type', 'urgency', 'sentiment', 'flag', 'due', 'needs_review', 'sender', 'received_after', 'received_before', 'view'] as const
+export const FILTER_PARAMS = ['project', 'type', 'urgency', 'sentiment', 'flag', 'due', 'needs_review', 'sender', 'received_after', 'received_before', 'view'] as const
 
 /**
  * Checks a widget filter (proposals §13) with the same parser GET /emails uses, so there is one vocabulary.
@@ -115,10 +115,14 @@ function filtered(user: { id: string }, url: URL) {
   const { type, urgency, sentiment, flag, due, needsReview, sender, after, before, view } = parseFilters(url)
   const q = url.searchParams.get('q')?.trim() || null
   const today = localDate(new Date().toISOString())
-  // The other S parameters (project, status, pinned, snoozed, tag) are accepted and ignored until built (§6.4.1).
+  // project (FR-UI-021): emails in any of these projects. The other S parameters (status, pinned, snoozed, tag) are
+  // accepted and ignored until built (§6.4.1).
+  const projects = url.searchParams.get('project')?.split(',').filter(Boolean) ?? null
+  const inProject = projects && new Set(db.projectItems.filter((i) => i.email_id && projects.includes(i.project_id)).map((i) => i.email_id))
   const order = sorter(url)
 
   return emailsOf(user.id)
+    .filter((e) => !inProject || inProject.has(e.id))
     .filter((e) => !type || (e.triage && type.includes(e.triage.email_type.label)))
     .filter((e) => !urgency || (e.triage && urgency.includes(e.triage.urgency.label)))
     .filter((e) => !sentiment || (e.triage && sentiment.includes(e.triage.sentiment.label)))

@@ -391,3 +391,16 @@ Scope note: phone work moves to **Version 2** (next semester), together with the
    - **Migration** (`user_layouts.pages` jsonb, M6; mock store schema 5 → 6): add `stacked: false` to every saved widget. No table change; `001_init.sql` is unaffected.
 3. **Hover lift** (F13, F14): the copy's own tag strip opens to every tag inside the card, instead of a separate tag box. Jira, Calendar and Done are solid accent buttons. No wire change.
 4. **Tile header on two lines** (F15), and the **widget menu** opens beside the tile (F16). The menu holds the tile's quick filters, and the colour and icon pickers show only the current choice until opened. The filter popover on a tile is headed "This tile's filter". No wire change.
+
+## 18. QA pass 5 (18 Nov 2026): projects on the wire, no Reveal
+
+1. **Projects API** (§6.5 v1.1 names `/projects` and "add or remove emails and cards; set primary"; shapes PROPOSED here):
+   - `GET /projects` (active first, then archived; each oldest first), `GET /projects/:id`, `POST /projects` (201), `PATCH /projects/:id`. Request fields are the §6.6 columns a user sets: `name` (≤ 60), `colour` (`#rrggbb`, stored lower case), `icon` (one emoji), `description` (≤ 500), `deadline`, `jira_project_key` (like `ATL`), `jira_epic` (like `ATL-100`). PATCH also takes `archived: true | false`; archiving replaces deletion (FR-UI-016). `Project.progress` is derived: done / total of the board cards that come from the project's emails or are filed in it.
+   - **§18.2** `POST /projects/:id/items {email_id | action_id, primary?}` returns `{project_id, email_id, action_id, is_primary, added_at}`. The first project an item gets is primary (FR-UI-017); `primary: true` moves it. Adding an item that is already there only applies `primary`. `DELETE /projects/:id/items/:itemId` takes the email or action id (204); when the primary leaves, the oldest remaining project becomes primary. Archived projects take no new items (409).
+   - **§18.3** `GET /actions?project=<id>`: a project's cards (its board).
+2. **`EmailListItem.projects`** = `{id, name, colour, is_primary}[]`, primary first, then in the order added (confirms §4 / §9.3). `project=<id>,<id>` filters `GET /emails` (FR-UI-021), and is valid in a saved widget filter. The mock seeds the Q3 deck and the Pune trip into their projects; so does `seed-demo.js`.
+3. **§18.4 No Reveal** (team decision, 18 Nov): SECEP never holds or shows a credential's value. The pipeline replaces it with its type; the drawer lists only the types and links to the message in the user's own mail app. Changes:
+   - `POST /secrets/:id/reveal` is **removed**, and FR-SEC-008 (re-auth for Reveal) with it. FR-SEC-007 reads "masked with its type; the value is never stored".
+   - `EmailDetail.open_url: string | null`: the message in Gmail on the web (`https://mail.google.com/mail/?authuser=<mailbox>#all/<provider_message_id>`), built by M6.
+   - **For M7 (Ampa):** `masked_secrets.value_enc` should become nullable or be dropped. Until then the demo seeder stores a fixed encrypted placeholder.
+4. **Starter layout gains a fourth page, "Handled"**, with one 3x Handled column. "See" on a Mark-handled toast opens it; a layout saved before it existed gets the page added at the end (no page added at the page cap: the Handled full view opens instead). No wire change.

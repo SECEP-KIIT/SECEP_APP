@@ -2,10 +2,10 @@
 import { setupServer } from 'msw/node'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../api/client'
-import { emailDetailOptions, queryClient, revealSecret, undoAction } from '../api/queries'
+import { emailDetailOptions, queryClient, undoAction } from '../api/queries'
 import { control } from '../mocks/control'
 import { handlers } from '../mocks/handlers'
-import { REAUTH_WINDOW_MS, signIn } from '../mocks/session'
+import { signIn } from '../mocks/session'
 import { db, initStore } from '../mocks/store/db'
 import { cardKeyAction } from './cardKeys'
 import { sendProposal } from './quickActions'
@@ -77,22 +77,13 @@ describe('undo of a send (FR-UI-029, §6.5 POST /actions/:id/undo)', () => {
   })
 })
 
-describe('reveal (FR-SEC-008, task 15)', () => {
-  it('reveals for 60 s within 5 min of sign-in, audited without the value; later it needs a fresh sign-in', async () => {
-    const secret = db.secrets.find((x) => x.owner_user_id === db.users[0].id) ?? db.secrets[0]
+describe('credentials (FR-SEC-007, QA pass 5)', () => {
+  it('there is no Reveal: the detail lists only credential types and links to the message in Gmail', async () => {
+    const secret = db.secrets.find((x) => x.owner_user_id === db.users[0].id)!
     signIn(secret.owner_user_id)
-    const res = await revealSecret(secret.id)
-    expect(res).toEqual({ value: secret.value, expires_in: 60 })
-    const entry = db.audit.at(-1)!
-    expect(entry).toMatchObject({ event: 'secret.reveal', target: secret.id })
-    expect(JSON.stringify(entry)).not.toContain(secret.value)
-
-    vi.useFakeTimers({ toFake: ['Date'] })
-    vi.setSystemTime(Date.now() + REAUTH_WINDOW_MS + 1000)
-    try {
-      expect(await revealSecret(secret.id).catch((e: unknown) => e)).toMatchObject({ status: 401, code: 'reauth_required' })
-    } finally {
-      vi.useRealTimers()
-    }
+    const detail = await queryClient.fetchQuery(emailDetailOptions(secret.email_id!))
+    expect(detail.masked_secrets).toEqual(expect.arrayContaining([{ id: secret.id, secret_type: secret.secret_type }]))
+    expect(detail.open_url).toMatch(/^https:\/\/mail\.google\.com\/mail\/\?authuser=.+#all\/[0-9a-f]+$/)
+    expect('value' in secret).toBe(false)
   })
 })

@@ -19,7 +19,7 @@ import {
   Zap,
 } from 'lucide-react'
 import type { EmailType, Urgency } from '../api/types'
-import type { CardTag } from './cardModel'
+import { splitDot, type CardTag } from './cardModel'
 
 const TYPE_ICONS = { Task: SquareCheck, Info, Credentials: KeyRound, Meeting: CalendarClock, Approval: Stamp }
 
@@ -55,6 +55,18 @@ export function TagIcon({ tag, size = 13 }: { tag: CardTag; size?: number }) {
       return tag.filter?.value === 'malicious' ? <ShieldX {...props} /> : <ShieldAlert {...props} />
     case 'due':
       return null // dates carry no icon: one word of context (item 4)
+    case 'project': {
+      const colours = tag.colours ?? []
+      // 5 or more: a ring with the count instead of thin slices (item 5).
+      if (colours.length >= 5) {
+        return (
+          <span className="project-ring" aria-hidden="true">
+            {colours.length}
+          </span>
+        )
+      }
+      return <span className="project-split" data-split={colours.length > 1 || undefined} style={{ background: splitDot(colours) }} aria-hidden="true" />
+    }
     case 'action':
       return tag.tone === 'ok' ? <CircleCheck {...props} /> : <Zap {...props} />
     case 'sentiment':

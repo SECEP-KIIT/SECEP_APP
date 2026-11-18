@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { Outlet } from 'react-router'
+import { Outlet, useNavigate } from 'react-router'
+import { onGoTo } from '../lib/navigate'
 import { useSignedOut } from '../api/session'
 import { SignIn } from './SignIn'
 import { FocusContext, useFocusMode } from './focusMode'
@@ -37,6 +38,8 @@ function SignedInShell() {
   const focused = useFocusMode()
   const announcement = useFocusAnnouncement(focused)
   const { sidebar_collapsed } = usePrefs()
+  const navigate = useNavigate()
+  useEffect(() => onGoTo((path) => void navigate(path)), [navigate])
 
   return (
     <FocusContext.Provider value={focused}>

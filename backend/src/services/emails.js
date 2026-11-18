@@ -1,6 +1,6 @@
 // Email reads for one user: the list query (GET /emails, §6.5 + PROPOSED view/due/needs_review) and the wire
 // shapes (§6.4.1 EmailListItem / EmailDetail). Per-person state comes from email_user_state, never from emails.
-import { Fail, csv, isDate } from '../http.js';
+import { Fail, UUID, csv, isDate } from '../http.js';
 import { query } from './db.js';
 
 export const TYPES = ['Task', 'Info', 'Credentials', 'Meeting', 'Approval'];
@@ -10,7 +10,7 @@ const FLAGS = ['none', 'suspicious', 'malicious'];
 const VIEWS = ['unread', 'due_today', 'needs_reply', 'overdue', 'handled'];
 const DUE = ['overdue', 'today', 'next_7_days', 'later', 'none'];
 const SORTS = ['smart', 'newest', 'oldest', 'due', 'urgency', 'sender', 'confidence'];
-export const FILTER_PARAMS = ['type', 'urgency', 'sentiment', 'flag', 'due', 'needs_review', 'sender', 'received_after', 'received_before', 'view'];
+export const FILTER_PARAMS = ['project', 'type', 'urgency', 'sentiment', 'flag', 'due', 'needs_review', 'sender', 'received_after', 'received_before', 'view'];
 
 /** The columns every list item needs. $1 is always the user id. */
 const ITEM_SELECT = `
@@ -24,6 +24,11 @@ const ITEM_SELECT = `
          s.snoozed_until, s.due_date,
          sender.role_category AS from_role,
          EXISTS (SELECT 1 FROM masked_secrets ms WHERE ms.email_id = e.id) AS has_masked_secret,
+         -- PROPOSED (proposals §4, §18): the email's projects for its card, primary first, then in the order added.
+         coalesce((SELECT json_agg(json_build_object('id', pr.id, 'name', pr.name, 'colour', pr.colour, 'is_primary', ep.is_primary)
+                     ORDER BY ep.is_primary DESC, ep.added_at)
+                     FROM email_projects ep JOIN projects pr ON pr.id = ep.project_id
+                    WHERE ep.email_id = e.id AND pr.owner_user_id = $1), '[]'::json) AS projects,
          (SELECT count(*)::int FROM actions a WHERE a.email_id = e.id AND a.user_id = $1 AND a.status = 'proposed') AS proposed_action_count,
          (SELECT a.external_ref FROM actions a WHERE a.email_id = e.id AND a.user_id = $1 AND a.type = 'create_jira_issue'
            AND a.external_ref IS NOT NULL ORDER BY a.updated_at DESC LIMIT 1) AS jira_key
@@ -73,7 +78,7 @@ export function toListItem(r) {
     due_date: r.due_date ?? null,
     handled: r.handled,
     read: r.read,
-    projects: [],
+    projects: r.projects,
     tags: [],
   };
 }
@@ -102,6 +107,13 @@ export const toLink = (c) => ({
   go_url: `/api/v1/links/${c.id}/go`,
 });
 
+/**
+ * PROPOSED open_url (proposals §18.4): the message in Gmail on the web, in the mailbox's own account. SECEP never
+ * holds a credential's value; the user opens the original here to see it. null when the message id is unknown.
+ */
+export const gmailUrl = (address, providerMessageId) =>
+  providerMessageId ? `https://mail.google.com/mail/?authuser=${encodeURIComponent(address)}#all/${encodeURIComponent(providerMessageId)}` : null;
+
 /** One email's list item for this user, or null if it isn't theirs. */
 export async function listItem(userId, emailId) {
   const { rows } = await query(`${ITEM_SELECT} WHERE e.id = $2`, [userId, emailId]);
@@ -114,7 +126,7 @@ export async function detail(userId, emailId) {
   const r = rows[0];
   if (!r) return null;
   const [body, actions, links, secrets, thread] = await Promise.all([
-    query('SELECT body_text, auth_results FROM emails WHERE id = $1', [emailId]),
+    query('SELECT e.body_text, e.auth_results, e.provider_message_id, m.address FROM emails e JOIN mailboxes m ON m.id = e.mailbox_id WHERE e.id = $1', [emailId]),
     query('SELECT * FROM actions WHERE email_id = $1 AND user_id = $2 ORDER BY created_at', [emailId, userId]),
     query('SELECT * FROM url_checks WHERE email_id = $1 ORDER BY checked_at, id', [emailId]),
     // Same order as the [MASKED:<type>] tokens in body_text (inserted in that order).
@@ -131,6 +143,7 @@ export async function detail(userId, emailId) {
     links: links.rows.map(toLink),
     attachments: r.attachments.map((a, index) => ({ index, filename: a.filename, mime: a.mime, size: a.size })),
     masked_secrets: secrets.rows,
+    open_url: gmailUrl(body.rows[0].address, body.rows[0].provider_message_id),
     auth_results: body.rows[0].auth_results,
     thread: r.thread_id
       ? {
@@ -162,7 +175,10 @@ function dateParam(params, name) {
 export function parseFilters(params) {
   const nr = params.get('needs_review');
   if (nr !== null && nr !== '' && nr !== 'true' && nr !== 'false') throw new Fail(400, 'bad_request', 'needs_review must be true or false');
+  const project = params.get('project')?.split(',').map((v) => v.trim()).filter(Boolean) ?? null;
+  if (project?.some((v) => !UUID.test(v))) throw new Fail(422, 'invalid_parameter', 'project must be project ids', { parameter: 'project' });
   return {
+    project: project?.length ? project : null,
     type: csv(params, 'type', TYPES),
     urgency: csv(params, 'urgency', URGENCIES),
     sentiment: csv(params, 'sentiment', SENTIMENTS),
@@ -212,6 +228,8 @@ export async function list(userId, params, { limit, offset }) {
   const arg = (v) => (args.push(v), `$${args.length}`);
   const where = [];
   const today = `(now() AT TIME ZONE me.timezone)::date`;
+  // FR-UI-021 Project: emails in any of these projects.
+  if (f.project) where.push(`EXISTS (SELECT 1 FROM email_projects ep WHERE ep.email_id = e.id AND ep.project_id = ANY(${arg(f.project)}::uuid[]))`);
   if (f.type) where.push(`e.email_type = ANY(${arg(f.type)})`);
   if (f.urgency) where.push(`e.urgency = ANY(${arg(f.urgency)})`);
   if (f.sentiment) where.push(`e.sentiment = ANY(${arg(f.sentiment)})`);

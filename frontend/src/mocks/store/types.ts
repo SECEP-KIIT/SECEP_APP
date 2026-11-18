@@ -89,9 +89,8 @@ export interface SecretRow {
   id: string
   email_id: string
   owner_user_id: string
+  /** Only the type: the pipeline drops the value, and SECEP never holds it (proposals §18.4). */
   secret_type: string
-  /** Fake value for Reveal. Never persisted (CLAUDE.md: nothing secret in localStorage). */
-  value: string
 }
 
 export interface ActionRow extends Action {
@@ -160,8 +159,18 @@ export interface NotificationRow extends AppNotification {
   user_id: string
 }
 
-export interface ProjectRow extends Project {
+/** §6.6 projects; progress is derived when serialised (toProject). */
+export interface ProjectRow extends Omit<Project, 'progress'> {
   user_id: string
+}
+
+/** §6.6 email_projects and card_projects in one list: exactly one of email_id and action_id is set. */
+export interface ProjectItemRow {
+  project_id: string
+  email_id: string | null
+  action_id: string | null
+  is_primary: boolean
+  added_at: string
 }
 
 export interface Db {
@@ -178,6 +187,8 @@ export interface Db {
   audit: AuditRow[]
   notifications: NotificationRow[]
   projects: ProjectRow[]
+  /** Emails and cards in projects (FR-UI-017). */
+  projectItems: ProjectItemRow[]
   /** Read state per user (proposal §1: per recipient, not a column on the email). */
   reads: Map<string, Set<string>>
   /** Handled state per user: email id → handled_at (proposals §10.3, email_states for M6). */
