@@ -404,3 +404,27 @@ Scope note: phone work moves to **Version 2** (next semester), together with the
    - `EmailDetail.open_url: string | null`: the message in Gmail on the web (`https://mail.google.com/mail/?authuser=<mailbox>#all/<provider_message_id>`), built by M6.
    - **For M7 (Ampa):** `masked_secrets.value_enc` should become nullable or be dropped. Until then the demo seeder stores a fixed encrypted placeholder.
 4. **Starter layout gains a fourth page, "Handled"**, with one 3x Handled column. "See" on a Mark-handled toast opens it; a layout saved before it existed gets the page added at the end (no page added at the page cap: the Handled full view opens instead). No wire change.
+
+## 19. Task 12 (19 Nov 2026): user cards, notes and files on the wire (PROPOSED for v1.3)
+
+The §6.6 tables (`actions` with `origin = user`, `notes`, `files`, `masked_secrets.note_id`) and the §6.5 v1.1 route names already exist. What follows are the shapes and rules the SRS does not give.
+
+1. **User cards (FR-CNT-001/002).**
+   - `POST /actions {type: "add_board_card", payload}` validates the §6.4 user-card payload: `title` 1–120; `description` ≤ 2000; `due_date` `YYYY-MM-DD`; `due_time` `HH:MM` (needs `due_date`); `urgency` one of the four labels; `checklist` ≤ 50 items of `{text: 1–200, done: boolean}`; `source` `in_person | call | chat | null`; `person` ≤ 120. The card is created `done` in To do (as in §6 note 6) and returned with 201.
+   - `PATCH /actions/:id` (v1.1 "adds `{payload}`"): a partial user-card payload, merged and re-validated. Only for `origin = user` cards with no email (`409` otherwise: decoder actions are edited when accepted). `board_column` and `board_position` stay a pair; a body may hold either the pair, `payload`, or both.
+   - **New: `DELETE /actions/:id`** (204) for user cards only (`409` for any other action). The client's Undo re-creates the card from the payload it held (a new id). Audited without content.
+   - Quick-add files a card into its `#project`s with `POST /projects/:id/items {action_id}` (§18.2, unchanged).
+   - **Open:** "Send to Jira / Calendar" from a user card (FR-CNT-002 "same actions") needs an action with no email that points at the card. Suggested: `POST /actions {type: "create_jira_issue" | "add_calendar_event", payload, card_id}` → a `proposed` action, accepted as usual. Not built until agreed.
+2. **Notes (FR-CNT-003/004/005).**
+   - `Note = {id, target_type: "email" | "card" | "project" | null, target_id: uuid | null, body, created_at, updated_at}`. `body` is markdown-lite, at most 20 000 characters, and is returned **masked**.
+   - `GET /notes?target_type=&target_id=` (both or neither; neither = every note of the user, newest edit first; `target_type=none` = standalone only). `POST /notes {target_type?, target_id?, body}` → 201. `PATCH /notes/:id {body}`. `DELETE /notes/:id` → 204. A target the user doesn't own → 404.
+   - **Masking (FR-CNT-005, after §18.4):** on save, secrets are replaced by `[MASKED:<type>]` (M5 `POST /v1/mask` when it runs, otherwise M6's local copy of the same patterns). A `masked_secrets` row per secret keeps its type with `note_id`; the value is never kept (the encrypted placeholder until `value_enc` is nullable). There is no Reveal.
+   - `EmailListItem.note_count` (int): the 📝 tag (§6 note 12). The project view counts its own notes from `GET /notes`.
+   - Meeting template (FR-CNT-004) is client-side: a new note on a Meeting email starts with `## Attendees` (from/to/cc) and `## Agenda` (the summary). Each `- [ ]` line offers → Card (`POST /actions`) and → Jira (`POST /emails/:id/actions`, the email's composer).
+3. **Files (FR-CNT-006/007/008).**
+   - `FileRef = {id, target_type: "email" | "card" | "project", target_id, filename, mime, size, created_at}`.
+   - **New: `GET /files?target_type=&target_id=`** lists a target's files, newest first.
+   - `POST /files` (multipart: `target_type`, `target_id`, `file`) → 201 `FileRef`. Over 25 MB → 413 `file_too_large`; over the user's quota (`settings.file_quota_mb`, default 500) → 413 `quota_exceeded`. Only the filename's last path part is kept, cut to 200 characters.
+   - `GET /files/:id` → the bytes with `Content-Disposition: attachment`, `X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox`. `?inline=1` is allowed for images and PDFs only: it serves `inline` (still sandboxed) for the preview. The client always fetches with the bearer token and shows a blob URL.
+   - `GET /emails/:id/attachments/:index` (FR-CNT-007) uses the `index` from `EmailDetail.attachments` (the SRS says `attachmentId`; the index is what the client has). Streamed from Gmail, never stored; same headers. The mock serves a small generated file.
+   - Pasting or dropping a file on the dashboard creates a user card titled with the file name and attaches the file (FR-UI-030).
