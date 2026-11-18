@@ -91,3 +91,16 @@
   height: 100%;
   border: 0;
 }
+.files .icon-button,
+.file-preview .icon-button,
+.attachments .icon-button {
+  width: 28px;
+  height: 28px;
+  color: var(--ink-muted);
+}
+.files .icon-button:hover:not(:disabled),
+.file-preview .icon-button:hover:not(:disabled),
+.attachments .icon-button:hover:not(:disabled) {
+  background: var(--tag-muted-bg);
+  color: var(--ink);
+}
