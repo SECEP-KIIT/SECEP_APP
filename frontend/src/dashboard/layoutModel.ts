@@ -106,20 +106,86 @@ export const updatePage = (pages: LayoutPage[], id: string, fn: (p: LayoutPage) 
 /** Adds a widget at the end of the page; null when the page holds MAX_WIDGETS already. */
 export function addWidget(page: LayoutPage, preset: WidgetPreset, size: WidgetSize = 'small'): LayoutPage | null {
   if (page.widgets.length >= MAX_WIDGETS) return null
-  const w: Widget = { id: newId(), type: 'inbox_column', size, hidden: false, title: preset.title, icon: preset.icon, colour: preset.colour, filter: preset.filter, sort: preset.sort, density: null }
+  const w: Widget = { id: newId(), type: 'inbox_column', size, hidden: false, stacked: false, title: preset.title, icon: preset.icon, colour: preset.colour, filter: preset.filter, sort: preset.sort, density: null }
   return { ...page, widgets: [...page.widgets, w] }
 }
 
-/** A copy right after the original. */
+/**
+ * Slots (F18): a widget with `stacked` shares the slot of the widget before it, the two at half height each. At most
+ * two per slot; a stacked widget always has its base's size. `slots` reads that from the list, `flat` writes it back
+ * and restores those rules, so every edit below goes through the two.
+ */
+export function slots(widgets: readonly Widget[]): Widget[][] {
+  const out: Widget[][] = []
+  for (const w of widgets) {
+    const last = out.at(-1)
+    if (w.stacked && last?.length === 1) last.push(w)
+    else out.push([w])
+  }
+  return out
+}
+const flat = (page: LayoutPage, s: Widget[][]): LayoutPage => ({
+  ...page,
+  widgets: s.flatMap((slot) => slot.map((w, i) => ({ ...w, stacked: i === 1, size: slot[0].size }))),
+})
+const slotOf = (s: Widget[][], id: string) => s.findIndex((slot) => slot.some((w) => w.id === id))
+
+/** A copy right after the original's slot, on its own. */
 export function duplicateWidget(page: LayoutPage, id: string): LayoutPage | null {
-  const i = page.widgets.findIndex((x) => x.id === id)
+  const s = slots(page.widgets)
+  const i = slotOf(s, id)
   if (i < 0 || page.widgets.length >= MAX_WIDGETS) return null
-  const widgets = [...page.widgets]
-  widgets.splice(i + 1, 0, { ...page.widgets[i], id: newId() })
-  return { ...page, widgets }
+  const w = s[i].find((x) => x.id === id)!
+  s.splice(i + 1, 0, [{ ...w, id: newId(), stacked: false }])
+  return flat(page, s)
 }
 
-export const removeWidget = (page: LayoutPage, id: string): LayoutPage => ({ ...page, widgets: page.widgets.filter((w) => w.id !== id) })
+/** Removing one of a pair gives the other the whole slot back. */
+export const removeWidget = (page: LayoutPage, id: string): LayoutPage =>
+  flat(page, slots(page.widgets).map((slot) => slot.filter((w) => w.id !== id)).filter((slot) => slot.length > 0))
+
+/** Size belongs to the slot: resizing either of a pair resizes both. */
+export function resizeWidget(page: LayoutPage, id: string, size: WidgetSize): LayoutPage {
+  const s = slots(page.widgets)
+  const i = slotOf(s, id)
+  if (i < 0) return page
+  s[i] = s[i].map((w) => ({ ...w, size }))
+  return flat(page, s)
+}
+
+/** Whether `activeId` can be stacked under `targetId`: the target is alone in its slot. */
+export function canStack(page: LayoutPage, activeId: string, targetId: string): boolean {
+  if (activeId === targetId) return false
+  const s = slots(page.widgets)
+  const i = slotOf(s, targetId)
+  return i >= 0 && s[i].length === 1 && slotOf(s, activeId) >= 0
+}
+
+/** Stacks a widget under another (F18): it leaves its own slot and takes the target's width. */
+export function stackWidget(page: LayoutPage, activeId: string, targetId: string): LayoutPage {
+  if (!canStack(page, activeId, targetId)) return page
+  const s = slots(page.widgets).map((slot) => slot.filter((w) => w.id !== activeId)).filter((slot) => slot.length > 0)
+  const moving = page.widgets.find((w) => w.id === activeId)!
+  s[slotOf(s, targetId)].push(moving)
+  return flat(page, s)
+}
+
+/** Splits a pair: the widget gets its own slot right after its partner. */
+export function unstackWidget(page: LayoutPage, id: string): LayoutPage {
+  const s = slots(page.widgets)
+  const i = slotOf(s, id)
+  if (i < 0 || s[i].length < 2) return page
+  const w = s[i].find((x) => x.id === id)!
+  s.splice(i, 1, s[i].filter((x) => x.id !== id), [w])
+  return flat(page, s)
+}
+
+/** The slot before this widget's, when it's free to stack under (menu: "Stack under previous"). */
+export function stackTargetBefore(page: LayoutPage, id: string): string | null {
+  const s = slots(page.widgets)
+  const i = slotOf(s, id)
+  return i > 0 && s[i].length === 1 && s[i - 1].length === 1 ? s[i - 1][0].id : null
+}
 
 export const patchWidget = (page: LayoutPage, id: string, patch: Partial<Omit<Widget, 'id' | 'type'>>): LayoutPage => ({
   ...page,
@@ -127,22 +193,29 @@ export const patchWidget = (page: LayoutPage, id: string, patch: Partial<Omit<Wi
 })
 
 /**
- * Dragging a tile onto another (proposals §16.3). Same-size tiles swap places. Otherwise the dragged tile takes the
- * target's place in the order and the tiles from there on move one along; the flow then pushes them right and down.
- * The same page object comes back when nothing changes, so hovering a tile's own place saves nothing.
+ * Dragging a tile onto another (proposals §16.3), slot by slot (F18: a pair moves together). Same-size slots swap
+ * places. Otherwise the dragged slot takes the target's place and the slots from there on move one along; the flow
+ * then pushes them right and down. A widget dragged out of a pair leaves it and moves on its own. The same page
+ * object comes back when nothing changes, so hovering a tile's own place saves nothing.
  */
 export function reorderWidget(page: LayoutPage, activeId: string, overId: string): LayoutPage {
-  const from = page.widgets.findIndex((w) => w.id === activeId)
-  const to = page.widgets.findIndex((w) => w.id === overId)
-  if (from < 0 || to < 0 || from === to) return page
-  const widgets = [...page.widgets]
-  if (widgets[from].size === widgets[to].size) {
-    ;[widgets[from], widgets[to]] = [widgets[to], widgets[from]]
-  } else {
-    const [moved] = widgets.splice(from, 1)
-    widgets.splice(to, 0, moved)
+  let s = slots(page.widgets)
+  const a = slotOf(s, activeId)
+  const o = slotOf(s, overId)
+  if (a < 0 || o < 0 || a === o) return page
+  // A stacked widget being dragged leaves its pair first (its base stays where it was).
+  if (s[a].length === 2 && s[a][1].id === activeId) {
+    s = [...s.slice(0, a), [s[a][0]], [s[a][1]], ...s.slice(a + 1)]
   }
-  return { ...page, widgets }
+  const from = slotOf(s, activeId)
+  const to = slotOf(s, overId)
+  if (s[from][0].size === s[to][0].size) {
+    ;[s[from], s[to]] = [s[to], s[from]]
+  } else {
+    const [moved] = s.splice(from, 1)
+    s.splice(to, 0, moved)
+  }
+  return flat(page, s)
 }
 
 /** Phone edit sheet (proposals §16.4): a section dragged to another place in the list; the rest close up. */

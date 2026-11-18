@@ -13,7 +13,7 @@ type Filter = (patch: FilterPatch) => (e: ReactMouseEvent) => void
  * one-line summary, tag strip. Shared by the card in the list and its lifted copy (CardLift). Subject and summary
  * are plain text with masked-secret chips; no HTML is ever rendered from email content.
  */
-export function CardBody({ email, now, subjectId, filter }: { email: EmailListItem; now: Date; subjectId: string | undefined; filter: Filter }) {
+export function CardBody({ email, now, subjectId, filter, tags = true }: { email: EmailListItem; now: Date; subjectId: string | undefined; filter: Filter; tags?: boolean }) {
   const triage = email.triage
   const role = senderRole(email)
   return (
@@ -81,14 +81,14 @@ export function CardBody({ email, now, subjectId, filter }: { email: EmailListIt
         )}
       </p>
 
-      <TagStrip tags={cardTags(email, now)} onFilter={filter} />
+      {tags && <TagStrip tags={cardTags(email, now)} onFilter={filter} />}
     </>
   )
 }
 
 /**
- * At most five tags, then +N (FR-UI-014). The full list is in the hover lift, below the card (QA pass 3: it replaces
- * the old tag popover). Tags with a §6.5 query parameter (security, sentiment) are filter buttons.
+ * At most five tags, then +N (FR-UI-014). In the hover lift the same strip opens up to every tag, inside the card
+ * (F13; it replaces the old tag popover). Tags with a §6.5 query parameter (security, sentiment) are filter buttons.
  */
 function TagStrip({ tags, onFilter }: { tags: CardTag[]; onFilter: Filter }) {
   if (tags.length === 0) return <div className="card-tags" />

@@ -14,7 +14,7 @@ const SORTS = ['smart', 'newest', 'oldest', 'due', 'urgency', 'sender', 'confide
 const DENSITIES = ['compact', 'comfortable', 'spacious']
 const SIZES: WidgetSize[] = ['small', 'medium', 'large']
 // Order in the array is the order on the page (proposals §16.3): no positions.
-const WIDGET_KEYS = ['id', 'type', 'size', 'hidden', 'title', 'colour', 'icon', 'filter', 'sort', 'density']
+const WIDGET_KEYS = ['id', 'type', 'size', 'hidden', 'stacked', 'title', 'colour', 'icon', 'filter', 'sort', 'density']
 /** Caps (task 8 decision): Ctrl+1…9 reaches every page. */
 export const MAX_PAGES = 9
 export const MAX_WIDGETS = 24
@@ -42,6 +42,7 @@ function checkWidget(f: Fields, at: string, w: unknown, ids: Set<string>) {
   if (!TYPES.includes(w.type as WidgetType)) f.add(`${at}.type`, 'Unknown widget type')
   if (!SIZES.includes(w.size as WidgetSize)) f.add(`${at}.size`, 'Must be small, medium or large')
   if (typeof w.hidden !== 'boolean') f.add(`${at}.hidden`, 'Must be true or false')
+  if (typeof w.stacked !== 'boolean') f.add(`${at}.stacked`, 'Must be true or false')
   if (w.title !== null && !(typeof w.title === 'string' && w.title.trim().length >= 1 && w.title.length <= 60)) f.add(`${at}.title`, 'Must be 1–60 characters or null')
   if (w.colour !== null && !SWATCHES.includes(w.colour as string)) f.add(`${at}.colour`, `Must be one of ${SWATCHES.join(', ')} or null`)
   if (w.icon !== null && !isEmoji(w.icon)) f.add(`${at}.icon`, 'Must be one emoji or null')
@@ -71,6 +72,14 @@ function checkPages(f: Fields, pages: unknown) {
     if (!isInt(p.order, 0, MAX_PAGES - 1)) f.add(`${at}.order`, `Must be 0–${MAX_PAGES - 1}`)
     if (!Array.isArray(p.widgets) || p.widgets.length > MAX_WIDGETS) return f.add(`${at}.widgets`, `At most ${MAX_WIDGETS} widgets`)
     p.widgets.forEach((w, j) => checkWidget(f, `${at}.widgets.${j}`, w, ids))
+    // F18 stacks: a stacked widget follows an unstacked one of the same size (at most two per slot).
+    const ws = p.widgets as unknown[]
+    ws.forEach((w, j) => {
+      if (!isRecord(w) || w.stacked !== true) return
+      const prev = ws[j - 1]
+      if (!isRecord(prev) || prev.stacked !== false) f.add(`${at}.widgets.${j}.stacked`, 'A stacked widget must follow an unstacked one (at most two per slot)')
+      else if (prev.size !== w.size) f.add(`${at}.widgets.${j}.size`, 'A stacked widget has the size of the widget it shares a slot with')
+    })
   })
 }
 

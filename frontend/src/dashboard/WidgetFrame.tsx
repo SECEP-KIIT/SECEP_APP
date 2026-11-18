@@ -1,9 +1,9 @@
 import * as Popover from '@radix-ui/react-popover'
-import { Copy, Ellipsis, Maximize2, Pencil, Trash2 } from 'lucide-react'
+import { Copy, Ellipsis, Layers, Maximize2, Pencil, SquareSplitVertical, Trash2 } from 'lucide-react'
 import { useContext, useMemo, useRef, useState, type MouseEvent, type PointerEvent, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import type { LayoutDeviceClass, Widget, WidgetSize } from '../api/types'
-import { filterQuery, parseColumnQuery, sortKeyOf, type ColumnState } from '../inbox/cardModel'
+import { filterQuery, parseColumnQuery, QUICK_VIEWS, sortKeyOf, toggleFilter, type ColumnState } from '../inbox/cardModel'
 import { Column } from '../inbox/Column'
 import { PortalContainer } from '../inbox/portal'
 import { useDragHandle } from './dragHandle'
@@ -18,6 +18,9 @@ export interface WidgetActions {
   resize: (size: WidgetSize) => void
   duplicate: () => boolean
   remove: () => void
+  /** Desktop and tablet (F18): share the slot of the tile before, or leave a pair. Undefined when not possible. */
+  stack?: () => void
+  unstack?: () => void
 }
 
 /**
@@ -94,8 +97,7 @@ export function WidgetFrame({ widget, device, editing, actions }: { widget: Widg
       <WidgetMenu
         widget={widget}
         device={device}
-        open={menu}
-        onOpenChange={setMenu}
+        onClose={() => setMenu(false)}
         onRename={() => {
           setMenu(false)
           setRenaming(true)
@@ -105,7 +107,10 @@ export function WidgetFrame({ widget, device, editing, actions }: { widget: Widg
     </span>
   )
 
+  // F16: the menu opens beside the tile (anchored to it), never over its column.
   return (
+    <Popover.Root open={menu} onOpenChange={setMenu}>
+    <Popover.Anchor asChild>
     <div className="widget" data-swatch={widget.colour ?? undefined} data-editing={editing || undefined}>
       {widget.type === 'inbox_column' && stack ? (
         <PhoneSection widget={widget} heading={heading} tools={tools} />
@@ -123,6 +128,8 @@ export function WidgetFrame({ widget, device, editing, actions }: { widget: Widg
         </section>
       )}
     </div>
+    </Popover.Anchor>
+    </Popover.Root>
   )
 }
 
@@ -176,34 +183,56 @@ function RenameField({ initial, onDone }: { initial: string; onDone: (name: stri
   )
 }
 
-const SIZE_LABEL: Record<WidgetSize, string> = { small: 'Small (1 slot)', medium: 'Medium (2 slots)', large: 'Large (3 slots)' }
+// F17: sizes by width only; every tile is the full row height (half when stacked).
+const SIZE_LABEL: Record<WidgetSize, string> = { small: '1x', medium: '2x', large: '3x' }
+const SIZE_TITLE: Record<WidgetSize, string> = { small: 'One column wide', medium: 'Two columns wide', large: 'Three columns wide' }
 
-function WidgetMenu({ widget, device, open, onOpenChange, onRename, actions }: {
+function WidgetMenu({ widget, device, onClose, onRename, actions }: {
   widget: Widget
   device: LayoutDeviceClass
-  open: boolean
-  onOpenChange: (open: boolean) => void
+  onClose: () => void
   onRename: () => void
   actions: WidgetActions
 }) {
   const container = useContext(PortalContainer)
   const [note, setNote] = useState<string | null>(null)
-  const close = () => onOpenChange(false)
+  const swatch = SWATCHES.find((s) => s.key === widget.colour)
+  // The quick filters a tile has no room for (F16): toggling one changes this tile's saved filter.
+  const filters = widget.type === 'inbox_column' ? parseColumnQuery(widget.filter ?? '').filters : null
   return (
-    <Popover.Root open={open} onOpenChange={(o) => (setNote(null), onOpenChange(o))}>
+    <>
       <Popover.Trigger asChild>
         <button type="button" className="col-tool" title="Widget menu (or right-click the title)" aria-label={`${widgetTitle(widget)} widget menu`}>
           <Ellipsis size={16} aria-hidden="true" />
         </button>
       </Popover.Trigger>
       <Popover.Portal container={container}>
-        <Popover.Content className="menu widget-menu" side="bottom" align="end" sideOffset={6} collisionPadding={12}>
+        <Popover.Content className="menu widget-menu" side="right" align="start" sideOffset={8} collisionPadding={12} onCloseAutoFocus={() => setNote(null)}>
+          {filters && (
+            <fieldset className="menu-group">
+              <legend>Quick filters</legend>
+              <div className="quick-chips">
+                {QUICK_VIEWS.map((v) => (
+                  <button
+                    key={v.key}
+                    type="button"
+                    className="quick-chip"
+                    aria-pressed={filters.view.includes(v.key)}
+                    title={v.title}
+                    onClick={() => actions.patch({ filter: filterQuery(toggleFilter(filters, { group: 'view', value: v.key })) })}
+                  >
+                    {v.label}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+          )}
+
           <button type="button" className="menu-item" onClick={onRename}>
             <Pencil size={14} aria-hidden="true" /> Rename
           </button>
 
-          <fieldset className="menu-group">
-            <legend>Colour</legend>
+          <PickerRow label="Colour" current={<><span className="swatch-dot" data-swatch={widget.colour ?? 'none'} aria-hidden="true" />{swatch?.label ?? 'None'}</>}>
             <div className="swatches">
               <button type="button" className="swatch" data-swatch="none" aria-pressed={widget.colour === null} onClick={() => actions.patch({ colour: null })}>
                 <span className="swatch-dot" aria-hidden="true" />
@@ -216,10 +245,9 @@ function WidgetMenu({ widget, device, open, onOpenChange, onRename, actions }: {
                 </button>
               ))}
             </div>
-          </fieldset>
+          </PickerRow>
 
-          <fieldset className="menu-group">
-            <legend>Icon</legend>
+          <PickerRow label="Icon" current={<span className="picker-emoji">{widget.icon ?? '∅'}</span>}>
             <div className="icon-grid">
               <button type="button" className="icon-choice" aria-pressed={widget.icon === null} onClick={() => actions.patch({ icon: null })} aria-label="No icon">
                 ∅
@@ -230,20 +258,32 @@ function WidgetMenu({ widget, device, open, onOpenChange, onRename, actions }: {
                 </button>
               ))}
             </div>
-          </fieldset>
+          </PickerRow>
 
-          {/* Phones stack widgets as sections, so size applies to desktop and tablet only (proposals §16.3). */}
+          {/* Phones stack widgets as sections, so size and stacking apply to desktop and tablet only (proposals §16.3). */}
           {device !== 'phone' && (
-            <fieldset className="menu-group">
-              <legend>Size</legend>
-              <div className="size-choices">
-                {SIZES.map((s) => (
-                  <button key={s} type="button" className="size-choice" aria-pressed={widget.size === s} onClick={() => actions.resize(s)}>
-                    {SIZE_LABEL[s]}
-                  </button>
-                ))}
-              </div>
-            </fieldset>
+            <>
+              <fieldset className="menu-group">
+                <legend>Size</legend>
+                <div className="size-choices">
+                  {SIZES.map((s) => (
+                    <button key={s} type="button" className="size-choice" title={SIZE_TITLE[s]} aria-pressed={widget.size === s} onClick={() => actions.resize(s)}>
+                      {SIZE_LABEL[s]}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+              {actions.stack && (
+                <button type="button" className="menu-item" onClick={() => (onClose(), actions.stack?.())}>
+                  <Layers size={14} aria-hidden="true" /> Stack under the tile before
+                </button>
+              )}
+              {actions.unstack && (
+                <button type="button" className="menu-item" onClick={() => (onClose(), actions.unstack?.())}>
+                  <SquareSplitVertical size={14} aria-hidden="true" /> Unstack
+                </button>
+              )}
+            </>
           )}
           {note && (
             <p className="menu-note" role="status">
@@ -251,14 +291,37 @@ function WidgetMenu({ widget, device, open, onOpenChange, onRename, actions }: {
             </p>
           )}
 
-          <button type="button" className="menu-item" onClick={() => (actions.duplicate() ? close() : setNote('This page is full. Add a page first.'))}>
+          <button type="button" className="menu-item" onClick={() => (actions.duplicate() ? onClose() : setNote('This page is full. Add a page first.'))}>
             <Copy size={14} aria-hidden="true" /> Duplicate
           </button>
-          <button type="button" className="menu-item menu-item-danger" onClick={() => (close(), actions.remove())}>
+          <button type="button" className="menu-item menu-item-danger" onClick={() => (onClose(), actions.remove())}>
             <Trash2 size={14} aria-hidden="true" /> Remove
           </button>
         </Popover.Content>
       </Popover.Portal>
-    </Popover.Root>
+    </>
+  )
+}
+
+/** F16: the current choice in a small box with an edit icon; clicking it opens the options in their own picker. */
+function PickerRow({ label, current, children }: { label: string; current: ReactNode; children: ReactNode }) {
+  const container = useContext(PortalContainer)
+  return (
+    <div className="picker-row">
+      <span className="picker-label">{label}</span>
+      <Popover.Root>
+        <Popover.Trigger asChild>
+          <button type="button" className="picker-current" aria-label={`Change ${label.toLowerCase()}`}>
+            {current}
+            <Pencil size={12} aria-hidden="true" />
+          </button>
+        </Popover.Trigger>
+        <Popover.Portal container={container}>
+          <Popover.Content className="menu picker-menu" side="right" align="start" sideOffset={8} collisionPadding={12} aria-label={label}>
+            {children}
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover.Root>
+    </div>
   )
 }

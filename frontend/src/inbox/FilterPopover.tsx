@@ -37,7 +37,8 @@ export function FilterPopover({ filters, onChange, summary }: { filters: ColumnF
         <Popover.Content className="menu filter-popover" side="bottom" align="end" sideOffset={6} collisionPadding={12} aria-label="Filters">
           {/* F8: Clear all sits at the top, reachable without scrolling the popover. */}
           <div className="filter-head">
-            <span className="filter-head-title">{count > 0 ? `Filters · ${count} active` : 'Filters'}</span>
+            {/* F16: on a tile, say whose filter this is (it's saved with the tile). */}
+            <span className="filter-head-title">{(summary ? "This tile's filter" : 'Filters') + (count > 0 ? ` · ${count} active` : '')}</span>
             <button type="button" className="text-button" disabled={count === 0} onClick={() => onChange(NO_FILTERS)}>
               Clear all
             </button>

@@ -327,6 +327,11 @@ export interface Widget {
   size: WidgetSize
   /** Phone only (a section toggled off in the edit sheet); desktop and tablet ignore it. */
   hidden: boolean
+  /**
+   * PROPOSED (F18, proposals §17): shares the slot of the widget before it, the two at half height each. At most two
+   * per slot, and a stacked widget has its base's size. Phones ignore it (sections in order).
+   */
+  stacked: boolean
   /** null = the type's default title. */
   title: string | null
   colour: Swatch | null

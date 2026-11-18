@@ -376,3 +376,18 @@ Decided after the browser pass on QA pass 2, read-marking and tasks 8a–8c. Eac
    - **Contrast:** all text meets AA, and marks, edges and focus are at least 3:1. The ratios are recorded in `tokens.css`, including the urgency marks, the security and due tags, and sentiment.
    - **Where to choose it:** in the avatar menu (desktop and tablet) and on the More page (phone) until the Settings page (task 16).
    - New text for v1.3, next to FR-UI-032 (motion): "The user can choose a Light, Dark or Auto (system) theme; the choice is stored in ui_prefs.theme and applied on every device."
+
+## 17. QA pass 4 (18 Nov 2026): changes for v1.3
+
+Scope note: phone work moves to **Version 2** (next semester), together with the Future items. F12 (phone back navigation) is deferred there.
+
+1. **Widget sizes are 1x, 2x and 3x** (F17). Labels only: the wire values stay `small | medium | large` (one, two or three slots wide). Every tile is the full row height, or half of it when stacked.
+2. **Stacked widgets** (F18). `Widget` gains **`stacked: boolean`** (required):
+   - `true` means the widget shares the slot of the widget before it, the two at **equal half height**.
+   - At most two per slot: a stacked widget must follow an unstacked one, and it has that widget's `size`. `PUT /layouts/:deviceClass` returns **422** otherwise (`…stacked` or `…size`).
+   - A pair moves, resizes and duplicates as one slot. Removing either gives the other the full slot back.
+   - Desktop: dropping a tile on the **lower half** of a tile that's alone in its slot stacks it there. The widget menu also has "Stack under the tile before" and "Unstack", for the keyboard.
+   - Phones ignore `stacked` and show the widgets as sections in order.
+   - **Migration** (`user_layouts.pages` jsonb, M6; mock store schema 5 → 6): add `stacked: false` to every saved widget. No table change; `001_init.sql` is unaffected.
+3. **Hover lift** (F13, F14): the copy's own tag strip opens to every tag inside the card, instead of a separate tag box. Jira, Calendar and Done are solid accent buttons. No wire change.
+4. **Tile header on two lines** (F15), and the **widget menu** opens beside the tile (F16). The menu holds the tile's quick filters, and the colour and icon pickers show only the current choice until opened. The filter popover on a tile is headed "This tile's filter". No wire change.

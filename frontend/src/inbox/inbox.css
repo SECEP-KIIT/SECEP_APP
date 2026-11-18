@@ -46,12 +46,17 @@
   font-size: 0.8125rem;
   font-variant-numeric: tabular-nums;
 }
+.col-title-end {
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+  flex: none;
+}
 .col-tools {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-1);
-  margin-left: auto;
   min-width: 0;
 }
 .col-tool,
@@ -828,18 +833,10 @@ html[data-motion='reduced'] .lift-card,
 html[data-motion='off'] .lift-card {
   transform: none;
 }
-.lift-bar,
-.lift-tags {
-  position: absolute;
-  pointer-events: auto;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--card-bg);
-  box-shadow: 0 6px 18px rgb(20 24 38 / 0.16);
-}
 .lift-bar {
+  position: absolute;
   right: 0;
-  padding: 2px;
+  pointer-events: auto;
 }
 .lift-bar[data-place='above'] {
   bottom: calc(100% + 4px);
@@ -847,19 +844,47 @@ html[data-motion='off'] .lift-card {
 .lift-bar[data-place='below'] {
   top: calc(100% + 4px);
 }
+/* F13: the copy is the card itself with its tag strip opened to every tag, growing down over the cards below. */
+.lift-card.card {
+  height: auto;
+  grid-template-rows: 20px 20px 20px auto;
+}
+.lift-card.card[data-density='compact'] {
+  grid-template-rows: 20px 20px auto;
+}
+.lift-body {
+  display: contents;
+}
 .lift-tags {
-  left: 0;
-  display: flex;
+  grid-column: 1 / -1;
   flex-wrap: wrap;
-  gap: var(--space-1);
-  max-width: 100%;
   margin: 0;
-  padding: var(--space-2);
-  list-style: none;
+  pointer-events: auto;
 }
 .lift-bar .card-actions {
   display: flex;
-  gap: 2px;
+  gap: 4px;
+}
+/* F14: solid accent buttons, so the actions stand out from whatever card sits behind them (light and dark). */
+.lift-bar .card-action {
+  height: 28px;
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 4px 12px rgb(20 24 38 / 0.25);
+}
+.lift-bar .card-action:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 82%, #000);
+}
+.lift-bar .card-action:disabled {
+  opacity: 0.6;
+}
+.lift-bar .card-action:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.lift-bar .card-action-done {
+  background: var(--tag-ok-bg);
+  color: var(--tag-ok-fg);
 }
 .card-action {
   display: inline-flex;

@@ -141,38 +141,39 @@ export function Column({ title, state, onStateChange, initial, heading, tools, v
             {loadedCount}
             <span className="sr-only">{more ? ' emails loaded, more below' : ' emails'}</span>
           </span>
-          <div className="col-tools">
-            <FilterPopover filters={filters} onChange={setFilters} summary={tile ? filterSummary(filters) : undefined} />
-            <label className="col-select" title="Sort" data-set={sort !== 'newest' || undefined}>
-              <ArrowDownUp size={16} aria-hidden="true" />
-              <span className="col-tool-dot" aria-hidden="true" />
-              <span className="sr-only">Sort</span>
-              <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)}>
-                {SORTS.map((s) => (
-                  <option key={s.key} value={s.key}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="col-select" title="Density" data-set={density !== 'comfortable' || undefined}>
-              <Rows3 size={16} aria-hidden="true" />
-              <span className="col-tool-dot" aria-hidden="true" />
-              <span className="sr-only">Density</span>
-              <select value={density} onChange={(e) => setDensity(e.target.value as Density)}>
-                {DENSITIES.map((d) => (
-                  <option key={d.key} value={d.key}>
-                    {d.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button type="button" className="col-tool" onClick={showLegend} title="Card symbols (?)" aria-keyshortcuts="?">
-              <CircleHelp size={16} aria-hidden="true" />
-              <span className="sr-only">Card symbols</span>
-            </button>
-          </div>
-          {tools}
+          {tools && <span className="col-title-end">{tools}</span>}
+        </div>
+        {/* F15: the filter, sort and density controls get their own line, so neither line is squeezed. */}
+        <div className="col-tools">
+          <FilterPopover filters={filters} onChange={setFilters} summary={tile ? filterSummary(filters) : undefined} />
+          <label className="col-select" title="Sort" data-set={sort !== 'newest' || undefined}>
+            <ArrowDownUp size={16} aria-hidden="true" />
+            <span className="col-tool-dot" aria-hidden="true" />
+            <span className="sr-only">Sort</span>
+            <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)}>
+              {SORTS.map((s) => (
+                <option key={s.key} value={s.key}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="col-select" title="Density" data-set={density !== 'comfortable' || undefined}>
+            <Rows3 size={16} aria-hidden="true" />
+            <span className="col-tool-dot" aria-hidden="true" />
+            <span className="sr-only">Density</span>
+            <select value={density} onChange={(e) => setDensity(e.target.value as Density)}>
+              {DENSITIES.map((d) => (
+                <option key={d.key} value={d.key}>
+                  {d.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="button" className="col-tool" onClick={showLegend} title="Card symbols (?)" aria-keyshortcuts="?">
+            <CircleHelp size={16} aria-hidden="true" />
+            <span className="sr-only">Card symbols</span>
+          </button>
         </div>
         <UrgencyBar split={split} total={items.length} />
         {focused && <p className="col-note">Focus mode: Critical and High only</p>}
