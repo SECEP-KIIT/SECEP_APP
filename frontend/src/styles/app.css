@@ -198,6 +198,80 @@ html[data-settled] .topbar {
 .user-menu-who span {
   color: var(--ink-muted);
 }
+.user-menu-signout {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 32px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.8125rem;
+}
+.user-menu-signout:hover {
+  background: var(--tag-muted-bg);
+}
+.user-menu-signout:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+/* Sign-in screen (F5): a card on the wallpaper, no shell behind it. */
+.signin {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+}
+.signin-card {
+  display: grid;
+  gap: var(--space-3);
+  width: min(380px, 100%);
+  padding: 32px 28px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--card-bg);
+  color: var(--ink);
+  box-shadow: 0 20px 48px rgb(20 24 38 / 0.22);
+  text-align: center;
+}
+.signin-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.signin-sub,
+.signin-note {
+  color: var(--ink-muted);
+  font-size: 0.875rem;
+}
+.signin-note {
+  font-size: 0.75rem;
+}
+.signin-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: 44px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-weight: 650;
+}
+.signin-button:disabled {
+  opacity: 0.7;
+}
+.signin-button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
 /* Light / Dark / Auto: a row of radios; the chosen one is filled and bold, with its icon (not colour alone). */
 .theme-choice {
   display: grid;

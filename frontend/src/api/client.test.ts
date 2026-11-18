@@ -23,6 +23,23 @@ const auth = (init: RequestInit) => new Headers(init.headers).get('Authorization
 beforeEach(() => vi.useRealTimers())
 afterEach(() => vi.unstubAllGlobals())
 
+describe('session end (F5)', () => {
+  it('a failed refresh marks the app signed out; so does signOutNow, which also calls /auth/logout', async () => {
+    const { api } = await setup((url) => (url.endsWith('/auth/refresh') ? new Response(null, { status: 401 }) : unauthenticated()))
+    const session = await import('./session')
+    expect(session.isSignedOut()).toBe(false)
+    await expect(api('/me')).rejects.toMatchObject({ status: 401 })
+    expect(session.isSignedOut()).toBe(true)
+
+    const second = await setup(() => new Response(null, { status: 204 }))
+    const s2 = await import('./session')
+    expect(s2.isSignedOut()).toBe(false)
+    await second.signOutNow()
+    expect(second.calls('/auth/logout')).toHaveLength(1)
+    expect(s2.isSignedOut()).toBe(true)
+  })
+})
+
 describe('api()', () => {
   it('shares one refresh between concurrent 401s, then retries each request once', async () => {
     const { api, calls } = await setup(async (url, init) => {
