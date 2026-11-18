@@ -12,3 +12,5 @@ venv/
 .vscode/
 *.log
 .claude/settings.local.json
+# M6 uploads (FILES_DIR default)
+backend/data/
