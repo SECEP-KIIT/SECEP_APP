@@ -3,10 +3,10 @@ import { useEffect, useRef, useState, type FocusEvent, type PointerEvent } from 
 import { createPortal } from 'react-dom'
 import { NavLink } from 'react-router'
 import { signOutNow } from '../api/client'
-import { useGlance, useMe, useProjects, useUpdatePreferences } from '../api/queries'
+import { useGlance, useMe, useUpdatePreferences } from '../api/queries'
 import { isAdmin, visibleNav } from './nav'
 import { usePrefs } from './prefs'
-import { ProgressRing } from './ProgressRing'
+import { SidebarProjects } from './SidebarProjects'
 import { ThemeChoice } from './ThemeChoice'
 
 const PEEK_INTENT_MS = 150
@@ -138,14 +138,12 @@ function UserMenu({ name, email }: { name: string; email: string | undefined }) 
 export function Sidebar() {
   const { data: me } = useMe()
   const { data: glance } = useGlance()
-  const { data: projects } = useProjects()
   const { sidebar_collapsed: collapsed } = usePrefs()
   const updatePrefs = useUpdatePreferences()
   const { peek, handlers } = usePeek(collapsed)
   const critical = glance?.counts.critical_unread ?? 0
   const pulse = useCriticalGlow(critical)
   const name = me?.display_name ?? me?.email
-  const active = (projects?.items ?? []).filter((p) => !p.archived_at)
 
   return (
     <nav
@@ -184,25 +182,7 @@ export function Sidebar() {
           })}
         </ul>
 
-        {active.length > 0 && (
-          <section className="nav-projects" aria-labelledby="nav-projects-title">
-            <h2 id="nav-projects-title" className="nav-heading">
-              <span className="nav-label">Projects</span>
-            </h2>
-            <ul className="nav">
-              {active.map((p) => (
-                <li key={p.id}>
-                  <NavLink to={`/projects/${p.id}`} className="nav-link">
-                    <span className="nav-icon">
-                      <ProgressRing done={p.progress.done} total={p.progress.total} colour={p.colour} />
-                    </span>
-                    <span className="nav-label">{p.name}</span>
-                  </NavLink>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
+        <SidebarProjects />
 
         <ul className="nav nav-bottom">
           {name && <UserMenu name={name} email={me?.email} />}

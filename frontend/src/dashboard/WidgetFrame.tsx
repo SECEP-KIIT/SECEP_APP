@@ -1,4 +1,5 @@
 import * as Popover from '@radix-ui/react-popover'
+import { Board } from '../board/Board'
 import { Copy, Ellipsis, Layers, Maximize2, Pencil, SquareSplitVertical, Trash2 } from 'lucide-react'
 import { useContext, useMemo, useRef, useState, type MouseEvent, type PointerEvent, type ReactNode } from 'react'
 import { Link } from 'react-router'
@@ -88,8 +89,8 @@ export function WidgetFrame({ widget, device, editing, actions }: { widget: Widg
 
   const tools = (
     <span className="widget-tools">
-      {widget.type === 'inbox_column' && !stack && (
-        <Link className="col-tool" to={fullViewHref(widget)} title="Open as full view">
+      {(widget.type === 'inbox_column' || widget.type === 'board') && !stack && (
+        <Link className="col-tool" to={widget.type === 'board' ? '/board' : fullViewHref(widget)} title="Open as full view">
           <Maximize2 size={15} aria-hidden="true" />
           <span className="sr-only">Open {title} as full view</span>
         </Link>
@@ -116,6 +117,18 @@ export function WidgetFrame({ widget, device, editing, actions }: { widget: Widg
         <PhoneSection widget={widget} heading={heading} tools={tools} />
       ) : widget.type === 'inbox_column' ? (
         <ColumnWidget widget={widget} title={title} heading={heading} tools={tools} onChange={actions.patch} locked={editing} />
+      ) : widget.type === 'board' ? (
+        <section className="column board-widget" aria-labelledby={`w-${widget.id}`}>
+          <header className="col-head">
+            <div className="col-title-row">
+              {heading(`w-${widget.id}`)}
+              {tools}
+            </div>
+          </header>
+          <div className="col-body" ref={(n) => n && (n.inert = editing)}>
+            <Board variant="tile" label={title} />
+          </div>
+        </section>
       ) : (
         <section className="column widget-placeholder" aria-label={title}>
           <header className="col-head">

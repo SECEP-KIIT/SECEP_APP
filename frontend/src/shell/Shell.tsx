@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Outlet, useNavigate } from 'react-router'
 import { onGoTo } from '../lib/navigate'
+import { shellToast } from '../lib/toastBus'
+import { onProjectDialog } from '../projects/dialogBus'
 import { useSignedOut } from '../api/session'
 import { SignIn } from './SignIn'
 import { FocusContext, useFocusMode } from './focusMode'
@@ -52,9 +54,23 @@ function SignedInShell() {
         <TabBar />
       </div>
       <LockSlots />
+      <ProjectDialogSlot />
       <p className="sr-only" aria-live="polite">
         {announcement}
       </p>
     </FocusContext.Provider>
   )
+}
+
+// The project dialog (FR-UI-016) is its own chunk, fetched on the first "New project" or "Edit" (NFR-PERF-010).
+const ProjectDialogHost = lazy(() => import('../projects/ProjectDialog').then((m) => ({ default: m.ProjectDialogHost })))
+
+function ProjectDialogSlot() {
+  const [wanted, setWanted] = useState(false)
+  useEffect(() => onProjectDialog(() => setWanted(true)), [])
+  return wanted ? (
+    <Suspense fallback={null}>
+      <ProjectDialogHost onToast={(m) => shellToast(m)} />
+    </Suspense>
+  ) : null
 }

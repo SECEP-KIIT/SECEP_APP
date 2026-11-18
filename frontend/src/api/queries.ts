@@ -275,7 +275,12 @@ export const boardOptions = (project?: string) =>
     staleTime: 30_000,
   })
 
-/** PATCH /actions/:id {board_column, board_position} (FR-ORC-007): a move on the board, applied to the cache first. */
+/**
+ * PATCH /actions/:id {board_column, board_position} (FR-ORC-007): a move on the board, applied to every cached board
+ * first. `position` is the card's index among the other cards of that column, over all the user's cards (positions
+ * are dense per user, so a project's board computes it with boardPosition). Every board then reloads, so a
+ * project's board and the full board agree on the order.
+ */
 export async function moveCard(action: Action, column: BoardColumn, position: number) {
   const before = queryClient.getQueriesData<Page<Action>>({ queryKey: ['actions', 'board'] })
   for (const [key, data] of before) if (data) queryClient.setQueryData(key, { ...data, items: placeCard(data.items, action.id, column, position) })
@@ -286,7 +291,9 @@ export async function moveCard(action: Action, column: BoardColumn, position: nu
       body: JSON.stringify({ board_column: column, board_position: position }),
     })
     patchActionCache(queryClient, updated)
+    void queryClient.invalidateQueries({ queryKey: ['actions', 'board'] })
     void queryClient.invalidateQueries({ queryKey: ['projects'] })
+    void queryClient.invalidateQueries({ queryKey: ['project'] })
     void queryClient.invalidateQueries({ queryKey: ['glance'] })
     return updated
   } catch (err) {
@@ -295,19 +302,35 @@ export async function moveCard(action: Action, column: BoardColumn, position: nu
   }
 }
 
-/** A board after moving one card: it goes to `position` in `column`, and both columns are renumbered. Pure. */
+/**
+ * The server position for a card dropped in `column` just before `next` (or at the end, after `last`), from those
+ * cards' own board_position. Works on a board that shows only some of the user's cards (a project's board).
+ */
+export function boardPosition(card: Pick<Action, 'board_column' | 'board_position'>, column: BoardColumn, next: Action | null, last: Action | null): number {
+  const self = card.board_column === column ? (card.board_position ?? Infinity) : Infinity
+  if (next) return Math.max(0, (next.board_position ?? 0) - (self < (next.board_position ?? 0) ? 1 : 0))
+  if (last) return Math.max(0, (last.board_position ?? 0) + 1 - (self <= (last.board_position ?? 0) ? 1 : 0))
+  return 0
+}
+
+/**
+ * A board after moving one card to `position` in `column`, with the server's own arithmetic per card (M6 boardMove):
+ * the column it left closes the gap, the column it joins makes room. Exact on a board showing only some of the
+ * user's cards too (a project's), because positions are the user's global ones. Pure.
+ */
 export function placeCard(items: readonly Action[], id: string, column: BoardColumn, position: number): Action[] {
   const card = items.find((a) => a.id === id)
   if (!card) return [...items]
-  const byPos = (a: Action, b: Action) => (a.board_position ?? 0) - (b.board_position ?? 0)
-  const target = items.filter((a) => a.board_column === column && a.id !== id).sort(byPos)
-  target.splice(Math.max(0, Math.min(position, target.length)), 0, { ...card, board_column: column })
-  const placed = new Map(target.map((a, i) => [a.id, { ...a, board_position: i }]))
   const from = card.board_column
-  if (from && from !== column) {
-    items.filter((a) => a.board_column === from && a.id !== id).sort(byPos).forEach((a, i) => placed.set(a.id, { ...a, board_position: i }))
-  }
-  return items.map((a) => placed.get(a.id) ?? a)
+  const self = card.board_position ?? Infinity
+  return items.map((a) => {
+    if (a.id === id) return { ...a, board_column: column, board_position: position }
+    if (a.board_column === null || a.board_position === null) return a
+    // Rank among the others once the card has left its old place.
+    const rank = a.board_column === from && a.board_position > self ? a.board_position - 1 : a.board_position
+    if (a.board_column === column) return { ...a, board_position: rank >= position ? rank + 1 : rank }
+    return rank === a.board_position ? a : { ...a, board_position: rank }
+  })
 }
 
 /** PATCH /me/preferences, optimistic: the UI follows the click at once and rolls back if the server refuses. */
