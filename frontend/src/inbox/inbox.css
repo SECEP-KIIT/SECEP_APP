@@ -1169,3 +1169,38 @@ html[data-motion='off'] .card[data-leaving] {
   margin-left: auto;
   color: var(--accent);
 }
+
+/* Snooze picker and the "Snoozed · n" divider (FR-REM-002, task 13). */
+.snooze-pick {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-2);
+}
+.snooze-pick-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.snooze-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+  padding: 0 var(--space-3);
+  border: 0;
+  background: none;
+  color: var(--ink-muted, inherit);
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+.snooze-divider::after {
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+  content: '';
+}
+.col-row[data-snoozed] .card {
+  opacity: 0.55;
+}

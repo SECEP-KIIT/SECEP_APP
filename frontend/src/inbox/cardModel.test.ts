@@ -70,9 +70,10 @@ describe('card tags (item 4, FR-UI-013/014)', () => {
     expect(cardTags(email({ proposed_action_count: 2 }), NOW)[0]).toMatchObject({ kind: 'action', text: '2', label: '2 proposed actions' })
   })
 
-  it('snoozed only while the snooze is in the future', () => {
-    expect(cardTags(email({ snoozed_until: '2026-11-05T09:00:00Z' }), NOW).map((t) => t.kind)).toEqual(['snoozed'])
-    expect(cardTags(email({ snoozed_until: '2026-11-03T09:00:00Z' }), NOW)).toEqual([])
+  it('snoozed while the snooze is in the future; ⏰ "back" once it has passed, until the email is read', () => {
+    expect(cardTags(email({ snoozed_until: '2026-11-05T09:00:00Z' }), NOW).map((t) => t.label)).toEqual([expect.stringMatching(/^Snoozed until/)])
+    expect(cardTags(email({ snoozed_until: '2026-11-03T09:00:00Z' }), NOW).map((t) => t.label)).toEqual(['Back from snooze'])
+    expect(cardTags(email({ snoozed_until: '2026-11-03T09:00:00Z', read: true }), NOW)).toEqual([])
   })
 
   it('at most five, then +N (four tags + the +N keep the strip at five)', () => {

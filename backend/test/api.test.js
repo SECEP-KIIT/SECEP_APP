@@ -269,6 +269,23 @@ describe('M6 API', { skip: !reachable && 'no test database' }, () => {
     assert.equal((await api(`/files/${png.id}`)).status, 404);
   });
 
+  test('notifications: read some by id, then all; ids must be UUIDs', async () => {
+    const { pool } = await import('../src/services/db.js');
+    const { rows: [u] } = await pool.query("SELECT id FROM users WHERE email = 'demo@northwind.example'");
+    const ids = [];
+    for (const title of ['a', 'b', 'c']) {
+      const { rows: [n] } = await pool.query("INSERT INTO notifications (user_id, kind, payload) VALUES ($1, 'reminder', $2) RETURNING id", [u.id, { title }]);
+      ids.push(String(n.id));
+    }
+    const unread = async () => (await api('/notifications')).body.items.filter((n) => ids.includes(n.id) && n.read_at === null).map((n) => n.id);
+    assert.deepEqual((await unread()).sort(), [...ids].sort());
+    assert.equal((await api('/notifications/read', { method: 'POST', body: JSON.stringify({ ids: [ids[0]] }) })).status, 204);
+    assert.deepEqual((await unread()).sort(), [ids[1], ids[2]].sort());
+    assert.equal((await api('/notifications/read', { method: 'POST', body: JSON.stringify({ ids: ['x'] }) })).status, 422);
+    assert.equal((await api('/notifications/read', { method: 'POST', body: JSON.stringify({}) })).status, 204);
+    assert.deepEqual(await unread(), []);
+  });
+
   test('files: an email is a target too; someone else\'s email is a 404', async () => {
     const email = (await api('/emails?limit=1')).body.items[0];
     const send = (target) => {

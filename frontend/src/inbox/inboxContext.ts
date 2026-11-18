@@ -28,13 +28,15 @@ export interface InboxApi {
   toast: (message: string, tone?: Toast['tone'], action?: ToastAction, extra?: ToastAction) => void
   /** The project picker (FR-UI-017), one per page, for these emails at a point on screen. */
   pickProject: (ids: readonly string[], x: number, y: number) => void
+  /** Snooze / "Remind me" picker (FR-REM-002). */
+  pickSnooze: (ids: readonly string[], x: number, y: number) => void
   /** The `?` legend (FR-UI-014), one per page however many columns it has. */
   showLegend: () => void
   /** The card right-click menu (FR-UI-028), one per page, at a point on screen. */
   menu: (email: EmailListItem, x: number, y: number) => void
 }
 
-export const InboxContext = createContext<InboxApi>({ open: () => {}, toast: () => {}, showLegend: () => {}, menu: () => {}, pickProject: () => {} })
+export const InboxContext = createContext<InboxApi>({ open: () => {}, toast: () => {}, showLegend: () => {}, menu: () => {}, pickProject: () => {}, pickSnooze: () => {} })
 export const useInbox = () => useContext(InboxContext)
 
 const TOAST_MS = 5_000

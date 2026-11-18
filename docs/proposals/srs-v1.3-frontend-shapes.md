@@ -431,3 +431,18 @@ The §6.6 tables (`actions` with `origin = user`, `notes`, `files`, `masked_secr
    - **Preview (FR-CNT-008):** the client fetches with the bearer token and shows a blob URL: images in an `<img>`, PDFs in the browser's own PDF viewer inside an iframe (that viewer runs in the browser's sandboxed process; a `sandbox` attribute would stop it rendering at all). HTML, SVG and everything else only download.
    - The mock keeps uploaded bytes in memory, so they last until a reload.
    - Pasting or dropping a file on the dashboard creates a user card titled with the file name and attaches the file (FR-UI-030).
+
+## 20. Task 12 follow-up and task 13 (19 Nov 2026): notes without masking, email files, reminders (PROPOSED for v1.3)
+
+**Changes to §19 (decided by Sky, 19 Nov, after browser testing):**
+
+1. **Notes are not masked.** A note is the user's own jotting; masking made a typed password unrecoverable. `POST/PATCH /notes` store the body as typed. This replaces the masking rule in §19.2: FR-CNT-005 and the §6.5 row "Notes CRUD (masked on save)" should read "stored as typed". No `masked_secrets` rows are written for notes, so the §19 request to Ampa (nullable `value_enc`) now concerns emails only. The M6 mask copy (`backend/src/services/mask.js`) is removed. The rule still holds for email bodies: the site never handles credential values.
+2. **Files can hang on an email.** `target_type` of `POST /files` and `GET /files` is `email | card | project`. The schema (§6.6 `files.target_type`) already allows `email`; only the route list in §19.3 said card and project. Same checks: the email must be the caller's own (404 otherwise), 25 MB a file, quota.
+3. **No note template.** FR-CNT-004 (a Meeting email's note starts with attendees and agenda) is dropped for now. A note is free text; attachments sit beside it. The project page shows notes and files as pills in one box.
+
+**New for task 13 (reminders and notifications):**
+
+4. `POST /notifications/read` (§6.5 names it): body `{ ids?: string[] }`. With `ids`, those notifications become read; without, every unread one. Response `204`. Ids that belong to someone else are ignored. Ids are UUID strings in the schema (`notifications.id` is `uuid` in `001_init.sql`), so the earlier bigserial concern in §3 is resolved on the database side; the mock still sends decimal strings.
+5. **Snooze** reuses `PATCH /emails/:id { snoozed_until }` (§6.5 v1.1). A snoozed email sinks below a "Snoozed · n" divider in its column and returns with ⏰ until opened. **Not built:** snoozing board cards. `actions` has no snooze column; adding `actions.snoozed_until` and `PATCH /actions/:id { snoozed_until }` is the suggested change if cards should snooze too (FR-REM-002 says "card").
+6. **Automatic reminders (FR-REM-001):** 21:00 the day before, 09:00 on the due day, 1 h before when a time is set, 24 h before for Critical; reminders within 30 min merge into the later one. Each fires once as a `notification.new` event (`kind: "reminder"`, `title: "Reminder due"`, `body` = the item's title, `target` = the email or card), which the client shows as a toast and in the bell. The mock runs this every 15 s from due dates (emails and open user cards) and remembers what fired. **M6 does not yet:** it needs the `reminders` table, the 15 s tick, exactly-once firing, and the Redis index (FR-REM-003).
+7. **Deferred (flashy, on hold for time):** Web Push and `POST /push/subscriptions` (FR-REM-004 push part), daily digest (FR-REM-005), Meeting mode and the "Now:" strip (FR-REM-006), pop-up rules per Normal / Focus / Quiet (FR-REM-007, with the settings task 16), manual `GET/POST /reminders` and the "Remind me" on cards.

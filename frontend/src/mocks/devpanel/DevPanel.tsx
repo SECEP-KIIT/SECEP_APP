@@ -7,6 +7,7 @@ import type { Me, PreferencesResponse, UiPrefs } from '../../api/types'
 import { tabs } from '../browser'
 import { control, setControl, type JiraMode } from '../control'
 import { runDemo, sendOne } from '../pipeline'
+import { fireReminderNow } from '../reminders'
 import { currentSession, signIn, signOut } from '../session'
 import { db, resetStore } from '../store/db'
 
@@ -59,6 +60,7 @@ export function DevPanel() {
       <div style={row}>
         <button style={btn} onClick={sendOne}>Send one email</button>
         <button style={btn} onClick={runDemo}>Run §7.2 demo</button>
+        <button style={btn} onClick={() => session && fireReminderNow(session.user_id)}>Fire a reminder</button>
       </div>
       <div style={row}>
         Incoming:
