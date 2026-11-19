@@ -727,3 +727,47 @@ describe('notes (FR-CNT-003/005, proposals §19.2)', () => {
     expect((await call('GET', `/emails/${email.id}`, { token: t })).json!.note_count).toBe(0)
   })
 })
+
+describe('files (FR-CNT-006/007/008, proposals §19.3)', () => {
+  it('uploads to a card, lists, serves safe headers, previews only images/PDFs, guards ownership, streams attachments', async () => {
+    const t = await login('demo')
+    const card = (await call('POST', '/actions', { token: t, body: { type: 'add_board_card', payload: { title: 'Files' } } })).json!
+    const upload = (token: string, name: string, type: string, bytes: number | string = 'hello', target = card.id as string) => {
+      const form = new FormData()
+      form.append('target_type', 'card')
+      form.append('target_id', target)
+      form.append('file', new File([typeof bytes === 'number' ? new Uint8Array(bytes) : bytes], name, { type }))
+      return fetch('http://localhost/api/v1/files', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form })
+    }
+    const res = await upload(t, '../../etc/notes.html', 'text/html', '<script>alert(1)</script>')
+    expect(res.status).toBe(201)
+    const ref = (await res.json()) as Json
+    expect(Object.keys(ref).sort()).toEqual(['created_at', 'filename', 'id', 'mime', 'size', 'target_id', 'target_type'])
+    expect(ref.filename).toBe('notes.html')
+
+    const list = (await call('GET', `/files?target_type=card&target_id=${card.id}`, { token: t })).json!.items as Json[]
+    expect(list.map((f) => f.id)).toEqual([ref.id])
+
+    const auth = { Authorization: `Bearer ${t}` }
+    for (const q of ['', '?inline=1']) {
+      const got = await fetch(`http://localhost/api/v1/files/${ref.id}${q}`, { headers: auth })
+      expect(got.headers.get('content-disposition')).toMatch(/^attachment;/) // HTML never inline
+      expect(got.headers.get('x-content-type-options')).toBe('nosniff')
+      expect(got.headers.get('content-security-policy')).toMatch(/sandbox/)
+    }
+    const png = (await (await upload(t, 'a.png', 'image/png')).json()) as Json
+    expect((await fetch(`http://localhost/api/v1/files/${png.id}?inline=1`, { headers: auth })).headers.get('content-disposition')).toMatch(/^inline;/)
+
+    expect((await upload(t, 'big.bin', 'application/octet-stream', 25 * 1024 * 1024 + 1)).status).toBe(413)
+    const sam = await login('sam')
+    expect((await upload(sam, 'x.txt', 'text/plain')).status).toBe(404)
+    expect((await call('DELETE', `/files/${ref.id}`, { token: sam })).status).toBe(404)
+    expect((await call('DELETE', `/files/${ref.id}`, { token: t })).status).toBe(204)
+
+    const withAttachment = [...db.emails.values()].find((e) => e.user_id === db.users[0].id && e.attachments.length)!
+    const att = await fetch(`http://localhost/api/v1/emails/${withAttachment.id}/attachments/0`, { headers: auth })
+    expect(att.status).toBe(200)
+    expect(att.headers.get('content-disposition')).toMatch(/^attachment;/)
+    expect((await fetch(`http://localhost/api/v1/emails/${withAttachment.id}/attachments/99`, { headers: auth })).status).toBe(404)
+  })
+})

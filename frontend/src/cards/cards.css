@@ -237,3 +237,13 @@
   display: flex;
   justify-content: flex-end;
 }
+/* Icon buttons here sit on the card surface, not the frosted bars. */
+.card-sheet .icon-button {
+  width: 28px;
+  height: 28px;
+  color: var(--ink-muted);
+}
+.card-sheet .icon-button:hover:not(:disabled) {
+  background: var(--tag-muted-bg);
+  color: var(--ink);
+}

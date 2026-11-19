@@ -10,6 +10,7 @@ process.env.DATABASE_URL = DB;
 process.env.JWT_SECRET ||= 'test-jwt-secret-test-jwt-secret-test';
 process.env.MASTER_KEY ||= '0'.repeat(64);
 process.env.DEV_LOGIN = '1';
+process.env.FILES_DIR = (await import('node:fs')).mkdtempSync((await import('node:path')).join((await import('node:os')).tmpdir(), 'secep-files-'));
 
 const probe = new pg.Client({ connectionString: DB });
 const reachable = await probe.connect().then(() => true, () => false);
@@ -232,6 +233,44 @@ describe('M6 API', { skip: !reachable && 'no test database' }, () => {
     assert.equal((await api(`/notes/${made.body.id}`, { method: 'DELETE' })).status, 204);
     assert.equal((await api(`/emails/${email.id}`)).body.note_count, 0);
     assert.equal((await api(`/notes/${made.body.id}`, { method: 'DELETE' })).status, 404);
+  });
+
+  test('files: upload to a card (name cleaned, hashed), safe headers, inline only for images/PDFs, 413/404/422, delete', async () => {
+    const card = (await api('/actions', { method: 'POST', body: JSON.stringify({ type: 'add_board_card', payload: { title: 'Files' } }) })).body;
+    const upload = (name, type, bytes, target = card.id) => {
+      const form = new FormData();
+      form.append('target_type', 'card');
+      form.append('target_id', target);
+      form.append('file', new File([bytes], name, { type }));
+      return fetch(`${base}/api/v1/files`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form });
+    };
+    const res = await upload('../../etc/page.html', 'text/html', '<script>alert(1)</script>');
+    assert.equal(res.status, 201);
+    const ref = await res.json();
+    assert.equal(ref.filename, 'page.html');
+    assert.equal(ref.size, 25);
+    assert.deepEqual((await api(`/files?target_type=card&target_id=${card.id}`)).body.items.map((f) => f.id), [ref.id]);
+    for (const q of ['', '?inline=1']) {
+      const got = await fetch(`${base}/api/v1/files/${ref.id}${q}`, { headers: { Authorization: `Bearer ${token}` } });
+      assert.equal(got.status, 200);
+      assert.match(got.headers.get('content-disposition'), /^attachment;/);
+      assert.equal(got.headers.get('x-content-type-options'), 'nosniff');
+      assert.match(got.headers.get('content-security-policy'), /sandbox/);
+      assert.equal(await got.text(), '<script>alert(1)</script>');
+    }
+    const png = await (await upload('a.png', 'image/png', 'png')).json();
+    assert.match((await fetch(`${base}/api/v1/files/${png.id}?inline=1`, { headers: { Authorization: `Bearer ${token}` } })).headers.get('content-disposition'), /^inline;/);
+    assert.equal((await upload('big.bin', 'application/octet-stream', new Uint8Array(25 * 1024 * 1024 + 1))).status, 413);
+    assert.equal((await upload('x.txt', 'text/plain', 'x', '00000000-0000-4000-8000-000000000000')).status, 404);
+    const noFile = new FormData();
+    noFile.append('target_type', 'card');
+    noFile.append('target_id', card.id);
+    assert.equal((await fetch(`${base}/api/v1/files`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: noFile })).status, 422);
+    assert.equal((await api(`/files/${ref.id}`, { method: 'DELETE' })).status, 204);
+    assert.equal((await api(`/files/${ref.id}`)).status, 404);
+    // Deleting the card takes its files with it.
+    assert.equal((await api(`/actions/${card.id}`, { method: 'DELETE' })).status, 204);
+    assert.equal((await api(`/files/${png.id}`)).status, 404);
   });
 
   test('layouts: starter by default; full replace; stale save 409; bad stack 422', async () => {

@@ -4,6 +4,7 @@ import { useParams } from 'react-router'
 import { ApiError } from '../api/client'
 import { boardOptions, useProject } from '../api/queries'
 import { Board } from '../board/Board'
+import { FilesPanel } from '../files/FilesPanel'
 import { NotesPanel } from '../notes/NotesPanel'
 import { Column } from '../inbox/Column'
 import { DEFAULT_COLUMN_STATE } from '../inbox/cardModel'
@@ -101,6 +102,10 @@ function ProjectView({ id }: { id: string }) {
           <section className="project-section" aria-labelledby="project-notes">
             <h3 id="project-notes">Notes</h3>
             <NotesPanel scope={{ type: 'project', id: p.id }} />
+          </section>
+          <section className="project-section" aria-labelledby="project-files">
+            <h3 id="project-files">Files</h3>
+            <FilesPanel scope={{ type: 'project', id: p.id }} />
           </section>
         </div>
       </div>

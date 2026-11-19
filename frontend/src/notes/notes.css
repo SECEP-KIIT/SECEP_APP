@@ -124,3 +124,12 @@
   color: var(--accent);
   border-color: var(--accent);
 }
+.note .icon-button {
+  width: 26px;
+  height: 26px;
+  color: var(--ink-muted);
+}
+.note .icon-button:hover:not(:disabled) {
+  background: var(--tag-muted-bg);
+  color: var(--tag-danger-fg);
+}
