@@ -1,6 +1,6 @@
 // /me, preferences, glance, notifications, disconnect (projects: api/projects.js) (§6.5; preferences and glance PROPOSED for v1.3).
 import { Router } from 'express';
-import { Fail, isInt, object, pageParams, route, searchParams, toPage } from '../http.js';
+import { Fail, UUID, isInt, object, pageParams, route, searchParams, toPage } from '../http.js';
 import { query } from '../services/db.js';
 
 export const me = Router();
@@ -85,6 +85,18 @@ route(me, 'get', '/notifications', 'user', async (req, user) => {
     id: n.id, kind: n.kind, title: n.payload.title, body: n.payload.body ?? null, target: n.payload.target ?? null,
     read_at: n.read_at?.toISOString() ?? null, created_at: n.created_at.toISOString(),
   })), p);
+});
+
+// §6.5 POST /notifications/read { ids? }: those, or every unread one when ids is left out. Another user's ids are ignored.
+route(me, 'post', '/notifications/read', 'user', async (req, user) => {
+  const f = object(req.body).only(['ids']);
+  const ids = f.body.ids;
+  if (ids !== undefined && !(Array.isArray(ids) && ids.length <= 500 && ids.every((i) => typeof i === 'string' && UUID.test(i)))) f.add('ids', 'Must be an array of notification ids');
+  f.done();
+  await query(
+    'UPDATE notifications SET read_at = now() WHERE user_id = $1 AND read_at IS NULL AND ($2::uuid[] IS NULL OR id = ANY($2::uuid[]))',
+    [user.id, ids ?? null],
+  );
 });
 
 // FR-ADM-007: stop polling; M2 revokes the Google token when it sees the status.

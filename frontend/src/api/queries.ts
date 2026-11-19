@@ -179,6 +179,15 @@ export const useGlance = () => useQuery({ queryKey: ['glance'], queryFn: () => a
 export const useNotifications = () =>
   useQuery({ queryKey: ['notifications'], queryFn: () => api<Page<AppNotification>>('/notifications') })
 
+/** POST /notifications/read (§6.5): the given ids, or every unread one when `ids` is left out. */
+export async function markNotificationsRead(ids?: readonly string[]) {
+  await api<void>('/notifications/read', json(ids ? { ids } : {}))
+  const at = new Date().toISOString()
+  queryClient.setQueryData<Page<AppNotification>>(['notifications'], (page) =>
+    page && { ...page, items: page.items.map((n) => (n.read_at === null && (!ids || ids.includes(n.id)) ? { ...n, read_at: at } : n)) },
+  )
+}
+
 export const useProjects = () =>
   useQuery({ queryKey: ['projects'], queryFn: () => api<Page<Project>>('/projects?limit=50') })
 
@@ -219,6 +228,19 @@ export function withProject(refs: readonly EmailProjectRef[], project: Pick<Proj
   }
   if (refs.some((r) => r.id === project.id)) return [...refs]
   return [...refs, { id: project.id, name: project.name, colour: project.colour, is_primary: refs.length === 0 }]
+}
+
+/** An email's snooze time, wherever the client holds it. */
+export function emailSnoozedUntil(id: string): string | null {
+  const detail = queryClient.getQueryData<EmailDetail>(['email', id])
+  if (detail) return detail.snoozed_until
+  for (const [, data] of queryClient.getQueriesData<{ pages: Page<EmailListItem>[] } | Page<EmailListItem>>({ queryKey: ['emails'] })) {
+    if (!data) continue
+    const pages = 'pages' in data ? data.pages : [data]
+    const hit = pages.flatMap((p) => p.items).find((e) => e.id === id)
+    if (hit) return hit.snoozed_until
+  }
+  return null
 }
 
 /** The projects an email belongs to, wherever the client holds it. */

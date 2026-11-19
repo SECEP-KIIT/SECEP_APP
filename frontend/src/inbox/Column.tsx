@@ -1,8 +1,10 @@
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { ArrowDownUp, ArrowUp, CircleHelp, Rows3, X } from 'lucide-react'
+import { AlarmClock, ArrowDownUp, ArrowUp, ChevronDown, CircleHelp, Rows3, X } from 'lucide-react'
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { emailListOptions } from '../api/queries'
+import type { EmailListItem } from '../api/types'
+import { isSnoozed, splitSnoozed } from '../reminders/snooze'
 import { useFocused } from '../shell/focusMode'
 import { useMinuteClock } from '../shell/useMinuteClock'
 import {
@@ -60,6 +62,9 @@ interface Props {
   locked?: boolean
 }
 
+/** The "Snoozed · n" divider is a row of its own (FR-REM-002). */
+const DIVIDER = Symbol('snoozed-divider')
+
 /**
  * An inbox column widget (FR-UI-006 "a saved filter and sort"; item 6). Rendered here as the Inbox full view; the
  * tiling dashboard (task 8) places several side by side and persists their filters, sort and density.
@@ -100,15 +105,19 @@ export function Column({ title, state, onStateChange, initial, heading, tools, v
   const base = columnQuery(filters, sort, focused)
   const query = base === null || !scope ? base : [scope, base].filter(Boolean).join('&')
   const list = useInfiniteQuery({ ...emailListOptions(query ?? ''), enabled: query !== null })
-  const items = useMemo(() => (query === null ? [] : (list.data?.pages.flatMap((p) => p.items) ?? [])), [query, list.data])
+  const loaded = useMemo(() => (query === null ? [] : (list.data?.pages.flatMap((p) => p.items) ?? [])), [query, list.data])
+  // FR-REM-002: snoozed cards sink below a collapsible "Snoozed · n" divider and stay out of the counts.
+  const { active: items, snoozed } = useMemo(() => splitSnoozed(loaded, now), [loaded, now])
+  const [snoozedOpen, setSnoozedOpen] = useState(false)
+  const view = useMemo<(EmailListItem | typeof DIVIDER)[]>(() => (snoozed.length ? [...items, DIVIDER, ...(snoozedOpen ? snoozed : [])] : items), [items, snoozed, snoozedOpen])
   const more = query !== null && list.hasNextPage
 
   // "↑ n new" (FR-UI-024): scroll to the top first, then reload page 1 only.
   const scrollRef = useRef<HTMLDivElement>(null)
-  const { pending, fresh, showNew } = useNewPill(query, items, filters, focused, () => scrollRef.current?.scrollTo({ top: 0 }), scope)
+  const { pending, fresh, showNew } = useNewPill(query, loaded, filters, focused, () => scrollRef.current?.scrollTo({ top: 0 }), scope)
   const pitch = ROW_PITCH[density]
   const showSkeleton = query !== null && list.isPending
-  const rowCount = showSkeleton ? SKELETON_ROWS : items.length + (more ? 1 : 0)
+  const rowCount = showSkeleton ? SKELETON_ROWS : view.length + (more ? 1 : 0)
   // The virtualizer's functions are used only in this component's render, never passed to memoised children.
   // oxlint-disable-next-line react/incompatible-library
   const virtualizer = useVirtualizer({
@@ -124,8 +133,8 @@ export function Column({ title, state, onStateChange, initial, heading, tools, v
   const lastIndex = rows.at(-1)?.index ?? -1
   const { fetchNextPage, isFetchingNextPage } = list
   useEffect(() => {
-    if (more && !isFetchingNextPage && lastIndex >= items.length - PREFETCH_ROWS) void fetchNextPage()
-  }, [more, isFetchingNextPage, lastIndex, items.length, fetchNextPage])
+    if (more && !isFetchingNextPage && lastIndex >= view.length - PREFETCH_ROWS) void fetchNextPage()
+  }, [more, isFetchingNextPage, lastIndex, view.length, fetchNextPage])
 
   const onFilter = useCallback((patch: FilterPatch) => setFilters((f) => addFilter(f, patch)), [setFilters])
 
@@ -259,7 +268,7 @@ export function Column({ title, state, onStateChange, initial, heading, tools, v
                 Try again
               </button>
             </div>
-          ) : !showSkeleton && items.length === 0 ? (
+          ) : !showSkeleton && view.length === 0 ? (
             <EmptyState filtered={isFiltered(filters) || focused} onClear={() => setFilters(NO_FILTERS)} canClear={isFiltered(filters)} />
           ) : (
             <div
@@ -269,19 +278,28 @@ export function Column({ title, state, onStateChange, initial, heading, tools, v
               style={{ height: virtualizer.getTotalSize() }}
             >
               {rows.map((row) => {
-                const email = items[row.index]
+                const entry = view[row.index]
+                const email = entry === DIVIDER ? undefined : entry
+                const divider = entry === DIVIDER
                 return (
                   <div
-                    key={showSkeleton ? `skel-${row.index}` : (email?.id ?? 'more')}
+                    key={showSkeleton ? `skel-${row.index}` : divider ? 'snoozed-divider' : (email?.id ?? 'more')}
                     className="col-row"
                     role={showSkeleton ? undefined : 'listitem'}
-                    aria-setsize={showSkeleton || !email ? undefined : more ? -1 : items.length}
+                    aria-setsize={showSkeleton || !email ? undefined : more ? -1 : view.length}
                     aria-posinset={showSkeleton || !email ? undefined : row.index + 1}
                     data-email-id={showSkeleton ? undefined : email?.id}
                     data-pos={row.index}
+                    data-snoozed={email && isSnoozed(email, now) ? '' : undefined}
                     style={{ transform: `translateY(${row.start}px)`, height: pitch }}
                   >
-                    {email && !showSkeleton ? (
+                    {divider ? (
+                      <button type="button" className="snooze-divider" aria-expanded={snoozedOpen} onClick={() => setSnoozedOpen((o) => !o)}>
+                        <AlarmClock size={14} aria-hidden="true" />
+                        Snoozed · {snoozed.length}
+                        <ChevronDown size={14} aria-hidden="true" style={{ transform: snoozedOpen ? 'rotate(180deg)' : undefined }} />
+                      </button>
+                    ) : email && !showSkeleton ? (
                       <EmailCard email={email} now={now} density={density} fresh={fresh.has(email.id)} onFilter={onFilter} />
                     ) : (
                       <SkeletonCard density={density} />

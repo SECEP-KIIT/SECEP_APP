@@ -7,6 +7,7 @@ import { control } from './control'
 import { handlers } from './handlers'
 import { registry } from './http/route'
 import { deliver } from './pipeline'
+import { tickReminders } from './reminders'
 import { signIn } from './session'
 import { verifyChain } from './store/audit'
 import { db, initStore } from './store/db'
@@ -769,5 +770,38 @@ describe('files (FR-CNT-006/007/008, proposals §19.3)', () => {
     expect(att.status).toBe(200)
     expect(att.headers.get('content-disposition')).toMatch(/^attachment;/)
     expect((await fetch(`http://localhost/api/v1/emails/${withAttachment.id}/attachments/99`, { headers: auth })).status).toBe(404)
+  })
+})
+
+describe('notifications and reminders (FR-REM-001/004, proposals §20)', () => {
+  it('POST /notifications/read marks some by id, then all; bad ids are 422', async () => {
+    const t = await login('demo')
+    const list = async () => (await call('GET', '/notifications', { token: t })).json!.items as Json[]
+    const before = await list()
+    expect(before.length).toBeGreaterThan(1)
+    expect(before.every((n) => n.read_at === null)).toBe(true)
+    expect((await call('POST', '/notifications/read', { token: t, body: { ids: [before[0].id] } })).status).toBe(204)
+    const some = await list()
+    expect(some.filter((n) => n.read_at !== null).map((n) => n.id)).toEqual([before[0].id])
+    expect((await call('POST', '/notifications/read', { token: t, body: { ids: 'x' } })).status).toBe(422)
+    expect((await call('POST', '/notifications/read', { token: t, body: {} })).status).toBe(204)
+    expect((await list()).every((n) => n.read_at !== null)).toBe(true)
+  })
+
+  it('fires each reminder once, from the due date, with a generic title and the item as target', async () => {
+    const t = await login('demo')
+    const due = addDays(localDate(new Date().toISOString()), 1)
+    const card = (await call('POST', '/actions', { token: t, body: { type: 'add_board_card', payload: { title: 'Send the deck', due_date: due } } })).json!
+    const [y, m, d] = due.split('-').map(Number)
+    const nineAm = new Date(y, m - 1, d, 9, 5)
+    const events: Json[] = []
+    const off = subscribe((_u, event, payload) => event === 'notification.new' && events.push(payload as Json))
+    expect(tickReminders(nineAm)).toBeGreaterThanOrEqual(1)
+    expect(tickReminders(nineAm)).toBe(0)
+    off()
+    const mine = events.map((e) => e.notification as Json).find((n) => (n.target as Json).id === card.id)!
+    expect(mine).toMatchObject({ kind: 'reminder', title: 'Reminder due', body: 'Send the deck', target: { type: 'card', id: card.id }, read_at: null })
+    const listed = (await call('GET', '/notifications', { token: t })).json!.items as Json[]
+    expect(listed.some((n) => n.id === mine.id)).toBe(true)
   })
 })

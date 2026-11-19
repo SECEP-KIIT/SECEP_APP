@@ -9,6 +9,7 @@
 import type { InfiniteData, QueryClient } from '@tanstack/react-query'
 import type { Socket } from 'socket.io-client'
 import { dueDateOfActions } from '../lib/due'
+import { shellToast } from '../lib/toastBus'
 import { currentAccessToken, refreshForSocket } from './client'
 import type { Action, AppNotification, EmailDetail, EmailListItem, LinkView, Page, SecurityFlag } from './types'
 
@@ -226,6 +227,10 @@ function handle<E extends keyof Events>(qc: QueryClient, event: E, payload: Even
       qc.setQueryData<Page<AppNotification>>(['notifications'], (page) =>
         page && !page.items.some((n) => n.id === notification.id) ? { ...page, items: [notification, ...page.items] } : page,
       )
+      // FR-REM-004: a reminder or meeting that fires pops up in the app as well as in the bell.
+      if (notification.kind === 'reminder' || notification.kind === 'meeting') {
+        shellToast(notification.body ? `${notification.title}: ${notification.body}` : notification.title)
+      }
       break
     }
   }

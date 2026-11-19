@@ -58,6 +58,18 @@ export const meRoutes = [
     ),
   ),
 
+  // §6.5: POST /notifications/read { ids? }: those, or every unread one when ids is left out.
+  route('post', '/notifications/read', 'user', ({ user, body }) => {
+    const f = object(body).only(['ids'])
+    const ids = f.body.ids
+    if (ids !== undefined && !(Array.isArray(ids) && ids.every((i) => typeof i === 'string'))) f.add('ids', 'Must be an array of notification ids')
+    f.done()
+    const at = new Date().toISOString()
+    for (const n of db.notifications) if (n.user_id === user.id && n.read_at === null && (ids === undefined || (ids as string[]).includes(n.id))) n.read_at = at
+    changed()
+    return undefined
+  }, { status: 204 }),
+
   // FR-ADM-007: revoke the Google token and stop polling (the mock pipeline skips revoked mailboxes).
   route('delete', '/mailboxes/me', 'user', ({ user }) => {
     if (user.mailbox) user.mailbox.status = 'revoked'
