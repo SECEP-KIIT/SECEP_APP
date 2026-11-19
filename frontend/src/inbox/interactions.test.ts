@@ -36,7 +36,8 @@ describe('selection and keys (FR-UI-027/028)', () => {
   })
 
   it('maps the card shortcuts; plain letters never fire with Ctrl, Cmd or Alt', () => {
-    expect([key('j'), key('k'), key('x'), key('e'), key('J', { shiftKey: true }), key('C', { shiftKey: true })]).toEqual(['next', 'prev', 'select', 'done', 'jira', 'calendar'])
+    expect([key('j'), key('k'), key('x'), key('e'), key('J', { shiftKey: true })]).toEqual(['next', 'prev', 'select', 'done', 'jira'])
+    expect(key('C', { shiftKey: true })).toBeNull() // Calendar is v2
     expect(key('c', { ctrlKey: true })).toBe('copy')
     expect(key('c', { metaKey: true })).toBe('copy')
     expect(key('F10', { shiftKey: true })).toBe('menu')

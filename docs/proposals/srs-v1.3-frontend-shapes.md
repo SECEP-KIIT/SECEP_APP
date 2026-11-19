@@ -88,7 +88,7 @@ The frontend mirrors `skip_lock`, `idle_minutes` and `motion` in `localStorage` 
 
 ## 6. Other notes from task 4
 
-- **FR-UI-002 vs §6.7:** item 1 lists Calendar in the sidebar. It's now shown, since Calendar is being built (task 14).
+- **FR-UI-002 vs §6.7:** item 1 lists Calendar in the sidebar. It was shown while Calendar was being built (task 14); **Calendar is v2 (19 Nov 2026)**, so the sidebar entry, `/calendar` (redirects Home), the Calendar buttons, menu items, ⇧C key, "Download .ics" and calendar sends from cards are all hidden. The data shapes and mock routes stay for v2.
 - **Metrics visibility:** FR-UI-002 doesn't say who sees Metrics. The frontend shows it to admins only, because `GET /admin/metrics` is an admin route.
 
 ## 7. Found while building the mock backend (task 5)
@@ -479,3 +479,80 @@ The §6.6 tables (`actions` with `origin = user`, `notes`, `files`, `masked_secr
 3. **Project board accepts emails:** dropping emails from a list onto a To do / In progress / Done column files them in the project (rule 1) and moves their cards there.
 4. Seed data and saved mock snapshots are backfilled on load. **M6:** not built yet (same rules in `projects.js`, `emails.js`, `actions.js`, plus a one-off backfill).
 5. **Lock screen subjects** (when opted in) show at most three distinct subjects, then "and n more".
+
+## 24. Metrics as a widget, lock now, readable lock screen (19 Nov 2026) (PROPOSED for v1.3)
+
+1. **No Metrics page.** FR-UI-002's "Metrics" nav item is replaced by a **Stats** home widget (`type: "stats"`, already in the WidgetType enum): everyone sees today's counts from `GET /me/glance`; admins also see the classifier over 30 days from `GET /admin/metrics` (volume per type, correction rate, confidence histogram). `/metrics` redirects to Home. The Planning starter page gains the Stats tile (mock and M6 starters). Non-column widgets keep `filter: null`.
+2. **Lock now:** a lock button in the topbar and **Alt+L** bring up the lock screen at once (the same curtain as the idle return, FR-WP-004). Desktop only.
+3. **Lock screen glance:** one frosted chip per fact (Critical, next event with its time, due today, overdue); opted-in subjects in one card headed "Critical unread" (three distinct at most).
+4. **Board lanes** are lightly colour-coded (To do blue, In progress amber, Done green), with the existing ○ ◐ ● shapes kept.
+
+## 25. Admin page, richer classifier stats, Jira target (19 Nov 2026) (PROPOSED for v1.3)
+
+1. **`GET /admin/metrics` gains urgency and sentiment** (additive; the v1.1 type fields are unchanged): `urgency` and `sentiment`, each `{ volume: { <label>: n }, override_rate: { <label>: 0.04 }, confidence_histogram: [ { bin_start, bin_end, count } ×10 ] }`. Override rate counts corrections with `field` = that head and `old_label` = the label, inside the window. The Stats widget switches between Type, Urgency and Sentiment and shows emails labelled, share at ≥ 80 % confidence, share corrected, a per-label table (count, share, corrected) and a labelled histogram (count over each bar, 0–100 % ticks, axis titles).
+2. **`POST /actions/:id/accept` gains `jira?: { project_key: string | null, epic: string | null }`** (create_jira_issue only; 422 for other types). `project_key` is a Jira key (`^[A-Z][A-Z0-9]{1,9}$`), `epic` an issue key. Resolution: given `jira` → its project (null → tenant default) and epic; omitted → the caller's primary project for the email (its `jira_project_key` and `jira_epic`), else the tenant default project with no epic. This completes FR-ORC-012's prefill (deferred in §12.2) and shows the FR-UI-017 Jira target before accepting: a proposed Jira action reads "to ATL › ATL-100", and the composer has Jira project and Epic fields prefilled from the primary project. Implemented in the mock; M6 needs the same rule.
+3. **Admin page** (`/admin`, admins only) uses only the §6.5 admin routes: Connections (Jira and LLM settings, secrets write-only, Test connection), Classifier and polling (threshold, protected domains, interval), Users (allow-list, role, security review), Models (Retrain, Promote with the failed gates listed, F1 deltas against the live model). M6 does not implement these routes yet.
+4. **Board lanes:** coloured top edge only; the lane body keeps the neutral column background (amends §24.4).
+5. **An empty dashboard page** shows an Add widget button (in the page and the toolbar) until it has a widget.
+
+
+## 26. Search, lean (19 Nov 2026) (PROPOSED for v1.3)
+
+1. **`GET /emails` gains `q_in=subject|all`** (default `all`, today's behaviour: subject and masked body). `subject` matches the words against the subject only. Any other value → `422 invalid_parameter`. Implemented in the mock and M6.
+2. **The palette (FR-UI-025, cut down)** opens with Ctrl/⌘+K, `/` (when not typing) or the topbar pill, and loads on first use. It searches **email subjects** (open and handled mail; handled via a second `view=handled` request, merged newest first, at most 8) and **project names** (from `GET /projects`, archived included and labelled). When no subject matches, **Go deeper** repeats the search with `q_in=all`. **Filters:** type, urgency, unread / due today / overdue, include handled, mapped to the existing `GET /emails` parameters. Enter or click opens the email in the inbox drawer (whose People & thread section lists the earlier messages) or the project page. 150 ms debounce; stale requests cancelled; matches highlighted as plain text.
+3. **Not in the lean palette** (need `GET /search`, whose response shape §6.5 never defined): people, cards, actions, notes and attachment filenames, typed operators, typo tolerance, saved searches.
+4. **Lock screen:** the recent-notification cards are removed; the glance chips and the Critical unread card remain.
+
+## 27. Search scrolling, cards to Jira/Calendar, Remind me on the board (19 Nov 2026) (PROPOSED for v1.3)
+
+1. **`GET /emails` gains `include_handled=true|false`** (default false). True keeps handled mail in the list, in the same order and paging, so search pages through one list (25 at a time, more on scroll) instead of merging two. Other values → `422 invalid_parameter`. Ignored when `view` already includes `handled`. Implemented in the mock and M6, with tests.
+2. **Sending one of your cards to Jira or Calendar** (FR-CNT-002 "same actions"; resolves §19's open point):
+   - `POST /actions { type: "create_jira_issue" | "add_calendar_event", payload, card_id }` → `201` Action, `status: "proposed"`, `origin: "user"`, `email_id: null`, `card_id` set. Same payload fields and §6.4 per-type rules as an email's actions (a Jira priority left empty defaults from the card's urgency). `card_id` must be one of the caller's own cards (404 otherwise; 409 if it isn't a user card). Then `POST /actions/:id/accept` as usual, with §25.2's `jira` target (default: the card's primary project, else the tenant default). Undo as usual.
+   - **`Action.card_id: string | null`** on the wire (null for every other action).
+   - Such an action is **not placed on the board**: the card is already there. The card lists what was sent with `GET /actions?card=<card id>`.
+   - The card sheet's **Send to** section: Jira, Calendar (the drawer's composer, prefilled from the card: title, description, due date, priority from urgency or Medium; an event at the due time or tomorrow 9 am, one hour, with you as attendee) and Remind me.
+   - Implemented in the mock; **M6 still needs it**.
+3. **Remind me on board cards:** right-click, `r`, or the ⏰ button that appears on hover. An email's card reminds about the email (`target.type = "email"`), one of your cards about the card (`"card"`). Uses the existing `POST /reminders`.
+4. **Search result in the Inbox:** picking an email in search opens `/inbox?found=<id>&sq=<words>`. The Inbox shows only that email (from `GET /emails/:id`) with a "search: …" pill beside the title. The pill reopens search with the same words; its ✕ shows the whole inbox. No wire change.
+
+## 28. Pop-up rules, quiet hours, lock refresh, key binds (19 Nov 2026) (PROPOSED for v1.3)
+
+### 28.1 `ui_prefs.popup_rules` and `ui_prefs.quiet_hours` (FR-REM-007)
+- `popup_rules`: `{ normal, focus, quiet }`, each `{ urgency: "all" | "medium" | "high" | "critical" | "none", sentiment: "off" | "frustrated" | "negative" }`. `sentiment` pops an email up whatever its urgency: `frustrated` = Frustrated only, `negative` = Negative or Frustrated. All three modes are required; extra keys → 422.
+- `quiet_hours`: `{ start: "HH:MM", end: "HH:MM" }` in the user's local time (start > end wraps past midnight), or `null` = off. Unset = `22:00–08:00`.
+- Defaults (FR-REM-007): Normal = High+ and Frustrated, Focus = Critical only, Quiet = none.
+- **Mode:** quiet hours win over Focus mode, then Focus, else Normal.
+- Applied in the client to new emails arriving over the socket (`email.triaged` for an email no list holds): a top alert with a mail icon, `Urgency · Mood · Sender` and the subject, once per email, never behind the lock. Everything else arrives silently (inbox, "↑ n new", bell counts). Reminders (FR-REM-004) are unchanged.
+- "Asked on first sign-in", lean: when `popup_rules` is unset, the client saves the defaults and shows a toast naming them, with Change → Settings › Notifications.
+- M6 validates both keys in `PATCH /me/preferences` (done). Web Push filtering by the same rules is v2 with Web Push.
+
+### 28.2 Lock-screen refresh
+A round button top right of the lock screen, shown once the app has loaded. It refetches every active query (glance chips, subjects, the dashboard behind the lock) without opening the lock; the icon spins while it runs. No API change.
+
+### 28.3 `ui_prefs.keybinds`
+- Editable actions and defaults: `search` Mod+K, `search_alt` /, `quick_add` N, `focus` F, `lock` Alt+L, `next` J, `prev` K, `select` X, `done` E, `project` P, `remind` R, `jira` Shift+J. `Mod` = Ctrl, or ⌘ on a Mac.
+- Wire: `{ [action]: combo }`, **overrides only**; a combo is `(Mod+)?(Alt+)?(Shift+)?KEY`, KEY one character or a named key in capitals (e.g. `F2`). Unknown actions or bad combos → 422. `{}` resets all.
+- Fixed and not bindable: Esc, Tab, Enter, Space, arrows, Backspace/Delete, Ctrl/⌘+C/V/X/A/Z, Shift+F10 and the menu key. Settings refuses a combo another action already uses.
+- A combo without Mod or Alt never fires while typing or with a dialog open.
+
+## 29. Lock over dialogs, quiet hours default, first-run help (19 Nov 2026) (PROPOSED for v1.3)
+
+### 29.0 Corrections
+- **Lock vs dialogs:** browser dialogs sit in the top layer, above the lock's z-index. When the lock comes down (idle, Alt+L, button) the client closes every open dialog and sends Escape to menus; an open email panel is remembered and reopens on the same email after unlock. `lock.ts` emits `secep:locking` / `secep:unlocked`; synthetic keys never open the lock.
+- **Quiet hours default off** (changes FR-REM-007's "default 22:00–08:00"): unset `quiet_hours` = `null`. Turning them on fills in 22:00–08:00.
+- The §28.1 first-run toast (and its automatic save of the pop-up defaults) is removed; the tour below replaces it.
+
+### 29.1 Tour
+Five "where things are" steps (Inbox, opening an email, Board, Search, Pop-ups and privacy) plus Admin for admins. Spotlight + card beside, below or above it; when the target fills the screen (a whole column, the board) the card sits in the bottom-right corner so it never covers headings; centred when the part isn't on screen; bottom sheet on phones. Not modal; Esc closes (paused, Settings offers Resume), ←/→ move. The last step has the Normal pop-up level and quiet-hours switch inside the card. Offered once after the lock first opens (Take the tour / Not now); never starts by itself. Lazy chunk (~2.7 KB gz).
+
+### 29.2 Getting started checklist (Home)
+Open an email · Send a task to Jira · Add a card of your own · Search your mail · Choose which emails pop up · Turn on quiet hours. Ticked automatically when done, each with a Go button; hideable. When the last item is ticked a toast says so and the list goes away for good.
+
+### 29.3 First-use hints
+Inbox (card keys, shown with the user's own bindings) and Board (Remind me). Once each; not during the tour or before it has been offered.
+
+### 29.4 Ways back in
+Settings › Tutorial: Start the tour, Resume from step n, Show Getting started, Show tips again. Search: "tutorial", "tour", "help", "guide"… → Start the tutorial; "shortcuts", "keys"… → Keyboard shortcuts.
+
+### 29.5 `ui_prefs.onboarding`
+`{ tour?: "done" | "skipped" | "paused", tour_step?: 0–19, checklist_hidden?: boolean, done?: ChecklistId[], hints?: ("card_keys" | "remind")[] }`, ChecklistId ∈ `open_email, send_jira, quick_add, search, popup_rules, quiet_hours`. Unknown keys/ids → 422. The client sends the whole object, one write at a time. Mock and M6 validate it.

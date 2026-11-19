@@ -13,8 +13,8 @@ export function toAction(a: ActionRow): Action {
   // undo_until is server state (§6.6), not part of the §6.4.1 Action shape.
   const { user_id: _owner, undo_until: _undo, ...action } = a
   // PROPOSED (proposals §19.1): a user card's projects; [] for an email's actions (the email carries them).
-  const projects = a.origin === 'user' && a.email_id === null && store ? itemProjectRefs(store(), 'action_id', a.id) : []
-  return { ...action, payload: { ...action.payload }, projects }
+  const projects = a.origin === 'user' && a.email_id === null && a.type === 'add_board_card' && store ? itemProjectRefs(store(), 'action_id', a.id) : []
+  return { ...action, card_id: a.card_id ?? null, payload: { ...action.payload }, projects }
 }
 
 export function toLink(c: UrlCheckRow): LinkView {

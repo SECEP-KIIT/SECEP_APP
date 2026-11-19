@@ -65,7 +65,7 @@ const LIST_KEYS = ['id', 'thread_id', 'from', 'to', 'cc', 'recipient_position', 
 const DETAIL_KEYS = [...LIST_KEYS, 'body_text', 'summary_short', 'actions', 'links', 'attachments', 'masked_secrets', 'open_url', 'auth_results', 'thread']
 const TRIAGE_KEYS = ['email_type', 'urgency', 'sentiment', 'needs_review', 'model_version', 'processed_at']
 const LINK_KEYS = ['check_id', 'anchor_text', 'host', 'verdict', 'go_url']
-const ACTION_KEYS = ['id', 'email_id', 'type', 'origin', 'status', 'payload', 'board_column', 'board_position', 'external_ref', 'external_status', 'error', 'created_at', 'updated_at', 'projects']
+const ACTION_KEYS = ['id', 'email_id', 'card_id', 'type', 'origin', 'status', 'payload', 'board_column', 'board_position', 'external_ref', 'external_status', 'error', 'created_at', 'updated_at', 'projects']
 const ME_KEYS = ['id', 'email', 'display_name', 'role_category', 'is_admin', 'permissions', 'mailbox', 'ui_prefs']
 const ERROR_KEYS = ['code', 'message', 'details', 'request_id']
 
@@ -590,11 +590,35 @@ describe('admin', () => {
     expect(refused.json.error.details.failed_gates[0]).toMatch(/Approval/)
   })
 
+  it('q_in=subject searches subjects only; all also the body; anything else is 422 (§26)', async () => {
+    const token = await login()
+    const e = demoEmails().find((x) => x.subject && x.body_text.length > 40)!
+    const bodyWord = e.body_text.split(/\s+/).find((w) => /^[a-z]{6,}$/i.test(w) && !(e.subject ?? '').toLowerCase().includes(w.toLowerCase()))!
+    const get = async (qIn: string) => {
+      const q = `/emails?q=${encodeURIComponent(bodyWord)}&q_in=${qIn}&limit=50`
+      return [...(await call('GET', q, { token })).json.items, ...(await call('GET', `${q}&view=handled`, { token })).json.items]
+    }
+    expect((await get('all')).some((x: { id: string }) => x.id === e.id)).toBe(true)
+    for (const it of await get('subject')) expect((it.subject ?? '').toLowerCase()).toContain(bodyWord.toLowerCase())
+    expect((await call('GET', '/emails?q=x&q_in=body', { token })).status).toBe(422)
+    // §27: include_handled keeps handled mail in one list.
+    const handled = [...(db.handled.get(db.users[0].id) ?? [])]
+    const both = (await call('GET', '/emails?include_handled=true&limit=50', { token })).json.items
+    expect(handled.length).toBeGreaterThan(0)
+    expect(both.some((x: { handled: boolean }) => x.handled)).toBe(true)
+    expect((await call('GET', '/emails?include_handled=1', { token })).status).toBe(422)
+  })
+
   it('metrics and .ics', async () => {
     const token = await login()
     const m = (await call('GET', '/admin/metrics?days=30', { token })).json
-    expect(keys(m)).toEqual(['confidence_histogram', 'override_rate_by_class', 'volume_by_type', 'window_days'])
+    expect(keys(m)).toEqual(['confidence_histogram', 'override_rate_by_class', 'sentiment', 'urgency', 'volume_by_type', 'window_days'])
     expect(m.confidence_histogram).toHaveLength(10)
+    for (const h of [m.urgency, m.sentiment]) {
+      expect(keys(h)).toEqual(['confidence_histogram', 'override_rate', 'volume'])
+      expect(h.confidence_histogram).toHaveLength(10)
+    }
+    expect(keys(m.urgency.volume)).toEqual(['Critical', 'High', 'Low', 'Medium'])
     const meeting = demoEmails().find((e) => e.triage?.email_type.label === 'Meeting' && [...db.actions.values()].some((a) => a.email_id === e.id))!
     const ics = await call('GET', `/emails/${meeting.id}/ics`, { token })
     expect(ics.headers.get('Content-Type')).toMatch(/^text\/calendar/)
@@ -687,6 +711,25 @@ describe('ui_prefs.theme (PROPOSED, proposals §16.6)', () => {
     expect((await call('PATCH', '/me/preferences', { token, body: { motion: 'off' } })).json.ui_prefs.motion).toBe('off')
     expect((await call('PATCH', '/me/preferences', { token, body: { motion: null } })).json.ui_prefs.motion).toBeNull()
     expect((await call('PATCH', '/me/preferences', { token, body: { motion: 'wobbly' } })).status).toBe(422)
+  })
+
+  it('PATCH /me/preferences: pop-up rules, quiet hours and key binds (proposals §28)', async () => {
+    const token = await login()
+    const rules = { normal: { urgency: 'medium', sentiment: 'negative' }, focus: { urgency: 'critical', sentiment: 'off' }, quiet: { urgency: 'none', sentiment: 'off' } }
+    const ok = await call('PATCH', '/me/preferences', { token, body: { popup_rules: rules, quiet_hours: { start: '23:30', end: '07:00' }, keybinds: { lock: 'Alt+Q' } } })
+    expect(ok.status).toBe(200)
+    expect(ok.json.ui_prefs).toMatchObject({ popup_rules: rules, quiet_hours: { start: '23:30', end: '07:00' }, keybinds: { lock: 'Alt+Q' } })
+    expect((await call('PATCH', '/me/preferences', { token, body: { quiet_hours: null } })).json.ui_prefs.quiet_hours).toBeNull()
+    for (const body of [{ popup_rules: { normal: rules.normal } }, { quiet_hours: { start: '25:00', end: '07:00' } }, { keybinds: { teleport: 'T' } }, { keybinds: { lock: 'Ctrl+Alt+Q' } }]) {
+      expect((await call('PATCH', '/me/preferences', { token, body })).status).toBe(422)
+    }
+  })
+  it('PATCH /me/preferences: onboarding progress (proposals §29)', async () => {
+    const token = await login()
+    const ok = await call('PATCH', '/me/preferences', { token, body: { onboarding: { tour: 'done', done: ['open_email'], hints: ['remind'] } } })
+    expect(ok.status).toBe(200)
+    expect(ok.json.ui_prefs.onboarding).toEqual({ tour: 'done', done: ['open_email'], hints: ['remind'] })
+    expect((await call('PATCH', '/me/preferences', { token, body: { onboarding: { done: ['teleport'] } } })).status).toBe(422)
   })
 })
 

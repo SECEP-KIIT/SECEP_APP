@@ -1,3 +1,4 @@
+import { markDone } from '../onboarding/onboarding'
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react'
 import { ApiError } from '../api/client'
 import { createCard, useProjects } from '../api/queries'
@@ -67,6 +68,7 @@ export function QuickAddHost() {
         { title: parsed.title.slice(0, 120), due_date: parsed.due_date, due_time: parsed.due_time, urgency: parsed.urgency, source, person: parsed.person },
         targets,
       )
+      markDone('quick_add')
       const files = req?.files ?? []
       close()
       // FR-UI-030: pasted or dropped files go on the new card.

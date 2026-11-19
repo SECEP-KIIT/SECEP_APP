@@ -203,6 +203,13 @@
   left: 0;
   right: 0;
   padding-bottom: 8px;
+  /* Item 9: a card that leaves lets the ones below glide up (180 ms), and a re-sort glides cards to their new
+     places (200 ms). Rows are keyed by email, so only rows that stay move; new rows simply appear. */
+  transition: transform 190ms ease-out;
+}
+html[data-motion='reduced'] .col-row,
+html[data-motion='off'] .col-row {
+  transition: none;
 }
 
 /* "↑ n new" (FR-UI-024): floats over the list, so showing it moves nothing. */
@@ -1180,4 +1187,72 @@ html[data-motion='off'] .card[data-leaving] {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+/* Undo window (item 9): shrinks from full width to nothing over UNDO_MS. */
+.toast {
+  position: relative;
+  overflow: hidden;
+}
+.toast-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--accent);
+  transform-origin: left;
+  animation: toast-bar linear forwards;
+}
+@keyframes toast-bar {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+html[data-motion='off'] .toast-bar {
+  animation: none;
+  opacity: 0.5;
+}
+
+/* "search: …" pill beside the Inbox title when one searched email is shown (19 Nov 2026). */
+.search-badge {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+  max-width: 420px;
+  margin-left: var(--space-2);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.search-badge button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+.search-badge-text {
+  flex: 1;
+  min-width: 0;
+}
+.search-badge-text span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.search-badge-clear {
+  border-left: 1px solid color-mix(in srgb, var(--accent) 40%, transparent) !important;
+}
+.col-tools[hidden] {
+  display: none;
 }

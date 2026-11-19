@@ -71,8 +71,8 @@ function dateParam(url: URL, name: string) {
 }
 
 /** Keyword search over masked text only: subject and the stored (masked) body (FR-UI-026). */
-const matchesKeywords = (e: EmailRow, q: string) => {
-  const hay = `${e.subject ?? ''}\n${e.body_text}`.toLowerCase()
+const matchesKeywords = (e: EmailRow, q: string, subjectOnly = false) => {
+  const hay = (subjectOnly ? (e.subject ?? '') : `${e.subject ?? ''}\n${e.body_text}`).toLowerCase()
   return q.toLowerCase().split(/\s+/).filter(Boolean).every((term) => hay.includes(term))
 }
 
@@ -115,6 +115,13 @@ export function filterError(filter: string): string | null {
 function filtered(user: { id: string }, url: URL) {
   const { type, urgency, sentiment, flag, due, needsReview, sender, after, before, view } = parseFilters(url)
   const q = url.searchParams.get('q')?.trim() || null
+  // PROPOSED (proposals §26): q_in=subject searches subjects only; all (default) also the masked body.
+  const qIn = url.searchParams.get('q_in') ?? 'all'
+  if (qIn !== 'subject' && qIn !== 'all') throw new Fail(422, 'invalid_parameter', 'q_in must be subject or all', { parameter: 'q_in' })
+  // PROPOSED (proposals §27): include_handled=true keeps handled mail in the list (search), in the same order and paging.
+  const ih = url.searchParams.get('include_handled')
+  if (ih !== null && ih !== 'true' && ih !== 'false') throw new Fail(422, 'invalid_parameter', 'include_handled must be true or false', { parameter: 'include_handled' })
+  const includeHandled = ih === 'true'
   const today = localDate(new Date().toISOString())
   // project (FR-UI-021): emails in any of these projects. The other S parameters (status, pinned, snoozed, tag) are
   // accepted and ignored until built (§6.4.1).
@@ -138,9 +145,9 @@ function filtered(user: { id: string }, url: URL) {
     })
     .filter((e) => !after || e.received_at.slice(0, 10) >= after)
     .filter((e) => !before || e.received_at.slice(0, 10) <= before)
-    .filter((e) => !q || matchesKeywords(e, q))
+    .filter((e) => !q || matchesKeywords(e, q, qIn === 'subject'))
     // Handled mail leaves the default inbox and is surfaced with view=handled (proposals §10.3).
-    .filter((e) => view.includes('handled') || !(db.handled.get(user.id)?.has(e.id) ?? false))
+    .filter((e) => includeHandled || view.includes('handled') || !(db.handled.get(user.id)?.has(e.id) ?? false))
     .filter((e) => view.every((v) => inView(v, e, user.id, today)))
     .sort((a, b) => Number(b.pinned) - Number(a.pinned) || order(a, b)) // pinned stay on top (FR-UI-023)
 }

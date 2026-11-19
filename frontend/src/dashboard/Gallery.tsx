@@ -3,12 +3,12 @@ import { useEffect, useRef } from 'react'
 import { api } from '../api/client'
 import type { EmailListItem, Page } from '../api/types'
 import { MaskedText } from '../components/MaskedText'
-import { BOARD_PRESET, COLUMN_PRESETS, NOTES_PRESET, type WidgetPreset } from './layoutModel'
+import { BOARD_PRESET, COLUMN_PRESETS, NOTES_PRESET, STATS_PRESET, type WidgetPreset } from './layoutModel'
 
 /**
  * "+ Add widget" (FR-UI-008, item 2): the widget gallery, with a live preview of what each column would show (its
  * first three subjects, fetched only while the gallery is open). Lists only widget types that exist today: inbox
- * columns as saved filters; Board, Calendar and the rest join with their tasks.
+ * columns as saved filters; Board, Notes and Stats are built; the rest join later.
  */
 export function Gallery({ open, onClose, onPick }: { open: boolean; onClose: () => void; onPick: (preset: WidgetPreset) => void }) {
   const ref = useRef<HTMLDialogElement>(null)
@@ -27,7 +27,7 @@ export function Gallery({ open, onClose, onPick }: { open: boolean; onClose: () 
           Close
         </button>
       </div>
-      <p className="drawer-muted">Inbox columns are saved filters. Calendar and the other widgets join as they are built.</p>
+      <p className="drawer-muted">Inbox columns are saved filters. More widgets join later.</p>
       <ul className="gallery-list">
         {open && (
           <li>
@@ -46,6 +46,16 @@ export function Gallery({ open, onClose, onPick }: { open: boolean; onClose: () 
                 <span aria-hidden="true">{NOTES_PRESET.icon}</span> {NOTES_PRESET.title}
               </span>
               <span className="gallery-preview drawer-muted">Notes of your own, not tied to an email, card or project.</span>
+            </button>
+          </li>
+        )}
+        {open && (
+          <li>
+            <button type="button" className="gallery-item" onClick={() => onPick(STATS_PRESET)}>
+              <span className="gallery-item-head">
+                <span aria-hidden="true">{STATS_PRESET.icon}</span> {STATS_PRESET.title}
+              </span>
+              <span className="gallery-preview drawer-muted">Unread, Critical, due and overdue at a glance; for admins, how the classifier is doing.</span>
             </button>
           </li>
         )}

@@ -15,6 +15,7 @@ import { anyLayerOpen, focusKeyAction, isTypingTarget } from './focusKeys'
 import { glanceLine, lockNotificationText } from './lockText'
 import { moreNav, NAV, phoneTabs, visibleNav } from './nav'
 import { resolvePrefs } from './prefs'
+import { DEFAULT_POPUP_RULES } from '../lib/popupRules'
 
 const key = (k: string, extra: Partial<{ ctrlKey: boolean; metaKey: boolean; altKey: boolean; target: unknown }> = {}) => ({
   key: k,
@@ -60,23 +61,24 @@ describe('focus mode keys (FR-UI-004)', () => {
 
 describe('nav gating (sidebar and tab bar share it)', () => {
   const user = { ...me, is_admin: false, permissions: [] } satisfies Me
-  it('hides Security without security.review and Metrics without admin', () => {
-    expect(visibleNav(user).map((i) => i.label)).toEqual(['Home', 'Inbox', 'Board', 'Calendar'])
+  it('hides Security without security.review', () => {
+    expect(visibleNav(user).map((i) => i.label)).toEqual(['Home', 'Inbox', 'Board'])
     expect(visibleNav(me).map((i) => i.label)).toEqual(NAV.map((i) => i.label))
   })
   it('shows only ungated items before /me arrives', () => {
-    expect(visibleNav(undefined).map((i) => i.label)).toEqual(['Home', 'Inbox', 'Board', 'Calendar'])
+    expect(visibleNav(undefined).map((i) => i.label)).toEqual(['Home', 'Inbox', 'Board'])
   })
-  it('phone tabs are Home, Inbox, Board, Security; Calendar and the rest go under More (proposals §15.3)', () => {
+  it('phone tabs are Home, Inbox, Board, Security; the rest go under More (proposals §15.3)', () => {
     expect(phoneTabs(me).map((i) => i.label)).toEqual(['Home', 'Inbox', 'Board', 'Security'])
-    expect(moreNav(me).map((i) => i.label)).toEqual(['Calendar', 'Metrics'])
+    expect(moreNav(me).map((i) => i.label)).toEqual([]) // Calendar is v2; Metrics is the Stats widget now
     expect(phoneTabs(user).map((i) => i.label)).toEqual(['Home', 'Inbox', 'Board']) // no security.review
   })
 })
 
 describe('resolvePrefs', () => {
   it('defaults, and drops wrongly typed values', () => {
-    expect(resolvePrefs({})).toEqual({ motion: undefined, skip_lock: false, idle_minutes: 15, glance_subjects: false, sidebar_collapsed: false, theme: 'auto' })
+    expect(resolvePrefs({})).toEqual({ motion: undefined, skip_lock: false, idle_minutes: 15, glance_subjects: false, sidebar_collapsed: false, theme: 'auto', popup_rules: DEFAULT_POPUP_RULES, quiet_hours: null, keybinds: {} })
+    expect(resolvePrefs({ quiet_hours: null, keybinds: { lock: 'Alt+Q' }, popup_rules: { bad: 1 } })).toMatchObject({ quiet_hours: null, keybinds: { lock: 'Alt+Q' }, popup_rules: DEFAULT_POPUP_RULES })
     expect(resolvePrefs({ theme: 'dark' }).theme).toBe('dark')
     expect(resolvePrefs({ theme: 'sepia' }).theme).toBe('auto')
     expect(resolvePrefs({ motion: 'wild', skip_lock: 'yes', idle_minutes: null })).toMatchObject({ motion: undefined, skip_lock: false, idle_minutes: null })

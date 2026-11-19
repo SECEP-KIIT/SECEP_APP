@@ -1,3 +1,4 @@
+import { Checklist } from '../onboarding/Checklist'
 import { ArrowLeft, ArrowRight, Check, LayoutGrid, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import { useSearchParams } from 'react-router'
@@ -217,6 +218,7 @@ function Dashboard() {
 
   return (
     <div className="dash" data-editing={editing || undefined}>
+      <Checklist />
       {phone ? (
         // Phone: one slim header row, the page switcher and Edit (proposals §16.4).
         <div className="dash-bar phone-bar">
@@ -258,7 +260,7 @@ function Dashboard() {
           <h2 className="dash-title">{page.name}</h2>
         )}
         <SaveStatus state={state} isDefault={isDefault} />
-        {editing && (
+        {(editing || page.widgets.length === 0) && (
           <button type="button" className="ghost-button" onClick={() => setGallery(true)}>
             <Plus size={14} aria-hidden="true" /> Add widget
           </button>
@@ -275,9 +277,19 @@ function Dashboard() {
       <div className="dash-pages" ref={pagesRef} onPointerDown={onPointerDown} onPointerUp={onPointerUp}>
         <div key={page.id} className="dash-page" data-direction={direction}>
           {page.widgets.length === 0 ? (
+            // An empty page offers Add widget straight away, until its first widget is added (19 Nov 2026).
             <div className="col-state">
               <p className="col-state-title">An empty page</p>
-              <p>Choose Edit, then Add widget.</p>
+              <div className="dash-empty-actions">
+                <button type="button" className="primary-button" onClick={() => setGallery(true)}>
+                  <Plus size={14} aria-hidden="true" /> Add widget
+                </button>
+                {sorted.length > 1 && (
+                  <button type="button" className="ghost-button" onClick={deletePage}>
+                    <Trash2 size={14} aria-hidden="true" /> Delete page
+                  </button>
+                )}
+              </div>
             </div>
           ) : phone ? (
             <PhonePage page={page} render={render} />

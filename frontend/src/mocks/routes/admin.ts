@@ -1,5 +1,5 @@
 // Admin (FR-ADM-002–004, FR-ML-011/012) and security review (§6.5). All routes here need admin or security.review.
-import type { EmailType, RoleCategory } from '../../api/types'
+import type { ConfidenceBin, EmailType, RoleCategory, Sentiment, Urgency } from '../../api/types'
 import { control, scaled } from '../control'
 import { page } from '../http/cursor'
 import { Fail, route } from '../http/route'
@@ -171,16 +171,31 @@ export const adminRoutes = [
     if (!Number.isInteger(days) || days < 1 || days > 365) throw new Fail(400, 'bad_request', 'days must be 1–365')
     const since = Date.now() - days * 86_400_000
     const emails = [...db.emails.values()].filter((e) => e.triage && Date.parse(e.received_at) >= since)
-    const count = (t: EmailType) => emails.filter((e) => e.triage!.email_type.label === t).length
-    const overrides = (t: EmailType) =>
-      db.corrections.filter((c) => c.field === 'email_type' && c.old_label === t && Date.parse(c.created_at) >= since).length
-    const bins = Array.from({ length: 10 }, (_, i) => ({ bin_start: i / 10, bin_end: (i + 1) / 10, count: 0 }))
-    for (const e of emails) bins[Math.min(9, Math.floor(e.triage!.email_type.confidence * 10))].count++
+    const corrections = db.corrections.filter((c) => Date.parse(c.created_at) >= since)
+    type Head = 'email_type' | 'urgency' | 'sentiment'
+    const label = (e: (typeof emails)[number], h: Head) => e.triage![h].label as string
+    const histogram = (h: Head): ConfidenceBin[] => {
+      const bins = Array.from({ length: 10 }, (_, i) => ({ bin_start: i / 10, bin_end: (i + 1) / 10, count: 0 }))
+      for (const e of emails) bins[Math.min(9, Math.floor(e.triage![h].confidence * 10))].count++
+      return bins
+    }
+    const head = <L extends string>(h: Head, labels: readonly L[]) => {
+      const n = (l: L) => emails.filter((e) => label(e, h) === l).length
+      const fixed = (l: L) => corrections.filter((c) => c.field === h && c.old_label === l).length
+      return {
+        volume: Object.fromEntries(labels.map((l) => [l, n(l)])) as Record<L, number>,
+        override_rate: Object.fromEntries(labels.map((l) => [l, n(l) ? +(fixed(l) / n(l)).toFixed(4) : 0])) as Record<L, number>,
+        confidence_histogram: histogram(h),
+      }
+    }
+    const type = head('email_type', TYPES)
     return {
       window_days: days,
-      volume_by_type: Object.fromEntries(TYPES.map((t) => [t, count(t)])),
-      override_rate_by_class: Object.fromEntries(TYPES.map((t) => [t, count(t) ? +(overrides(t) / count(t)).toFixed(4) : 0])),
-      confidence_histogram: bins,
+      volume_by_type: type.volume,
+      override_rate_by_class: type.override_rate,
+      confidence_histogram: type.confidence_histogram,
+      urgency: head<Urgency>('urgency', ['Low', 'Medium', 'High', 'Critical']),
+      sentiment: head<Sentiment>('sentiment', ['Positive', 'Neutral', 'Negative', 'Frustrated']),
     }
   }),
 

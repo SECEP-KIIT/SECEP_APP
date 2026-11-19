@@ -1,3 +1,6 @@
+import type { Onboarding } from '../onboarding/onboarding'
+import type { KeyActionId } from '../lib/keybinds'
+import type { PopupRules, QuietHours } from '../lib/popupRules'
 // Wire types for the public API: SRS §6.4.1 (shapes) and §6.6 (enums and nullability). snake_case on purpose:
 // the client uses exactly what the API sends, so switching from MSW to the real API needs no mapping layer.
 // Only the shapes used so far are here; add the rest from §6.4.1 as features need them, never invent fields.
@@ -69,6 +72,11 @@ export interface UserCardPayload {
 export interface Action {
   id: string
   email_id: string | null
+  /**
+   * PROPOSED (proposals §27.2): a Jira issue or calendar event sent from one of your cards (FR-CNT-002 "same
+   * actions"); null otherwise. Such actions are not board cards themselves; the card lists them.
+   */
+  card_id: string | null
   type: ActionType
   origin: ActionOrigin
   status: ActionStatus
@@ -292,6 +300,90 @@ export interface UiPrefs {
   sidebar_collapsed?: boolean
   /** PROPOSED (proposals §16.6): Light, Dark, or Auto (follow the system). Unset = Auto. */
   theme?: 'light' | 'dark' | 'auto'
+  /** PROPOSED (proposals §28.1, FR-REM-007): which new emails pop up, per Normal / Focus / Quiet hours. */
+  popup_rules?: PopupRules
+  /** PROPOSED (proposals §28.1): local HH:MM range; null = quiet hours off. Unset = 22:00–08:00. */
+  quiet_hours?: QuietHours | null
+  /** PROPOSED (proposals §28.3): action id → key combo, overrides of the defaults only. */
+  keybinds?: Partial<Record<KeyActionId, string>>
+  /** PROPOSED (proposals §29): tour, Getting started checklist and first-use hint progress. */
+  onboarding?: Onboarding
+}
+
+/** GET /admin/metrics (§6.5, admin): the classifier over `window_days`. Shown in the Stats widget. */
+/** GET /admin/settings (§6.5): secrets are never returned, only whether one is set. */
+export interface AdminSettings {
+  jira: { site_url: string | null; email: string | null; project_key: string | null; token_set: boolean }
+  llm: { base_url: string | null; model: string | null; api_style: 'ollama' | 'openai'; api_key_set: boolean }
+  confidence_threshold: number
+  protected_domains: string[]
+  poll_interval_s: number
+}
+
+/** PUT /admin/settings: the GET shape; secrets as `token` / `api_key` only when changing them. */
+export interface AdminSettingsInput {
+  jira?: Partial<Omit<AdminSettings['jira'], 'token_set'>> & { token?: string }
+  llm?: Partial<Omit<AdminSettings['llm'], 'api_key_set'>> & { api_key?: string }
+  confidence_threshold?: number
+  protected_domains?: string[]
+  poll_interval_s?: number
+}
+
+export interface SettingsTest {
+  jira: { ok: boolean; error: string | null }
+  llm: { ok: boolean; error: string | null }
+}
+
+/** GET /admin/users item (§6.5). */
+export interface AdminUser {
+  id: string
+  email: string
+  display_name: string | null
+  role_category: RoleCategory
+  is_admin: boolean
+  permissions: string[]
+  last_login_at: string | null
+}
+
+/** GET /admin/models item (§6.5); metrics as M1's model card reports them. */
+export interface ModelView {
+  id: string
+  version: string
+  status: 'candidate' | 'promoted' | 'retired'
+  metrics: { type_macro_f1: number; urgency_macro_f1: number; sentiment_macro_f1: number; per_class_f1: Record<string, number>; ece: number }
+  created_at: string
+  promoted_at: string | null
+}
+
+/**
+ * PROPOSED (proposals §25.2, FR-ORC-012): optional in `POST /actions/:id/accept` for create_jira_issue. Omitted, the
+ * server uses the primary project's Jira project and epic, else the tenant default project.
+ */
+export interface JiraTarget {
+  project_key: string | null
+  epic: string | null
+}
+
+export interface ConfidenceBin {
+  bin_start: number
+  bin_end: number
+  count: number
+}
+
+/** PROPOSED (proposals §25.1): the same three figures as the email-type fields, for urgency and for sentiment. */
+export interface HeadMetrics<L extends string> {
+  volume: Partial<Record<L, number>>
+  override_rate: Partial<Record<L, number>>
+  confidence_histogram: ConfidenceBin[]
+}
+
+export interface AdminMetrics {
+  window_days: number
+  volume_by_type: Partial<Record<EmailType, number>>
+  override_rate_by_class: Partial<Record<EmailType, number>>
+  confidence_histogram: ConfidenceBin[]
+  urgency: HeadMetrics<Urgency>
+  sentiment: HeadMetrics<Sentiment>
 }
 
 /** PATCH /me/preferences: request is a partial UiPrefs; response is the full stored object. */

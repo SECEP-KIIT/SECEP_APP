@@ -67,7 +67,7 @@ export const EmailCard = memo(function EmailCard({ email, now, density, fresh, o
 
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.target !== e.currentTarget) return
-    // FR-UI-028 keyboard: j/k, x, e, ⇧J, ⇧C, Ctrl/⌘+C, Shift+F10.
+    // FR-UI-028 keyboard: card keys from Settings (j/k, x, e, p, r, ⇧J by default), Ctrl/⌘+C, Shift+F10.
     const key = cardKeyAction(e)
     if (key) {
       e.preventDefault()
@@ -82,7 +82,6 @@ export const EmailCard = memo(function EmailCard({ email, now, density, fresh, o
       } else if (key === 'select') selection.toggle(email.id)
       else if (key === 'done') void quick.toggleHandled()
       else if (key === 'jira') void quick.send('create_jira_issue')
-      else if (key === 'calendar') void quick.send('add_calendar_event')
       else if (key === 'copy') copySummary(email, toast)
       else if (key === 'project') {
         const r = ref.current?.getBoundingClientRect()

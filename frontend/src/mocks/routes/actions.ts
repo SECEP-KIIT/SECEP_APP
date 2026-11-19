@@ -84,12 +84,34 @@ function emitUpdated(a: ActionRow) {
   if (email) publish(a.user_id, 'email.triaged', { email_id: email.id, email: toListItem(db, email) })
 }
 
-async function execute(a: ActionRow, user: UserRow): Promise<Response | ActionRow> {
+const KEY_RE = /^[A-Z][A-Z0-9]{1,9}$/
+const EPIC_RE = /^[A-Z][A-Z0-9]{1,9}-\d+$/
+
+/** The caller's primary project for an email or card (FR-UI-017: it decides Jira routing). */
+function primaryProject(a: ActionRow, user: UserRow) {
+  const items = db.projectItems.filter((i) => i.is_primary && (a.email_id ? i.email_id === a.email_id : i.action_id === (a.card_id ?? a.id)))
+  return items.map((i) => db.projects.find((p) => p.id === i.project_id)).find((p) => p && p.user_id === user.id)
+}
+
+/**
+ * Proposals §25.2 (FR-ORC-012): where the issue goes. An explicit `jira` in the accept body wins; otherwise the primary
+ * project's Jira project and epic; otherwise the tenant default project with no epic.
+ */
+export function jiraTarget(a: ActionRow, user: UserRow, given?: { project_key: string | null; epic: string | null }) {
+  const p = primaryProject(a, user)
+  const fallback = db.settings.jira.project_key ?? 'ATL'
+  if (given) return { project_key: given.project_key ?? fallback, epic: given.epic }
+  return { project_key: p?.jira_project_key ?? fallback, epic: p?.jira_project_key ? p.jira_epic : null }
+}
+
+async function execute(a: ActionRow, user: UserRow, target?: { project_key: string; epic: string | null }): Promise<Response | ActionRow> {
   a.status = 'executing'
   a.updated_at = now()
   try {
     if (a.type === 'create_jira_issue') {
-      a.external_ref = await createIssue({ assignee: user.email }) // FR-ORC-003; assigned to the caller (§12.2)
+      const t = target ?? jiraTarget(a, user)
+      // FR-ORC-003; assigned to the caller (§12.2), in the target project and under its epic (§25.2).
+      a.external_ref = await createIssue({ assignee: user.email, project_key: t.project_key, epic: t.epic })
       a.external_status = 'To Do'
     } else if (a.type === 'add_calendar_event') {
       a.external_ref = `evt_${crypto.randomUUID().slice(0, 8)}` // simulated Google Calendar events.insert (FR-ORC-010)
@@ -97,7 +119,9 @@ async function execute(a: ActionRow, user: UserRow): Promise<Response | ActionRo
     a.status = 'done'
     a.error = null
     a.undo_until = new Date(Date.now() + UNDO_WINDOW_MS).toISOString()
-    placeOnBoard(a, 'todo') // FR-ORC-007: accepted cards and created Jira issues land in To do
+    // FR-ORC-007: accepted cards and created Jira issues land in To do. One sent from a card (§27.2) stays off the
+    // board: the card is already there and lists it.
+    if (!a.card_id) placeOnBoard(a, 'todo')
     await audit(user.id, 'action.execute', a.id, { type: a.type, outcome: 'done', external_ref: a.external_ref })
     return a
   } catch (err) {
@@ -148,6 +172,36 @@ function boardMove(a: ActionRow, column: BoardColumn, position: number) {
   }
 }
 
+/**
+ * PROPOSED (proposals §27.2): POST /actions { type: create_jira_issue | add_calendar_event, payload, card_id } makes a
+ * proposed action for one of the caller's cards, accepted as usual (POST /actions/:id/accept). Same payload and
+ * per-type rules as an email's actions; the Jira priority defaults from the card's urgency.
+ */
+function sendFromCard(user: UserRow, body: unknown) {
+  const f = object(body).only(['type', 'payload', 'card_id'])
+  const type = f.body.type as ActionType
+  if (type !== 'create_jira_issue' && type !== 'add_calendar_event') f.add('type', 'Must be create_jira_issue or add_calendar_event')
+  const raw = (f.body.payload ?? {}) as Record<string, unknown>
+  if (typeof raw !== 'object' || Array.isArray(raw)) f.add('payload', 'Must be an object')
+  else checkPayloadFields(f, raw)
+  f.done()
+  const card = own(typeof f.body.card_id === 'string' ? db.actions.get(f.body.card_id) : undefined, user, 'Card')
+  if (!isUserCard(card)) throw new Fail(409, 'conflict', 'Only cards you made can be sent')
+  const payload: DecoderActionPayload = { title: null, description: null, priority: null, due_date: null, start: null, end: null, attendees: null, ...raw }
+  const urgency = (card.payload as UserCardPayload).urgency
+  if (type === 'create_jira_issue' && !payload.priority && urgency) payload.priority = PRIORITY_FOR[urgency]
+  checkTypeRules(type, payload, f)
+  f.done('action_invalid', 'Action payload fails the per-type rules')
+  const a: ActionRow = {
+    id: crypto.randomUUID(), user_id: user.id, email_id: null, card_id: card.id, type, origin: 'user', status: 'proposed', payload,
+    board_column: null, board_position: null, external_ref: null, external_status: null, error: null, created_at: now(), updated_at: now(),
+  }
+  db.actions.set(a.id, a)
+  changed()
+  emitUpdated(a)
+  return new Response(JSON.stringify(toAction(a)), { status: 201, headers: { 'Content-Type': 'application/json' } })
+}
+
 export const actionRoutes = [
   route('get', '/actions', 'user', ({ user, url }) => {
     const status = url.searchParams.get('status')
@@ -155,9 +209,12 @@ export const actionRoutes = [
     if (column && !COLUMNS.includes(column as BoardColumn)) throw new Fail(400, 'bad_request', 'Unknown column')
     // PROPOSED (proposals §18.3): a project's cards, from its emails or filed in it.
     const projectId = url.searchParams.get('project')
+    // PROPOSED (proposals §27.2): the Jira issues and events sent from one card.
+    const cardId = url.searchParams.get('card')
+    if (cardId) own(db.actions.get(cardId), user, 'Card')
     const inProject = projectId ? new Set(projectCards(db, own(db.projects.find((p) => p.id === projectId), user, 'Project').id).map((a) => a.id)) : null
     const items = [...db.actions.values()]
-      .filter((a) => a.user_id === user.id && (!status || a.status === status) && (!column || a.board_column === column) && (!inProject || inProject.has(a.id)))
+      .filter((a) => a.user_id === user.id && (!status || a.status === status) && (!column || a.board_column === column) && (!inProject || inProject.has(a.id)) && (!cardId || a.card_id === cardId))
       .sort((a, b) => (a.board_position ?? Infinity) - (b.board_position ?? Infinity) || b.created_at.localeCompare(a.created_at))
     return page(url, items.map(toAction))
   }),
@@ -186,6 +243,7 @@ export const actionRoutes = [
 
   // User card (FR-CNT-002, proposals §19.1): no email; lands in To do.
   route('post', '/actions', 'user', ({ user, body }) => {
+    if ((body as { card_id?: unknown } | null)?.card_id !== undefined) return sendFromCard(user, body)
     const f = object(body).only(['type', 'payload'])
     if (f.body.type !== 'add_board_card') f.add('type', 'Only add_board_card')
     const p = (f.body.payload ?? {}) as Record<string, unknown>
@@ -230,10 +288,20 @@ export const actionRoutes = [
     if (a.status === 'executing') throw new Fail(409, 'conflict', 'Action is already executing')
     if (a.status === 'rejected') throw new Fail(409, 'conflict', 'Action was rejected')
 
-    const f = object(body ?? {}).only(['payload', 'mode'])
+    const f = object(body ?? {}).only(['payload', 'mode', 'jira'])
     const edits = (f.body.payload ?? {}) as Record<string, unknown>
     if (typeof edits !== 'object' || Array.isArray(edits)) f.add('payload', 'Must be an object')
     else checkPayloadFields(f, edits)
+    // Proposals §25.2: optional Jira target for create_jira_issue only.
+    const jira = f.body.jira as { project_key?: unknown; epic?: unknown } | undefined
+    if (jira !== undefined) {
+      if (a.type !== 'create_jira_issue') f.add('jira', 'Only for Jira issues')
+      else if (typeof jira !== 'object' || jira === null || Array.isArray(jira) || Object.keys(jira).some((k) => k !== 'project_key' && k !== 'epic')) f.add('jira', 'Must be { project_key, epic }')
+      else {
+        if (jira.project_key != null && !(typeof jira.project_key === 'string' && KEY_RE.test(jira.project_key))) f.add('jira.project_key', 'A Jira project key, like ATL')
+        if (jira.epic != null && !(typeof jira.epic === 'string' && EPIC_RE.test(jira.epic))) f.add('jira.epic', 'An issue key, like ATL-100')
+      }
+    }
     // mode "comment" (FR-ORC-013, S) is accepted and treated as "issue" until commenting is built.
     if (f.body.mode !== undefined && f.body.mode !== 'issue' && f.body.mode !== 'comment') f.add('mode', 'Must be issue or comment')
     f.done()
@@ -245,7 +313,8 @@ export const actionRoutes = [
     f.done('action_invalid', 'Action payload fails the per-type rules')
     a.payload = payload
 
-    const result = await execute(a, user)
+    const given = jira && { project_key: (jira.project_key as string | null | undefined) ?? null, epic: (jira.epic as string | null | undefined) ?? null }
+    const result = await execute(a, user, a.type === 'create_jira_issue' ? jiraTarget(a, user, given) : undefined)
     return result instanceof Response ? result : toAction(result)
   }),
 

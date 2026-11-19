@@ -1,7 +1,9 @@
+import { markDone } from '../onboarding/onboarding'
 import { QueryClient, infiniteQueryOptions, keepPreviousData, queryOptions, useMutation, useQuery } from '@tanstack/react-query'
 import { ApiError, api, apiBlob } from './client'
 import { patchActionCache, patchEmailCache, settleLists } from './realtime'
 import type {
+  JiraTarget,
   BoardColumn,
   EmailProjectRef,
   Action,
@@ -93,10 +95,11 @@ const json = (body: unknown): RequestInit => ({ method: 'POST', headers: { 'Cont
  * POST /actions/:id/accept (FR-ORC-012). `payload` holds only the edited fields. A 502 upstream_error means the
  * server marked the action failed after its retries (FR-ORC-006), so the detail is refetched to show that.
  */
-export function acceptAction(action: Action, payload?: Partial<DecoderActionPayload>) {
-  return api<Action>(`/actions/${action.id}/accept`, json(payload ? { payload } : {})).then(
+export function acceptAction(action: Action, payload?: Partial<DecoderActionPayload>, jira?: JiraTarget) {
+  return api<Action>(`/actions/${action.id}/accept`, json({ ...(payload && { payload }), ...(jira && { jira }) })).then(
     (updated) => {
       patchActionCache(queryClient, updated)
+      if (updated.type === 'create_jira_issue') markDone('send_jira')
       return updated
     },
     (err: unknown) => {
@@ -420,7 +423,8 @@ export function useUpdatePreferences() {
     },
     onSuccess: ({ ui_prefs }) => {
       const me = queryClient.getQueryData<Me>(['me'])
-      if (me) queryClient.setQueryData<Me>(['me'], { ...me, ui_prefs: { ...ui_prefs } })
+      // Onboarding progress is written by its own queue (onboarding.ts); the client's copy is the newest.
+      if (me) queryClient.setQueryData<Me>(['me'], { ...me, ui_prefs: { ...ui_prefs, ...(me.ui_prefs.onboarding !== undefined && { onboarding: me.ui_prefs.onboarding }) } })
       // Glance hides or shows subjects depending on glance_subjects.
       void queryClient.invalidateQueries({ queryKey: ['glance'] })
     },
@@ -460,6 +464,20 @@ const refreshProjects = () => {
   void queryClient.invalidateQueries({ queryKey: ['projects'] })
   void queryClient.invalidateQueries({ queryKey: ['project'] })
   void queryClient.invalidateQueries({ queryKey: ['actions', 'board'] })
+}
+
+/** Proposals §27.2: the Jira issues and calendar events sent from one card. */
+export const cardSendsOptions = (cardId: string) =>
+  queryOptions({
+    queryKey: ['actions', 'card', cardId],
+    queryFn: ({ signal }) => api<Page<Action>>(`/actions?card=${cardId}&limit=50`, { signal }),
+  })
+
+/** Send a card to Jira or Calendar (proposals §27.2): POST /actions {type, payload, card_id}, then accept it. */
+export async function sendCard(cardId: string, type: 'create_jira_issue' | 'add_calendar_event', payload: Partial<DecoderActionPayload>, jira?: JiraTarget) {
+  const created = await api<Action>('/actions', json({ type, payload, card_id: cardId }))
+  void queryClient.invalidateQueries({ queryKey: ['actions', 'card', cardId], exact: true })
+  return acceptAction(created, undefined, jira)
 }
 
 /** POST /actions, then files the card into its projects (POST /projects/:id/items {action_id}). */
