@@ -123,3 +123,13 @@
 html[data-motion='off'] .board-item {
   transition: none !important;
 }
+.board-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.board-card-tags .tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}

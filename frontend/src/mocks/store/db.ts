@@ -3,9 +3,11 @@ import { SEED, addEmail, createDb, enrichEmail, scoreLinks, syncJiraSeq, withIdB
 import { apply, load, save, STORAGE_KEY } from './persist'
 import { rng } from './random'
 import { TEMPLATES } from './templates'
+import { bindStore } from './serialize'
 import type { Db, EmailRow, UserRow } from './types'
 
 export let db: Db = createDb(Date.now())
+bindStore(() => db)
 
 let persist = false
 let saveTimer: ReturnType<typeof setTimeout> | undefined

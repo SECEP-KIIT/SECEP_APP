@@ -22,7 +22,7 @@ async function sha256(text: string) {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-export type AuditEvent = 'login' | 'settings.update' | 'action.execute' | 'action.undo' | 'secret.reveal' | 'model.promote'
+export type AuditEvent = 'login' | 'settings.update' | 'action.execute' | 'action.undo' | 'action.delete' | 'secret.reveal' | 'model.promote'
 
 export async function audit(actorUserId: string | null, event: AuditEvent, target: string | null, details: Record<string, unknown> = {}) {
   const prev = db.audit[db.audit.length - 1]

@@ -49,6 +49,26 @@ function checkTypeRules(type: ActionType, p: DecoderActionPayload, f: Fields) {
 
 const now = () => new Date().toISOString()
 
+const URGENCIES: Urgency[] = ['Critical', 'High', 'Medium', 'Low']
+const SOURCES = ['in_person', 'call', 'chat']
+const CARD_KEYS = ['title', 'description', 'due_date', 'due_time', 'urgency', 'checklist', 'source', 'person'] as const
+
+/** User-card payload rules (§6.4 FR-CNT-002, proposals §19.1), for a whole payload or a partial edit. */
+export function checkCardPayload(f: Fields, p: Record<string, unknown>, partial: boolean) {
+  for (const k of Object.keys(p)) if (!(CARD_KEYS as readonly string[]).includes(k)) f.add(`payload.${k}`, 'Unknown field')
+  if ((!partial || 'title' in p) && !(isStr(p.title, 120) && (p.title as string).trim())) f.add('payload.title', 'Required, at most 120 characters')
+  if ('description' in p && !isOptStr(p.description, 2000)) f.add('payload.description', 'At most 2000 characters')
+  if ('due_date' in p && p.due_date !== null && !isDate(p.due_date)) f.add('payload.due_date', 'Must be YYYY-MM-DD')
+  if ('due_time' in p && p.due_time !== null && !(typeof p.due_time === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(p.due_time))) f.add('payload.due_time', 'Must be HH:MM')
+  if ('urgency' in p && p.urgency !== null && !URGENCIES.includes(p.urgency as Urgency)) f.add('payload.urgency', 'Not an urgency')
+  if ('checklist' in p && !(Array.isArray(p.checklist) && p.checklist.length <= 50 && p.checklist.every((i) => i && typeof i === 'object' && isStr(i.text, 200) && i.text.trim() && typeof i.done === 'boolean' && Object.keys(i).length === 2))) {
+    f.add('payload.checklist', 'Up to 50 items of {text, done}')
+  }
+  if ('source' in p && p.source !== null && !SOURCES.includes(p.source as string)) f.add('payload.source', 'Must be in_person, call or chat')
+  if ('person' in p && !isOptStr(p.person, 120)) f.add('payload.person', 'At most 120 characters')
+}
+const isUserCard = (a: ActionRow) => a.origin === 'user' && a.email_id === null && a.type === 'add_board_card'
+
 /** Appends a card to the end of a board column (FR-ORC-007). */
 function placeOnBoard(a: ActionRow, column: BoardColumn) {
   const others = [...db.actions.values()].filter((x) => x.user_id === a.user_id && x.board_column === column && x.id !== a.id)
@@ -163,18 +183,20 @@ export const actionRoutes = [
     return toAction(a)
   }),
 
-  // User card (FR-CNT-002): no email; lands in To do.
+  // User card (FR-CNT-002, proposals §19.1): no email; lands in To do.
   route('post', '/actions', 'user', ({ user, body }) => {
     const f = object(body).only(['type', 'payload'])
     if (f.body.type !== 'add_board_card') f.add('type', 'Only add_board_card')
-    const p = (f.body.payload ?? {}) as Partial<UserCardPayload>
-    if (!isStr(p.title, 120) || !p.title) f.add('payload.title', 'Required, at most 120 characters')
-    if (p.description !== undefined && !isOptStr(p.description, 2000)) f.add('payload.description', 'At most 2000 characters')
-    if (p.due_date != null && !isDate(p.due_date)) f.add('payload.due_date', 'Must be YYYY-MM-DD')
+    const p = (f.body.payload ?? {}) as Record<string, unknown>
+    if (typeof p !== 'object' || Array.isArray(p)) f.add('payload', 'Must be an object')
+    else checkCardPayload(f, p, false)
+    f.done()
+    const c = p as Partial<UserCardPayload>
+    if (c.due_time && !c.due_date) f.add('payload.due_time', 'Needs a due date')
     f.done()
     const payload: UserCardPayload = {
-      title: p.title!, description: p.description ?? null, due_date: p.due_date ?? null, due_time: p.due_time ?? null,
-      urgency: p.urgency ?? null, checklist: p.checklist ?? [], source: p.source ?? null, person: p.person ?? null,
+      title: c.title!.trim(), description: c.description ?? null, due_date: c.due_date ?? null, due_time: c.due_time ?? null,
+      urgency: c.urgency ?? null, checklist: c.checklist ?? [], source: c.source ?? null, person: c.person ?? null,
     }
     const a: ActionRow = {
       id: crypto.randomUUID(), user_id: user.id, email_id: null, type: 'add_board_card', origin: 'user', status: 'done', payload,
@@ -185,6 +207,18 @@ export const actionRoutes = [
     changed()
     emitUpdated(a)
     return toAction(a)
+  }, { status: 201 }),
+
+  // PROPOSED (proposals §19.1): a user card can be deleted; the client's Undo re-creates it.
+  route<{ id: string }>('delete', '/actions/:id', 'user', async ({ user, params }) => {
+    const a = own(db.actions.get(params.id), user, 'Action')
+    if (!isUserCard(a)) throw new Fail(409, 'conflict', 'Only cards you made can be deleted')
+    removeFromBoard(a)
+    db.actions.delete(a.id)
+    db.projectItems = db.projectItems.filter((i) => i.action_id !== a.id)
+    await audit(user.id, 'action.delete', a.id, { type: a.type })
+    changed()
+    return undefined
   }),
 
   route<{ id: string }>('post', '/actions/:id/accept', 'user', async ({ user, params, body }) => {
@@ -243,16 +277,34 @@ export const actionRoutes = [
     return toAction(a)
   }),
 
-  // Board moves (FR-ORC-007). The v1.1 fields (payload, pinned, snoozed_until) come with their features.
+  // Board moves (FR-ORC-007) and, for user cards, payload edits (v1.1, proposals §19.1). pinned and snoozed_until
+  // come with their features.
   route<{ id: string }>('patch', '/actions/:id', 'user', ({ user, params, body }) => {
     const a = own(db.actions.get(params.id), user, 'Action')
-    const f = object(body).only(['board_column', 'board_position'])
-    const column = f.body.board_column as BoardColumn
-    if (!COLUMNS.includes(column)) f.add('board_column', 'Must be todo, in_progress or done')
-    if (!isInt(f.body.board_position, 0, 10_000)) f.add('board_position', 'Must be a non-negative integer')
+    const f = object(body).only(['board_column', 'board_position', 'payload'])
+    const move = 'board_column' in f.body || 'board_position' in f.body
+    const edit = f.body.payload as Record<string, unknown> | undefined
+    if (!move && edit === undefined) f.add('payload', 'Nothing to change')
+    if (move) {
+      if (!COLUMNS.includes(f.body.board_column as BoardColumn)) f.add('board_column', 'Must be todo, in_progress or done')
+      if (!isInt(f.body.board_position, 0, 10_000)) f.add('board_position', 'Must be a non-negative integer')
+    }
+    if (edit !== undefined) {
+      if (!edit || typeof edit !== 'object' || Array.isArray(edit)) f.add('payload', 'Must be an object')
+      else checkCardPayload(f, edit, true)
+    }
     f.done()
-    if (a.status !== 'done') throw new Fail(409, 'conflict', 'Only cards on the board can move')
-    boardMove(a, column, f.body.board_position as number)
+    if (edit !== undefined) {
+      if (!isUserCard(a)) throw new Fail(409, 'conflict', 'Only cards you made can be edited here')
+      const next = { ...(a.payload as UserCardPayload), ...edit } as UserCardPayload
+      if (next.due_time && !next.due_date) f.add('payload.due_time', 'Needs a due date')
+      f.done()
+      a.payload = { ...next, title: next.title.trim() }
+    }
+    if (move) {
+      if (a.status !== 'done') throw new Fail(409, 'conflict', 'Only cards on the board can move')
+      boardMove(a, f.body.board_column as BoardColumn, f.body.board_position as number)
+    }
     a.updated_at = now()
     changed()
     emitUpdated(a)

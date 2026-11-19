@@ -93,7 +93,7 @@ export interface SecretRow {
   secret_type: string
 }
 
-export interface ActionRow extends Action {
+export interface ActionRow extends Omit<Action, 'projects'> {
   user_id: string
   /** §6.6 v1.1 `actions.undo_until`: until when POST /actions/:id/undo may delete the created issue or event. */
   undo_until?: string | null

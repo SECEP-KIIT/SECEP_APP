@@ -5,10 +5,16 @@ import { dueDateOfActions } from '../../lib/due'
 import { SENDERS } from './templates'
 import type { ActionRow, Db, EmailRow, ModelRow, ProjectRow, SettingsRow, UrlCheckRow, UserRow } from './types'
 
+// The store, for toAction's project list. Bound by db.ts (a direct import would be a cycle through generate.ts).
+let store: (() => Db) | null = null
+export const bindStore = (get: () => Db) => void (store = get)
+
 export function toAction(a: ActionRow): Action {
   // undo_until is server state (§6.6), not part of the §6.4.1 Action shape.
   const { user_id: _owner, undo_until: _undo, ...action } = a
-  return { ...action, payload: { ...action.payload } }
+  // PROPOSED (proposals §19.1): a user card's projects; [] for an email's actions (the email carries them).
+  const projects = a.origin === 'user' && a.email_id === null && store ? itemProjectRefs(store(), 'action_id', a.id) : []
+  return { ...action, payload: { ...action.payload }, projects }
 }
 
 export function toLink(c: UrlCheckRow): LinkView {
@@ -135,9 +141,11 @@ export function toModel(m: ModelRow) {
 }
 
 /** An email's projects for its card (proposals §4, §18): primary first, then in the order added. */
-export function emailProjectRefs(db: Db, emailId: string): EmailProjectRef[] {
+export const emailProjectRefs = (db: Db, emailId: string) => itemProjectRefs(db, 'email_id', emailId)
+
+function itemProjectRefs(db: Db, key: 'email_id' | 'action_id', id: string): EmailProjectRef[] {
   return db.projectItems
-    .filter((i) => i.email_id === emailId)
+    .filter((i) => i[key] === id)
     .sort((a, b) => Number(b.is_primary) - Number(a.is_primary) || a.added_at.localeCompare(b.added_at))
     .flatMap((i) => {
       const p = db.projects.find((x) => x.id === i.project_id)
