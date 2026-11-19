@@ -1,4 +1,5 @@
 import { memo, useEffect, useId, useRef, useState, type KeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react'
+import { startEmailDrag } from '../lib/dragEmails'
 import type { EmailListItem } from '../api/types'
 import type { Density, FilterPatch } from './cardModel'
 import { CardBody } from './CardBody'
@@ -155,6 +156,12 @@ export const EmailCard = memo(function EmailCard({ email, now, density, fresh, o
         menu(email, e.clientX, e.clientY)
       }}
       onKeyDown={onKeyDown}
+      // FR-UI-028: drag onto a sidebar project to add it; a selected card carries the whole selection.
+      draggable
+      onDragStart={(e) => {
+        lift?.hide()
+        startEmailDrag(e, selection.selected.has(email.id) ? [...selection.selected] : [email.id])
+      }}
       onPointerEnter={(e) => {
         const t = e.pointerType === 'mouse' && canLift() ? target() : null
         if (t) lift?.enter(t)

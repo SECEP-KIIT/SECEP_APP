@@ -40,10 +40,12 @@ export function fullViewHref(w: Pick<Widget, 'filter' | 'sort'>) {
 }
 
 /** Widget types the client can render today. The gallery offers only these; tasks 10–15 add theirs. */
-export const BUILT_TYPES: WidgetType[] = ['inbox_column']
+export const BUILT_TYPES: WidgetType[] = ['inbox_column', 'board']
 
 export interface WidgetPreset {
   key: string
+  /** Default inbox_column. */
+  type?: WidgetType
   title: string
   icon: string
   colour: Swatch | null
@@ -51,6 +53,9 @@ export interface WidgetPreset {
   filter: string
   sort: Widget['sort']
 }
+
+/** The Board widget (FR-ORC-007, task 10): the board as a tile; ⤢ opens /board. */
+export const BOARD_PRESET: WidgetPreset = { key: 'board', type: 'board', title: 'Board', icon: '📋', colour: null, filter: '', sort: null }
 
 /** Gallery entries: inbox columns as saved filters (FR-UI-006), in the GET /emails vocabulary. */
 export const COLUMN_PRESETS: WidgetPreset[] = [
@@ -122,7 +127,10 @@ export function addHandledPage(pages: LayoutPage[]): LayoutPage[] | null {
 /** Adds a widget at the end of the page; null when the page holds MAX_WIDGETS already. */
 export function addWidget(page: LayoutPage, preset: WidgetPreset, size: WidgetSize = 'small'): LayoutPage | null {
   if (page.widgets.length >= MAX_WIDGETS) return null
-  const w: Widget = { id: newId(), type: 'inbox_column', size, hidden: false, stacked: false, title: preset.title, icon: preset.icon, colour: preset.colour, filter: preset.filter, sort: preset.sort, density: null }
+  const type = preset.type ?? 'inbox_column'
+  // Only inbox columns have a filter and a sort (§6.4 Widget; PUT /layouts answers 422 otherwise).
+  const column = type === 'inbox_column'
+  const w: Widget = { id: newId(), type, size, hidden: false, stacked: false, title: preset.title, icon: preset.icon, colour: preset.colour, filter: column ? preset.filter : null, sort: column ? preset.sort : null, density: null }
   return { ...page, widgets: [...page.widgets, w] }
 }
 

@@ -98,6 +98,8 @@
   /* Tags: dark same-hue text on a pastel fill */
   --tag-danger-bg: #fdecea;  --tag-danger-fg: #a61b10;  /* 6.59 */
   --tag-warn-bg: #fff1dc;    --tag-warn-fg: #7c430c;    /* 7.08 */
+  /* Project progress ring warnings (FR-UI-020); always with a text label too. */
+  --ring-amber: #e67700;     --ring-red: #c92a2a;
   --tag-ok-bg: #e4f3e8;      --tag-ok-fg: #1b5e33;      /* 6.78 */
   --tag-muted-bg: #eef0f5;   --tag-muted-fg: var(--ink-muted); /* 6.98 */
   --skel: #e7eaf2;
@@ -137,6 +139,7 @@ html[data-theme='dark'] {
   /* Tags: light same-hue text on a deep fill (security, due, status) */
   --tag-danger-bg: #45222b;  --tag-danger-fg: #ffb4b4;  /* 8.20 */
   --tag-warn-bg: #3f3018;    --tag-warn-fg: #ffd59e;    /* 9.27 */
+  --ring-amber: #ffa94d;     --ring-red: #ff8787;
   --tag-ok-bg: #1b3a29;      --tag-ok-fg: #9be3b0;      /* 8.32 */
   --tag-muted-bg: #2d3346;
   --skel: #2b3142;

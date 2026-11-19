@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react'
 import { api } from '../api/client'
 import type { EmailListItem, Page } from '../api/types'
 import { MaskedText } from '../components/MaskedText'
-import { COLUMN_PRESETS, type WidgetPreset } from './layoutModel'
+import { BOARD_PRESET, COLUMN_PRESETS, type WidgetPreset } from './layoutModel'
 
 /**
  * "+ Add widget" (FR-UI-008, item 2): the widget gallery, with a live preview of what each column would show (its
@@ -27,8 +27,18 @@ export function Gallery({ open, onClose, onPick }: { open: boolean; onClose: () 
           Close
         </button>
       </div>
-      <p className="drawer-muted">Inbox columns are saved filters. Board, Calendar and the other widgets join as they are built.</p>
+      <p className="drawer-muted">Inbox columns are saved filters. Calendar and the other widgets join as they are built.</p>
       <ul className="gallery-list">
+        {open && (
+          <li>
+            <button type="button" className="gallery-item" onClick={() => onPick(BOARD_PRESET)}>
+              <span className="gallery-item-head">
+                <span aria-hidden="true">{BOARD_PRESET.icon}</span> {BOARD_PRESET.title}
+              </span>
+              <span className="gallery-preview drawer-muted">To do · In progress · Done. Drag cards between them.</span>
+            </button>
+          </li>
+        )}
         {open &&
           COLUMN_PRESETS.map((p) => (
             <li key={p.key}>
