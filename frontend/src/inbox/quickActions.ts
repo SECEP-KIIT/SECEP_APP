@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { acceptAction, emailDetailOptions, queryClient, updateEmail } from '../api/queries'
-import type { EmailListItem } from '../api/types'
-import { errorText, useInbox, type OpenOptions } from './inboxContext'
+import { acceptAction, emailDetailOptions, queryClient, undoAction, updateEmail } from '../api/queries'
+import type { Action, EmailListItem } from '../api/types'
+import { errorText, useInbox, type InboxApi, type OpenOptions } from './inboxContext'
 import { useLift } from './liftContext'
 
 export type Busy = 'jira' | 'calendar' | 'done' | 'pin' | null
@@ -9,6 +9,36 @@ type Compose = NonNullable<OpenOptions['compose']>
 
 /** Matches the card fade in inbox.css: the card fades, then leaves the list (item 9 "card removal"). */
 const LEAVE_MS = 120
+
+/**
+ * Sends the email's proposal of this type as is (FR-ORC-012). null when there's nothing to send as is (the caller
+ * opens the composer instead).
+ */
+export async function sendProposal(emailId: string, type: Compose): Promise<Action | null> {
+  const detail = await queryClient.fetchQuery(emailDetailOptions(emailId))
+  const proposal = detail.actions.find((a) => a.type === type && (a.status === 'proposed' || a.status === 'failed'))
+  return proposal ? acceptAction(proposal) : null
+}
+
+/** FR-UI-029: undo deletes the created issues or events (POST /actions/:id/undo), within ~10 s. */
+export const undoSends = (done: Action[], toast: InboxApi['toast']) => ({
+  label: 'Undo',
+  run: () =>
+    void Promise.all(done.map(undoAction)).then(
+      () => toast(done[0].type === 'create_jira_issue' ? `Deleted from Jira` : 'Removed from your calendar'),
+      (err: unknown) => toast(errorText(err), 'error'),
+    ),
+})
+
+/** Done / Restore for several emails, with Undo (FR-UI-029). */
+export async function setHandled(ids: readonly string[], handled: boolean, toast: InboxApi['toast']) {
+  await Promise.all(ids.map((id) => updateEmail(id, { handled })))
+  const n = ids.length === 1 ? '' : `${ids.length} emails `
+  toast(handled ? `${n}Marked as handled. Find ${ids.length === 1 ? 'it' : 'them'} under Handled.` : `${n}Back in the inbox`, 'info', {
+    label: 'Undo',
+    run: () => void Promise.all(ids.map((id) => updateEmail(id, { handled: !handled }))).catch((err: unknown) => toast(errorText(err), 'error')),
+  })
+}
 
 /**
  * The card's quick actions (FR-UI-011 layer 2), shared by the hover bar (desktop) and the long-press menu (touch).
@@ -30,11 +60,10 @@ export function useQuickActions(email: EmailListItem, onLeave: (leaving: boolean
     if (edit) return open({ compose: type })
     setBusy(type === 'create_jira_issue' ? 'jira' : 'calendar')
     try {
-      const detail = await queryClient.fetchQuery(emailDetailOptions(email.id))
-      const proposal = detail.actions.find((a) => a.type === type && (a.status === 'proposed' || a.status === 'failed'))
-      if (!proposal) return open({ compose: type })
-      const result = await acceptAction(proposal)
-      if (result.status === 'done') toast(type === 'create_jira_issue' ? `Sent to Jira as ${result.external_ref}` : 'Added to your calendar')
+      const result = await sendProposal(email.id, type)
+      if (!result) return open({ compose: type })
+      // No delay before sending (item 8): it happens now, and Undo deletes it again (FR-UI-029).
+      if (result.status === 'done') toast(type === 'create_jira_issue' ? `Sent to Jira · ${result.external_ref}` : 'Added to your calendar', 'info', undoSends([result], toast))
       else toast(`Couldn't send it: ${result.error ?? 'the action failed'}. Retry from the details.`, 'error')
     } catch (err) {
       toast(errorText(err), 'error')
@@ -47,8 +76,7 @@ export function useQuickActions(email: EmailListItem, onLeave: (leaving: boolean
     setBusy('done')
     onLeave(true)
     try {
-      await Promise.all([updateEmail(email.id, { handled: !email.handled }), new Promise((r) => setTimeout(r, LEAVE_MS))])
-      toast(email.handled ? 'Back in the inbox' : 'Marked as handled. Find it under Handled.')
+      await Promise.all([setHandled([email.id], !email.handled, toast), new Promise((r) => setTimeout(r, LEAVE_MS))])
     } catch (err) {
       onLeave(false)
       toast(errorText(err), 'error')
@@ -69,5 +97,14 @@ export function useQuickActions(email: EmailListItem, onLeave: (leaving: boolean
     }
   }
 
-  return { busy, send, toggleHandled, togglePin, open }
+  const toggleRead = async () => {
+    try {
+      await updateEmail(email.id, { read: !email.read })
+      toast(email.read ? 'Marked as unread' : 'Marked as read')
+    } catch (err) {
+      toast(errorText(err), 'error')
+    }
+  }
+
+  return { busy, send, toggleHandled, togglePin, toggleRead, open }
 }

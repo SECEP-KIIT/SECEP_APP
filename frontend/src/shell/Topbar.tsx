@@ -63,6 +63,8 @@ export function Topbar() {
         </time>
       </div>
       <div className="topbar-centre">
+        {/* Contextual mode (item 1): the inbox page renders its selection bar here, over the search pill. */}
+        <div id="topbar-context" className="topbar-context" />
         <button type="button" className="search-pill" disabled title="Search arrives with the command palette">
           <Search aria-hidden="true" size={16} />
           <span className="search-pill-label">Search</span>

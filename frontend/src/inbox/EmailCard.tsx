@@ -2,8 +2,11 @@ import { memo, useEffect, useId, useRef, useState, type KeyboardEvent, type Mous
 import type { EmailListItem } from '../api/types'
 import type { Density, FilterPatch } from './cardModel'
 import { CardBody } from './CardBody'
+import { cardKeyAction, copySummary } from './cardKeys'
 import { useInbox } from './inboxContext'
 import { canLift, useLift, type LiftTarget } from './liftContext'
+import { useQuickActions } from './quickActions'
+import { columnOrder, useSelection } from './selection'
 
 /** Long-press on touch opens the action menu (QA pass 3); moving this far first is a scroll, not a press. */
 const LONG_PRESS_MS = 500
@@ -30,10 +33,13 @@ interface Props {
 export const EmailCard = memo(function EmailCard({ email, now, density, fresh, onFilter }: Props) {
   // Per card instance: the same email can sit in several columns on one dashboard page.
   const subjectId = useId()
-  const { open } = useInbox()
+  const { open, menu, toast } = useInbox()
   const lift = useLift()
   const ref = useRef<HTMLElement>(null)
   const [leaving, setLeaving] = useState(false)
+  const selection = useSelection()
+  const selected = selection.selected.has(email.id)
+  const quick = useQuickActions(email, setLeaving)
   // Touch long-press: the timer, where it started, and whether it fired (then the click that follows is swallowed).
   const press = useRef<{ timer: number; x: number; y: number; fired: boolean } | null>(null)
   const cancelPress = () => {
@@ -53,8 +59,33 @@ export const EmailCard = memo(function EmailCard({ email, now, density, fresh, o
     if (t && lift?.isLifted(email.id)) lift.refresh(t)
   }, [lift, email, now, density, onFilter])
 
+  const openMenuAtCard = () => {
+    const r = ref.current?.getBoundingClientRect()
+    if (r) menu(email, r.left + 16, r.top + 24)
+  }
+
   const onKeyDown = (e: KeyboardEvent) => {
-    if (e.target !== e.currentTarget || e.ctrlKey || e.metaKey || e.altKey) return
+    if (e.target !== e.currentTarget) return
+    // FR-UI-028 keyboard: j/k, x, e, ⇧J, ⇧C, Ctrl/⌘+C, Shift+F10.
+    const key = cardKeyAction(e)
+    if (key) {
+      e.preventDefault()
+      lift?.hide()
+      if (key === 'next' || key === 'prev') {
+        const row = ref.current?.closest<HTMLElement>('[data-pos]')
+        const pos = Number(row?.dataset.pos) + (key === 'next' ? 1 : -1)
+        const to = row?.parentElement?.querySelector<HTMLElement>(`[data-pos="${pos}"] .card`)
+        to?.focus()
+        to?.scrollIntoView({ block: 'nearest' })
+      } else if (key === 'select') selection.toggle(email.id)
+      else if (key === 'done') void quick.toggleHandled()
+      else if (key === 'jira') void quick.send('create_jira_issue')
+      else if (key === 'calendar') void quick.send('add_calendar_event')
+      else if (key === 'copy') copySummary(email, toast)
+      else openMenuAtCard()
+      return
+    }
+    if (e.ctrlKey || e.metaKey || e.altKey) return
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
       lift?.hide()
@@ -72,17 +103,26 @@ export const EmailCard = memo(function EmailCard({ email, now, density, fresh, o
       data-density={density}
       data-fresh={fresh || undefined}
       data-leaving={leaving || undefined}
+      data-selected={selected || undefined}
+      aria-selected={selection.selected.size > 0 ? selected : undefined}
       aria-labelledby={subjectId}
       aria-describedby="card-hint"
       tabIndex={0}
-      onClick={() => {
+      onClick={(e) => {
         if (press.current?.fired) {
           press.current = null
           return
         }
+        // FR-UI-027: Ctrl/⌘+click toggles, Shift+click selects a range in this column; a plain click opens the
+        // drawer and ends any selection.
+        if (e.ctrlKey || e.metaKey) return selection.toggle(email.id)
+        if (e.shiftKey) return selection.range(email.id, columnOrder(ref.current))
+        selection.clear()
         lift?.hide()
         open(email.id)
       }}
+      // Shift+click would otherwise select the text between the two cards.
+      onMouseDown={(e) => e.shiftKey && e.preventDefault()}
       onPointerDown={(e) => {
         if (e.pointerType !== 'touch' || !lift) return
         const start = { x: e.clientX, y: e.clientY, fired: false, timer: 0 }
@@ -100,8 +140,15 @@ export const EmailCard = memo(function EmailCard({ email, now, density, fresh, o
       }}
       onPointerUp={cancelPress}
       onPointerCancel={cancelPress}
-      // The browser's own long-press menu (and the text selection callout) would cover ours.
-      onContextMenu={(e) => press.current && e.preventDefault()}
+      // Touch: the browser's own long-press menu would cover ours. Mouse: our card menu (FR-UI-028), except on links,
+      // which keep the browser's menu.
+      onContextMenu={(e) => {
+        if (press.current) return e.preventDefault()
+        if ((e.target as HTMLElement).closest('a[href]')) return
+        e.preventDefault()
+        lift?.hide()
+        menu(email, e.clientX, e.clientY)
+      }}
       onKeyDown={onKeyDown}
       onPointerEnter={(e) => {
         const t = e.pointerType === 'mouse' && canLift() ? target() : null
