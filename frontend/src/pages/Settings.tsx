@@ -328,7 +328,7 @@ function TutorialRow() {
             Resume from step {(o.tour_step ?? 0) + 1}
           </button>
         )}
-        {o.checklist_hidden && (
+        {o.checklist_hidden && done < CHECKLIST.length && (
           <button type="button" className="ghost-button" onClick={() => saveOnboarding({ checklist_hidden: false })}>
             Show Getting started on Home ({done} of {CHECKLIST.length} done)
           </button>

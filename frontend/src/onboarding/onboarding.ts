@@ -2,6 +2,7 @@
 // hints. Progress is per person in ui_prefs.onboarding; this module reads it from the /me cache and writes it back.
 import { api } from '../api/client'
 import { queryClient, useMe } from '../api/queries'
+import { shellToast } from '../lib/toastBus'
 import type { Me, PreferencesResponse } from '../api/types'
 
 export type ChecklistId = 'open_email' | 'send_jira' | 'quick_add' | 'search' | 'popup_rules' | 'quiet_hours'
@@ -74,7 +75,9 @@ export function saveOnboarding(patch: Partial<Onboarding>) {
 export function markDone(id: ChecklistId) {
   const o = read()
   if (!o || o.done?.includes(id)) return
-  saveOnboarding({ done: [...(o.done ?? []), id] })
+  const done = [...(o.done ?? []), id]
+  saveOnboarding({ done })
+  if (done.length === CHECKLIST.length && !o.checklist_hidden) shellToast("You're all set: Getting started is complete.")
 }
 
 export function markHintSeen(id: HintId) {

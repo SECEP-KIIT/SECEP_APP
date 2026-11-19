@@ -43,6 +43,12 @@
   left: 50%;
   transform: translate(-50%, -50%);
 }
+.tour[data-placed='corner'] .tour-card {
+  top: auto;
+  right: 28px;
+  bottom: 28px;
+  left: auto;
+}
 .tour[data-placed='bottom'] .tour-card,
 .tour-offer {
   top: auto;
@@ -203,6 +209,10 @@
 }
 .checklist-label {
   flex: 1;
+}
+.checklist header .icon-button,
+.tour-head .icon-button {
+  color: var(--ink-muted);
 }
 
 /* First-use hint bubble. */

@@ -185,20 +185,26 @@ export default function Tour({ start, admin, onClose }: { start: number; admin: 
   )
 }
 
-/** The card sits beside the spotlight where there's room, else below/above; on a phone it's a bottom sheet. */
-function placeCard(rect: DOMRect | null, phone: boolean): { mode: 'bottom' | 'center' | 'beside'; style?: React.CSSProperties } {
+/**
+ * The card sits beside the spotlight where there's room, else below or above it. When the target fills the screen
+ * (a whole column or the board), there is no outside: the card goes to the bottom-right corner, away from the
+ * headings at the top. On a phone it's a bottom sheet.
+ */
+function placeCard(rect: DOMRect | null, phone: boolean): { mode: 'bottom' | 'center' | 'beside' | 'corner'; style?: React.CSSProperties } {
   if (phone) return { mode: 'bottom' }
   if (!rect) return { mode: 'center' }
   const W = 340
   const gap = 14
   const vw = innerWidth
   const vh = innerHeight
-  const clampY = (y: number) => Math.max(12, Math.min(y, vh - 280))
+  const H = 300 // the tallest card (the last step, with its settings)
+  const clampY = (y: number) => Math.max(12, Math.min(y, vh - H - 12))
   const clampX = (x: number) => Math.max(12, Math.min(x, vw - W - 12))
   if (rect.right + gap + W < vw) return { mode: 'beside', style: { transform: `translate(${rect.right + gap}px, ${clampY(rect.top)}px)` } }
   if (rect.left - gap - W > 0) return { mode: 'beside', style: { transform: `translate(${rect.left - gap - W}px, ${clampY(rect.top)}px)` } }
-  if (rect.bottom + gap + 260 < vh) return { mode: 'beside', style: { transform: `translate(${clampX(rect.left)}px, ${rect.bottom + gap}px)` } }
-  return { mode: 'beside', style: { transform: `translate(${clampX(rect.left)}px, ${Math.max(12, rect.top - gap - 260)}px)` } }
+  if (rect.bottom + gap + H < vh) return { mode: 'beside', style: { transform: `translate(${clampX(rect.left)}px, ${rect.bottom + gap}px)` } }
+  if (rect.top - gap - H > 0) return { mode: 'beside', style: { transform: `translate(${clampX(rect.left)}px, ${rect.top - gap - H}px)` } }
+  return { mode: 'corner' }
 }
 
 /** Pop-up rule for normal time and the quiet-hours switch, right in the card. */

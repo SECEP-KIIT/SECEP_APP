@@ -543,10 +543,10 @@ A round button top right of the lock screen, shown once the app has loaded. It r
 - The §28.1 first-run toast (and its automatic save of the pop-up defaults) is removed; the tour below replaces it.
 
 ### 29.1 Tour
-Five "where things are" steps (Inbox, opening an email, Board, Search, Pop-ups and privacy) plus Admin for admins. Spotlight + card beside it; centred when the part isn't on screen; bottom sheet on phones. Not modal; Esc closes (paused, Settings offers Resume), ←/→ move. The last step has the Normal pop-up level and quiet-hours switch inside the card. Offered once after the lock first opens (Take the tour / Not now); never starts by itself. Lazy chunk (~2.7 KB gz).
+Five "where things are" steps (Inbox, opening an email, Board, Search, Pop-ups and privacy) plus Admin for admins. Spotlight + card beside, below or above it; when the target fills the screen (a whole column, the board) the card sits in the bottom-right corner so it never covers headings; centred when the part isn't on screen; bottom sheet on phones. Not modal; Esc closes (paused, Settings offers Resume), ←/→ move. The last step has the Normal pop-up level and quiet-hours switch inside the card. Offered once after the lock first opens (Take the tour / Not now); never starts by itself. Lazy chunk (~2.7 KB gz).
 
 ### 29.2 Getting started checklist (Home)
-Open an email · Send a task to Jira · Add a card of your own · Search your mail · Choose which emails pop up · Turn on quiet hours. Ticked automatically when done, each with a Go button; hideable.
+Open an email · Send a task to Jira · Add a card of your own · Search your mail · Choose which emails pop up · Turn on quiet hours. Ticked automatically when done, each with a Go button; hideable. When the last item is ticked a toast says so and the list goes away for good.
 
 ### 29.3 First-use hints
 Inbox (card keys, shown with the user's own bindings) and Board (Remind me). Once each; not during the tour or before it has been offered.

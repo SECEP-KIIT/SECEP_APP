@@ -21,11 +21,12 @@ export function Checklist() {
   if (!o || o.checklist_hidden) return null
   const done = new Set(o.done ?? [])
   const count = CHECKLIST.filter((c) => done.has(c.id)).length
-  const all = count === CHECKLIST.length
+  // Complete = done with it: the list goes away (markDone shows a toast for the last tick).
+  if (count === CHECKLIST.length) return null
   return (
     <section className="checklist" aria-labelledby="checklist-title">
       <header>
-        <h2 id="checklist-title">{all ? 'All set' : 'Getting started'}</h2>
+        <h2 id="checklist-title">Getting started</h2>
         <span className="checklist-count">
           {count} of {CHECKLIST.length}
         </span>
