@@ -93,6 +93,9 @@ export const EmailCard = memo(function EmailCard({ email, now, density, fresh, o
         const r = ref.current?.getBoundingClientRect()
         const ids = selection.selected.has(email.id) ? [...selection.selected] : [email.id]
         if (r) pickSnooze(ids, r.left + 16, r.top + 24)
+      } else if (key === 'remind') {
+        const r = ref.current?.getBoundingClientRect()
+        if (r) pickSnooze([email.id], r.left + 16, r.top + 24, true)
       }
       else openMenuAtCard()
       return

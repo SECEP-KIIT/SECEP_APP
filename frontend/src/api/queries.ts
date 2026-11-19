@@ -28,6 +28,7 @@ import type {
   ProjectInput,
   ProjectItem,
   ProjectPatch,
+  Reminder,
   UiPrefs,
   UserCardPayload,
 } from './types'
@@ -242,6 +243,24 @@ export function emailSnoozedUntil(id: string): string | null {
   }
   return null
 }
+
+/** An email's subject, wherever the client holds it (a reminder's title). */
+export function emailSubject(id: string): string {
+  const detail = queryClient.getQueryData<EmailDetail>(['email', id])
+  if (detail) return detail.subject ?? '(no subject)'
+  for (const [, data] of queryClient.getQueriesData<{ pages: Page<EmailListItem>[] } | Page<EmailListItem>>({ queryKey: ['emails'] })) {
+    if (!data) continue
+    const pages = 'pages' in data ? data.pages : [data]
+    const hit = pages.flatMap((p) => p.items).find((e) => e.id === id)
+    if (hit) return hit.subject ?? '(no subject)'
+  }
+  return '(no subject)'
+}
+
+/** "Remind me" (FR-REM-002, proposals §21): one notification at `at`. */
+export const createReminder = (target: NonNullable<Reminder['target']>, title: string, at: Date) =>
+  api<Reminder>('/reminders', json({ target, title, fire_at: at.toISOString() }))
+export const deleteReminder = (id: string) => api<void>(`/reminders/${id}`, { method: 'DELETE' })
 
 /** The projects an email belongs to, wherever the client holds it. */
 export function emailProjects(id: string): EmailProjectRef[] {

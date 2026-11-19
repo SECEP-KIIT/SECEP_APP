@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { CircleCheck, Mail, MailOpen, Paperclip, Pin, PinOff, ShieldAlert, ShieldX, Undo2, X, AlarmClock } from 'lucide-react'
+import { CircleCheck, Mail, MailOpen, Paperclip, Pin, PinOff, ShieldAlert, ShieldX, Undo2, X, AlarmClock, BellRing } from 'lucide-react'
 import { useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { emailDetailOptions, updateEmail } from '../api/queries'
 import type { EmailDetail, LabelSource, Person } from '../api/types'
@@ -100,7 +100,7 @@ export default function EmailDrawer({ id, compose, onClose }: { id: string; comp
 function DrawerBody({ email, compose, onClose }: { email: EmailDetail; compose?: OpenOptions['compose']; onClose: () => void }) {
   const { toast } = useInbox()
   const portal = useContext(PortalContainer)
-  const [snoozeAt, setSnoozeAt] = useState<{ ids: string[]; x: number; y: number } | null>(null)
+  const [snoozeAt, setSnoozeAt] = useState<{ ids: string[]; x: number; y: number; remind?: boolean } | null>(null)
   const [mountedAt] = useState(() => Date.now())
   const [busy, setBusy] = useState(false)
   const snoozedNow = !!email.snoozed_until && Date.parse(email.snoozed_until) > mountedAt
@@ -171,6 +171,18 @@ function DrawerBody({ email, compose, onClose }: { email: EmailDetail; compose?:
           >
             <AlarmClock size={14} aria-hidden="true" />
             {snoozedNow ? 'Snoozed' : 'Snooze'}
+          </button>
+          <button
+            type="button"
+            className="ghost-button"
+            disabled={busy}
+            onClick={(e) => {
+              const r = e.currentTarget.getBoundingClientRect()
+              setSnoozeAt({ ids: [email.id], x: r.left, y: r.bottom, remind: true })
+            }}
+          >
+            <BellRing size={14} aria-hidden="true" />
+            Remind me
           </button>
         </div>
       </header>

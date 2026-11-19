@@ -10,6 +10,7 @@ import { SignIn } from './SignIn'
 import { anyLayerOpen, isTypingTarget } from './focusKeys'
 import { FocusContext, useFocusMode } from './focusMode'
 import { LockSlots } from './LockSlots'
+import { TopAlerts } from './TopAlerts'
 import { useApplyPrefs, usePrefs } from './prefs'
 import { Sidebar } from './Sidebar'
 import { TabBar } from './TabBar'
@@ -60,6 +61,7 @@ function SignedInShell() {
       <ProjectDialogSlot />
       <CardsSlot />
       <PreviewSlot />
+      <TopAlerts />
       <p className="sr-only" aria-live="polite">
         {announcement}
       </p>

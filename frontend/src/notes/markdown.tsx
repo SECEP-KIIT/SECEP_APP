@@ -1,9 +1,10 @@
 // Markdown-lite (FR-CNT-003, decisions item 11): # headings, **bold**, *italics* / _italics_, `code`, - and 1. lists,
 // - [ ] / - [x] checkboxes, [links](https://…). Rendered as React elements, never as HTML strings. Only http(s) and mailto links are made clickable.
 import { Fragment, type ReactNode } from 'react'
+import { NoteFile } from './NoteFile'
 import { parseBlocks, type Block } from './markdownModel'
 
-const INLINE = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^)\s]+\)|(?<![\w*])\*[^*\s][^*]*\*(?!\w)|(?<!\w)_[^_\s][^_]*_(?!\w))/g
+const INLINE = /(\[file:[0-9a-f-]{36}\]|\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^)\s]+\)|(?<![\w*])\*[^*\s][^*]*\*(?!\w)|(?<!\w)_[^_\s][^_]*_(?!\w))/g
 
 function inline(text: string): ReactNode[] {
   const out: ReactNode[] = []
@@ -12,7 +13,8 @@ function inline(text: string): ReactNode[] {
     if (m.index > last) out.push(text.slice(last, m.index))
     const t = m[0]
     const k = `m${m.index}`
-    if (t.startsWith('**')) out.push(<strong key={k}>{inline(t.slice(2, -2))}</strong>)
+    if (t.startsWith('[file:')) out.push(<NoteFile key={k} id={t.slice(6, -1)} />)
+    else if (t.startsWith('**')) out.push(<strong key={k}>{inline(t.slice(2, -2))}</strong>)
     else if (t.startsWith('`')) out.push(<code key={k}>{t.slice(1, -1)}</code>)
     else if (t.startsWith('[')) {
       const [, label, href] = /^\[([^\]]+)\]\(([^)\s]+)\)$/.exec(t)!

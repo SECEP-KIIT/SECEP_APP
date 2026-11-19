@@ -1,7 +1,7 @@
 import * as Popover from '@radix-ui/react-popover'
 import { AlarmClock, AlarmClockOff, CalendarClock } from 'lucide-react'
 import { useRef, useState, type KeyboardEvent } from 'react'
-import { emailSnoozedUntil, updateEmail } from '../api/queries'
+import { createReminder, deleteReminder, emailSnoozedUntil, emailSubject, updateEmail } from '../api/queries'
 import { snoozeChoices, snoozeText } from '../reminders/snooze'
 import { errorText, useInbox } from './inboxContext'
 import type { PickerAt } from './ProjectPicker'
@@ -19,7 +19,8 @@ export function SnoozePicker({ at, onClose, container }: { at: PickerAt; onClose
   const [busy, setBusy] = useState(false)
   const [now] = useState(() => new Date())
   const n = at.ids.length
-  const anySnoozed = at.ids.some((id) => {
+  const remind = !!at.remind
+  const anySnoozed = !remind && at.ids.some((id) => {
     const t = emailSnoozedUntil(id)
     return t !== null && Date.parse(t) > now.getTime()
   })
@@ -27,6 +28,16 @@ export function SnoozePicker({ at, onClose, container }: { at: PickerAt; onClose
   const apply = async (until: Date | null) => {
     setBusy(true)
     try {
+      if (remind && until) {
+        // "Remind me": the email stays where it is; a notification arrives at `until` (proposals §21).
+        const made = await Promise.all(at.ids.map((id) => createReminder({ type: 'email', id }, emailSubject(id), until)))
+        onClose()
+        toast(`Reminder set for ${snoozeText(until, now)}`, 'info', {
+          label: 'Undo',
+          run: () => void Promise.all(made.map((r) => deleteReminder(r.id))).catch((err: unknown) => toast(errorText(err), 'error')),
+        })
+        return
+      }
       await Promise.all(at.ids.map((id) => updateEmail(id, { snoozed_until: until ? until.toISOString() : null })))
       onClose()
       const what = n === 1 ? '' : `${n} emails `
@@ -60,7 +71,7 @@ export function SnoozePicker({ at, onClose, container }: { at: PickerAt; onClose
           ref={ref}
           className="menu snooze-picker"
           role="menu"
-          aria-label={n === 1 ? 'Snooze' : `Snooze ${n} emails`}
+          aria-label={remind ? 'Remind me' : n === 1 ? 'Snooze' : `Snooze ${n} emails`}
           side="bottom"
           align="start"
           sideOffset={4}
@@ -71,7 +82,7 @@ export function SnoozePicker({ at, onClose, container }: { at: PickerAt; onClose
             ref.current?.querySelector<HTMLElement>('[role="menuitem"], input')?.focus()
           }}
         >
-          <p className="menu-title">{n === 1 ? 'Remind me' : `Snooze ${n} emails`}</p>
+          <p className="menu-title">{remind || n === 1 ? 'Remind me' : `Snooze ${n} emails`}</p>
           {!picking &&
             snoozeChoices(now).map((c) => (
               <button key={c.id} type="button" role="menuitem" className="menu-item" disabled={busy} onClick={() => void apply(c.at)}>
@@ -86,7 +97,7 @@ export function SnoozePicker({ at, onClose, container }: { at: PickerAt; onClose
               <span className="menu-label">Pick a time</span>
             </button>
           )}
-          {picking && <PickTime min={localInput(new Date(now.getTime() + 60_000))} now={now} disabled={busy} onPick={(d) => void apply(d)} onBack={() => setPicking(false)} />}
+          {picking && <PickTime label={remind ? 'Remind me' : 'Snooze'} min={localInput(new Date(now.getTime() + 60_000))} now={now} disabled={busy} onPick={(d) => void apply(d)} onBack={() => setPicking(false)} />}
           {anySnoozed && !picking && (
             <>
               <hr className="menu-sep" />
@@ -102,7 +113,7 @@ export function SnoozePicker({ at, onClose, container }: { at: PickerAt; onClose
   )
 }
 
-function PickTime({ min, now, disabled, onPick, onBack }: { min: string; now: Date; disabled: boolean; onPick: (d: Date) => void; onBack: () => void }) {
+function PickTime({ label, min, now, disabled, onPick, onBack }: { label: string; min: string; now: Date; disabled: boolean; onPick: (d: Date) => void; onBack: () => void }) {
   const [value, setValue] = useState('')
   const date = value ? new Date(value) : null
   const ok = date !== null && !Number.isNaN(date.getTime()) && date.getTime() > now.getTime()
@@ -114,7 +125,7 @@ function PickTime({ min, now, disabled, onPick, onBack }: { min: string; now: Da
           Back
         </button>
         <button type="button" className="ghost-button" disabled={disabled || !ok} onClick={() => ok && onPick(date)}>
-          Snooze
+          {label}
         </button>
       </div>
     </div>

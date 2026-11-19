@@ -209,3 +209,37 @@ button.na-pill {
   color: var(--ink);
   opacity: 0.8;
 }
+
+/* A file attached inside a note. */
+.note-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 240px;
+  padding: 1px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--card-bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.8125rem;
+  vertical-align: middle;
+}
+button.note-file {
+  cursor: pointer;
+}
+.note-file > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.note-foot .drawer-muted {
+  flex: 1;
+}
+
+.note-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  padding: var(--space-1) 0;
+}

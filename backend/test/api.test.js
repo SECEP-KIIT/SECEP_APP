@@ -303,6 +303,31 @@ describe('M6 API', { skip: !reachable && 'no test database' }, () => {
     assert.equal((await api(`/files/${ref.id}`, { method: 'DELETE' })).status, 204);
   });
 
+  test('reminders: create on an email, list, reschedule, cancel; fires once as a notification; 404/422', async () => {
+    const { fireDueReminders } = await import('../src/api/reminders.js');
+    const email = (await api('/emails?limit=1')).body.items[0];
+    const soon = new Date(Date.now() + 3_600_000).toISOString();
+    const made = await api('/reminders', { method: 'POST', body: JSON.stringify({ target: { type: 'email', id: email.id }, title: 'Call back', fire_at: soon }) });
+    assert.equal(made.status, 201);
+    assert.deepEqual([made.body.kind, made.body.status, made.body.target], ['manual', 'scheduled', { type: 'email', id: email.id }]);
+    assert.equal((await api('/reminders?status=scheduled')).body.items.some((r) => r.id === made.body.id), true);
+    const later = new Date(Date.now() + 7_200_000).toISOString();
+    assert.equal((await api(`/reminders/${made.body.id}`, { method: 'PATCH', body: JSON.stringify({ fire_at: later }) })).body.fire_at, later);
+    for (const bad of [{ title: '', fire_at: soon }, { title: 'x', fire_at: '2001-01-01T00:00:00Z' }, { title: 'x', fire_at: soon, target: { type: 'email', id: '1' } }]) {
+      assert.ok([404, 422].includes((await api('/reminders', { method: 'POST', body: JSON.stringify(bad) })).status));
+    }
+    assert.equal((await api('/reminders', { method: 'POST', body: JSON.stringify({ target: { type: 'email', id: '00000000-0000-4000-8000-000000000000' }, title: 'x', fire_at: soon }) })).status, 404);
+    // Due now: the tick fires it exactly once.
+    const { pool } = await import('../src/services/db.js');
+    await pool.query("UPDATE reminders SET fire_at = now() - interval '1 second' WHERE id = $1", [made.body.id]);
+    assert.ok((await fireDueReminders()) >= 1);
+    assert.equal(await fireDueReminders(), 0);
+    const n = (await api('/notifications')).body.items.find((x) => x.body === 'Call back');
+    assert.deepEqual([n.kind, n.title, n.target], ['reminder', 'Reminder due', { type: 'email', id: email.id }]);
+    assert.equal((await api(`/reminders/${made.body.id}`, { method: 'DELETE' })).status, 204);
+    assert.equal((await api(`/reminders/${made.body.id}`, { method: 'DELETE' })).status, 404);
+  });
+
   test('layouts: starter by default; full replace; stale save 409; bad stack 422', async () => {
     const start = (await api('/layouts/desktop')).body;
     assert.equal(start.is_default, true);

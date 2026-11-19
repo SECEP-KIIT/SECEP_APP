@@ -64,6 +64,8 @@ interface Props {
 
 /** The "Snoozed · n" divider is a row of its own (FR-REM-002). */
 const DIVIDER = Symbol('snoozed-divider')
+/** The divider is a slim row, not a card-high one. */
+const DIVIDER_PITCH = 44
 
 /**
  * An inbox column widget (FR-UI-006 "a saved filter and sort"; item 6). Rendered here as the Inbox full view; the
@@ -123,11 +125,11 @@ export function Column({ title, state, onStateChange, initial, heading, tools, v
   const virtualizer = useVirtualizer({
     count: rowCount,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => pitch,
+    estimateSize: (i) => (view[i] === DIVIDER ? DIVIDER_PITCH : pitch),
     overscan: 6,
   })
   // Every row's size changes together with the density; re-measure once rather than per row.
-  useEffect(() => virtualizer.measure(), [virtualizer, pitch])
+  useEffect(() => virtualizer.measure(), [virtualizer, pitch, view])
 
   const rows = virtualizer.getVirtualItems()
   const lastIndex = rows.at(-1)?.index ?? -1
@@ -291,7 +293,7 @@ export function Column({ title, state, onStateChange, initial, heading, tools, v
                     data-email-id={showSkeleton ? undefined : email?.id}
                     data-pos={row.index}
                     data-snoozed={email && isSnoozed(email, now) ? '' : undefined}
-                    style={{ transform: `translateY(${row.start}px)`, height: pitch }}
+                    style={{ transform: `translateY(${row.start}px)`, height: divider ? DIVIDER_PITCH : pitch }}
                   >
                     {divider ? (
                       <button type="button" className="snooze-divider" aria-expanded={snoozedOpen} onClick={() => setSnoozedOpen((o) => !o)}>

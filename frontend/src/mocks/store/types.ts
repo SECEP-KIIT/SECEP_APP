@@ -183,6 +183,17 @@ export interface NoteRow {
   updated_at: string
 }
 
+export interface ReminderRow {
+  id: string
+  user_id: string
+  kind: 'manual'
+  target: { type: 'email' | 'card'; id: string } | null
+  title: string
+  fire_at: string
+  status: 'scheduled' | 'fired' | 'cancelled'
+  fired_at: string | null
+}
+
 export interface FileRow {
   id: string
   owner_user_id: string
@@ -212,6 +223,8 @@ export interface Db {
   projectItems: ProjectItemRow[]
   /** Notes (FR-CNT-003), masked on save. */
   notes: NoteRow[]
+  /** Manual reminders (FR-REM-002). */
+  reminders: ReminderRow[]
   /** Uploaded files (FR-CNT-006). The bytes live in memory only (files.ts), so they last until a reload. */
   files: FileRow[]
   /** Read state per user (proposal §1: per recipient, not a column on the email). */

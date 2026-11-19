@@ -70,9 +70,9 @@ export function InboxHost({ children }: { children: ReactNode }) {
         setMenuAt(null)
         setPickerAt({ ids: [...ids], x, y })
       },
-      pickSnooze: (ids, x, y) => {
+      pickSnooze: (ids, x, y, remind) => {
         setMenuAt(null)
-        setSnoozeAt({ ids: [...ids], x, y })
+        setSnoozeAt({ ids: [...ids], x, y, remind })
       },
     }),
     [push],
