@@ -461,3 +461,49 @@ html[data-motion='off'] .check-draw path {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Masked secrets (FR-SEC-007/008, task 15): Reveal shows the value for at most 60 s. */
+.secrets {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.secret {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.secret-label {
+  font-weight: 600;
+}
+.secret-shown {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+}
+.secret-shown .text-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.secret-value {
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--tag-muted-bg);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8125rem;
+  user-select: all;
+}
+.secret-timer {
+  color: var(--ink-muted);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}

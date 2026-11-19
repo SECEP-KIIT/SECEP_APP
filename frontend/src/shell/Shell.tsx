@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Outlet } from 'react-router'
+import { useSignedOut } from '../api/session'
+import { SignIn } from './SignIn'
 import { FocusContext, useFocusMode } from './focusMode'
 import { LockSlots } from './LockSlots'
 import { useApplyPrefs, usePrefs } from './prefs'
@@ -25,6 +27,11 @@ function useFocusAnnouncement(focused: boolean) {
 // The floating sheet (FR-UI-001): inset over the wallpaper, frosted bars, solid content. It sits behind the static
 // lock screen while booting and rises into place when the lock opens (lock.css, html[data-lock]).
 export function Shell() {
+  // F5: no session (at boot, or after Sign out) shows the sign-in screen, never a shell of failing columns.
+  return useSignedOut() ? <SignIn /> : <SignedInShell />
+}
+
+function SignedInShell() {
   useBootSteps()
   useApplyPrefs()
   const focused = useFocusMode()

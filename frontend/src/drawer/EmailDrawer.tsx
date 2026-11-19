@@ -11,6 +11,7 @@ import { TypeIcon, UrgencyMark } from '../inbox/marks'
 import { PortalContainer } from '../inbox/portal'
 import { ActionList } from './ActionList'
 import { LinkList } from './LinkList'
+import { SecretList } from './SecretList'
 import './drawer.css'
 
 const SOURCE: Record<LabelSource, string> = {
@@ -261,12 +262,7 @@ function DrawerBody({ email, compose, onClose }: { email: EmailDetail; compose?:
           </p>
         )}
         <LinkList links={email.links} />
-        {email.masked_secrets.length > 0 && (
-          <p className="drawer-muted">
-            🔒 {email.masked_secrets.length === 1 ? '1 secret is' : `${email.masked_secrets.length} secrets are`} masked in this email. Reveal comes
-            with the security flows.
-          </p>
-        )}
+        {email.masked_secrets.length > 0 && <SecretList secrets={email.masked_secrets} />}
       </Section>
 
       <Section title="Notes & attachments">

@@ -96,6 +96,9 @@ export function acceptAction(action: Action, payload?: Partial<DecoderActionPayl
   )
 }
 
+/** FR-SEC-008: the original value, for at most expires_in seconds. Never cached: the caller holds it in state. */
+export const revealSecret = (id: string) => api<{ value: string; expires_in: number }>(`/secrets/${id}/reveal`, { method: 'POST' })
+
 /** FR-UI-029: within ~10 s, deletes the created Jira issue or Calendar event; the action goes back to proposed. */
 export const undoAction = (action: Pick<Action, 'id'>) =>
   api<Action>(`/actions/${action.id}/undo`, { method: 'POST' }).then((updated) => {

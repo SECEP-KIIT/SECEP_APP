@@ -2,10 +2,10 @@
 import { setupServer } from 'msw/node'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../api/client'
-import { emailDetailOptions, queryClient, undoAction } from '../api/queries'
+import { emailDetailOptions, queryClient, revealSecret, undoAction } from '../api/queries'
 import { control } from '../mocks/control'
 import { handlers } from '../mocks/handlers'
-import { signIn } from '../mocks/session'
+import { REAUTH_WINDOW_MS, signIn } from '../mocks/session'
 import { db, initStore } from '../mocks/store/db'
 import { cardKeyAction } from './cardKeys'
 import { sendProposal } from './quickActions'
@@ -71,6 +71,26 @@ describe('undo of a send (FR-UI-029, §6.5 POST /actions/:id/undo)', () => {
     vi.setSystemTime(Date.now() + 13_000)
     try {
       expect(await undoAction(sent).catch((e: unknown) => e)).toMatchObject({ status: 409 })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
+describe('reveal (FR-SEC-008, task 15)', () => {
+  it('reveals for 60 s within 5 min of sign-in, audited without the value; later it needs a fresh sign-in', async () => {
+    const secret = db.secrets.find((x) => x.owner_user_id === db.users[0].id) ?? db.secrets[0]
+    signIn(secret.owner_user_id)
+    const res = await revealSecret(secret.id)
+    expect(res).toEqual({ value: secret.value, expires_in: 60 })
+    const entry = db.audit.at(-1)!
+    expect(entry).toMatchObject({ event: 'secret.reveal', target: secret.id })
+    expect(JSON.stringify(entry)).not.toContain(secret.value)
+
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(Date.now() + REAUTH_WINDOW_MS + 1000)
+    try {
+      expect(await revealSecret(secret.id).catch((e: unknown) => e)).toMatchObject({ status: 401, code: 'reauth_required' })
     } finally {
       vi.useRealTimers()
     }

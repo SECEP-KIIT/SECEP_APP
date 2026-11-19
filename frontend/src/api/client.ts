@@ -1,3 +1,4 @@
+import { markSignedOut } from './session'
 import type { ApiErrorBody, ErrorCode, RefreshResponse } from './types'
 
 const BASE = '/api/v1'
@@ -66,6 +67,16 @@ export function refreshForSocket(): Promise<string | null> {
   return refreshAccessToken()
 }
 
+/** Sign out (§6.5 POST /auth/logout): the server clears the refresh cookie; the token here is dropped. */
+export async function signOutNow() {
+  try {
+    await send('/auth/logout', { method: 'POST', credentials: 'include' }, accessToken)
+  } finally {
+    accessToken = null
+    markSignedOut()
+  }
+}
+
 function send(path: string, init: RequestInit, token: string | null) {
   const headers = new Headers(init.headers)
   if (!headers.has('Accept')) headers.set('Accept', 'application/json')
@@ -105,7 +116,11 @@ async function request(path: string, init: RequestInit): Promise<Response> {
     if (body?.code === 'unauthenticated') {
       // If another caller already refreshed while this request was in flight, reuse that token.
       const token = accessToken && accessToken !== sentWith ? accessToken : await refreshAccessToken()
-      if (!token) throw new ApiError(401, body)
+      if (!token) {
+        // No valid refresh cookie: the session is over (F5). The shell shows the sign-in screen.
+        markSignedOut()
+        throw new ApiError(401, body)
+      }
       res = await send(path, init, token)
     }
   }

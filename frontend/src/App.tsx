@@ -20,7 +20,7 @@ const router = createBrowserRouter([
       { path: 'inbox', lazy: () => import('./pages/Inbox'), handle: { title: 'Inbox' } },
       { path: 'board', lazy: placeholder, handle: { title: 'Board' } },
       { path: 'calendar', lazy: placeholder, handle: { title: 'Calendar' } },
-      { path: 'security', lazy: placeholder, handle: { title: 'Security' } },
+      { path: 'security', lazy: () => import('./pages/Security'), handle: { title: 'Security' } },
       { path: 'metrics', lazy: placeholder, handle: { title: 'Metrics' } },
       { path: 'projects/:id', lazy: placeholder, handle: { title: 'Project' } },
       { path: 'settings', lazy: placeholder, handle: { title: 'Settings' } },

@@ -1,7 +1,8 @@
-import { PanelLeftClose, PanelLeftOpen, Settings, UserCog } from 'lucide-react'
+import { LogOut, PanelLeftClose, PanelLeftOpen, Settings, UserCog } from 'lucide-react'
 import { useEffect, useRef, useState, type FocusEvent, type PointerEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { NavLink } from 'react-router'
+import { signOutNow } from '../api/client'
 import { useGlance, useMe, useProjects, useUpdatePreferences } from '../api/queries'
 import { isAdmin, visibleNav } from './nav'
 import { usePrefs } from './prefs'
@@ -124,6 +125,9 @@ function UserMenu({ name, email }: { name: string; email: string | undefined }) 
               {email && <span>{email}</span>}
             </p>
             <ThemeChoice />
+            <button type="button" className="user-menu-signout" onClick={() => void signOutNow()}>
+              <LogOut size={16} aria-hidden="true" /> Sign out
+            </button>
           </div>,
           document.body,
         )}
