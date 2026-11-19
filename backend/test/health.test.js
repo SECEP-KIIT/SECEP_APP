@@ -21,5 +21,6 @@ test('unknown route returns 404 JSON', async (t) => {
   const res = await fetch(`http://localhost:${port}/nope`);
 
   assert.equal(res.status, 404);
-  assert.deepEqual(await res.json(), { error: 'Not found' });
+  // The §6.4.1 error envelope.
+  assert.equal((await res.json()).error.code, 'not_found');
 });
