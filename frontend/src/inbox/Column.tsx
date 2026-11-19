@@ -27,6 +27,7 @@ import {
   type SortKey,
 } from './cardModel'
 import { EmailCard } from './EmailCard'
+import { useMarquee } from './useMarquee'
 import { useNewPill } from './useNewPill'
 import { FilterPopover } from './FilterPopover'
 import { useInbox } from './inboxContext'
@@ -133,6 +134,8 @@ export function Column({ title, state, onStateChange, initial, heading, tools, v
   })
   // Every row's size changes together with the density; re-measure once rather than per row.
   useEffect(() => virtualizer.measure(), [virtualizer, pitch])
+  // FR-UI-027: drag a box over empty space to select cards (not for a single search result or while tiles are edited).
+  const marquee = useMarquee(scrollRef, view.map((e) => e.id), pitch, !showSkeleton && !locked && !only)
 
   const rows = virtualizer.getVirtualItems()
   const lastIndex = rows.at(-1)?.index ?? -1
@@ -266,7 +269,7 @@ export function Column({ title, state, onStateChange, initial, heading, tools, v
           {pending.length > 0 ? `${pending.length} new ${pending.length === 1 ? 'email' : 'emails'}` : ''}
         </p>
 
-        <div className="col-scroll" ref={scrollRef}>
+        <div className="col-scroll" ref={scrollRef} {...marquee.handlers}>
           {only && single.isError ? (
             <div className="col-state" role="alert">
               <p>Couldn't open this email. It may have been deleted.</p>
@@ -311,6 +314,7 @@ export function Column({ title, state, onStateChange, initial, heading, tools, v
             </div>
           )}
         </div>
+        {marquee.overlay}
       </div>
     </section>
   )

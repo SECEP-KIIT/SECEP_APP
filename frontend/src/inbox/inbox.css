@@ -5,6 +5,12 @@
   height: 100%;
   min-height: 0;
 }
+/* The full Inbox view: a wider reading column, centred on the page (tiles and phones keep their own rules). */
+.inbox-page > .column {
+  width: 100%;
+  max-width: 900px;
+  margin-inline: auto;
+}
 .security-page {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
