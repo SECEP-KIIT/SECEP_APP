@@ -10,6 +10,7 @@ import {
   Info,
   KeyRound,
   Lock,
+  NotebookPen,
   Paperclip,
   Reply,
   ShieldAlert,
@@ -73,6 +74,8 @@ export function TagIcon({ tag, size = 13 }: { tag: CardTag; size?: number }) {
       return tag.filter?.value === 'Frustrated' ? <Angry {...props} /> : <Frown {...props} />
     case 'attachments':
       return <Paperclip {...props} />
+    case 'notes':
+      return <NotebookPen {...props} />
     case 'replies':
       return <Reply {...props} />
     case 'duplicates':

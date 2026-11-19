@@ -16,6 +16,7 @@ const TAGS: CardTag[] = [
   sample('sentiment', 'Negative sentiment', { tone: 'warn', filter: { group: 'sentiment', value: 'Negative' } }),
   sample('sentiment', 'Frustrated sentiment', { tone: 'warn', filter: { group: 'sentiment', value: 'Frustrated' } }),
   sample('attachments', 'Attachments'),
+  sample('notes', 'Your notes'),
   sample('replies', 'Replies in the thread'),
   sample('duplicates', 'Duplicates merged'),
   sample('masked', 'Contains a masked secret'),

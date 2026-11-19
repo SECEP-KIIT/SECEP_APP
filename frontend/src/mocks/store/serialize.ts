@@ -66,6 +66,7 @@ export function toListItem(db: Db, e: EmailRow): EmailListItem {
     handled: db.handled.get(e.user_id)?.has(e.id) ?? false,
     read: db.reads.get(e.user_id)?.has(e.id) ?? false, // PROPOSED (proposals §12.3)
     projects: emailProjectRefs(db, e.id),
+    note_count: db.notes.filter((n) => n.target_type === 'email' && n.target_id === e.id && n.owner_user_id === e.user_id).length,
     tags: [],
   }
 }

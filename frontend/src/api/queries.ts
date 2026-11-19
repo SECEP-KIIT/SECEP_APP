@@ -19,6 +19,8 @@ import type {
   LabelCorrection,
   LabelCorrectionResponse,
   Me,
+  Note,
+  NoteTarget,
   Page,
   PreferencesResponse,
   Project,
@@ -439,4 +441,48 @@ export async function setCardsInProject(projectId: string, ids: readonly string[
     ids.map((id) => (add ? api<ProjectItem>(`/projects/${projectId}/items`, json({ action_id: id })) : api<void>(`/projects/${projectId}/items/${id}`, { method: 'DELETE' }))),
   )
   refreshProjects()
+}
+
+// ── Notes (FR-CNT-003, proposals §19.2) ─────────────────────────────────────────────────────────────────────────
+
+export type NoteScope = { type: NoteTarget; id: string } | null
+
+/** A target's notes, newest edit first; null = standalone notes (the Notes widget). */
+export const notesOptions = (scope: NoteScope) =>
+  queryOptions({
+    queryKey: ['notes', scope?.type ?? 'none', scope?.id ?? null],
+    queryFn: ({ signal }) =>
+      fetchAll<Note>(scope ? `/notes?target_type=${scope.type}&target_id=${scope.id}` : '/notes?target_type=none', signal),
+    staleTime: 30_000,
+  })
+
+function storeNote(scope: NoteScope, note: Note, remove = false) {
+  const key = notesOptions(scope).queryKey
+  const list = queryClient.getQueryData<Note[]>(key)
+  if (list) {
+    const rest = list.filter((n) => n.id !== note.id)
+    queryClient.setQueryData<Note[]>(key, remove ? rest : [note, ...rest])
+  }
+  // An email's 📝 count (EmailListItem.note_count) follows its notes.
+  if (scope?.type === 'email') {
+    const count = (queryClient.getQueryData<Note[]>(key) ?? []).length
+    patchEmailCache(queryClient, scope.id, { note_count: count })
+  }
+}
+
+export async function createNote(scope: NoteScope, body: string) {
+  const note = await api<Note>('/notes', json({ target_type: scope?.type ?? null, target_id: scope?.id ?? null, body }))
+  storeNote(scope, note)
+  return note
+}
+
+export async function patchNote(scope: NoteScope, id: string, body: string) {
+  const note = await api<Note>(`/notes/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ body }) })
+  storeNote(scope, note)
+  return note
+}
+
+export async function deleteNote(scope: NoteScope, note: Note) {
+  await api<void>(`/notes/${note.id}`, { method: 'DELETE' })
+  storeNote(scope, note, true)
 }

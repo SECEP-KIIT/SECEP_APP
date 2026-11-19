@@ -124,7 +124,20 @@ export interface EmailListItem {
   projects: EmailProjectRef[]
   // Should feature; the element shape is not in the SRS yet, so nothing can be put in it until it is.
   tags: never[]
+  /** PROPOSED (proposals §19.2): how many notes the user has on this email (the 📝 tag). */
+  note_count: number
 }
+
+/** PROPOSED (proposals §19.2): a note (FR-CNT-003). body is markdown-lite and already masked. */
+export interface Note {
+  id: string
+  target_type: NoteTarget | null
+  target_id: string | null
+  body: string
+  created_at: string
+  updated_at: string
+}
+export type NoteTarget = 'email' | 'card' | 'project'
 
 export interface EmailDetail extends EmailListItem {
   /** Sanitized, masked plain text. Never auto-link URLs in it; only `links` are clickable. */

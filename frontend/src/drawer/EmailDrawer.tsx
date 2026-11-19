@@ -10,6 +10,7 @@ import { errorText, useInbox, type OpenOptions } from '../inbox/inboxContext'
 import { setHandled } from '../inbox/quickActions'
 import { TypeIcon, UrgencyMark } from '../inbox/marks'
 import { PortalContainer } from '../inbox/portal'
+import { EmailNotes } from '../notes/EmailNotes'
 import { ActionList } from './ActionList'
 import { LinkList } from './LinkList'
 import { SecretList } from './SecretList'
@@ -283,7 +284,7 @@ function DrawerBody({ email, compose, onClose }: { email: EmailDetail; compose?:
         ) : (
           <p className="drawer-muted">No attachments.</p>
         )}
-        <p className="drawer-muted">Attachment downloads and notes come with notes and files.</p>
+        <EmailNotes email={email} />
       </Section>
     </>
   )

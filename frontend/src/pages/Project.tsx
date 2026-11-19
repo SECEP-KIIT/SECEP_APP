@@ -4,6 +4,7 @@ import { useParams } from 'react-router'
 import { ApiError } from '../api/client'
 import { boardOptions, useProject } from '../api/queries'
 import { Board } from '../board/Board'
+import { NotesPanel } from '../notes/NotesPanel'
 import { Column } from '../inbox/Column'
 import { DEFAULT_COLUMN_STATE } from '../inbox/cardModel'
 import { errorText } from '../inbox/inboxContext'
@@ -92,10 +93,16 @@ function ProjectView({ id }: { id: string }) {
         <section className="project-section" aria-label="Emails">
           <Column title="Emails" initial={DEFAULT_COLUMN_STATE} scope={`project=${p.id}`} />
         </section>
-        <section className="project-section" aria-labelledby="project-tasks">
-          <h3 id="project-tasks">Tasks</h3>
-          <Board project={p.id} variant="tile" label={`${p.name} tasks`} />
-        </section>
+        <div className="project-side">
+          <section className="project-section" aria-labelledby="project-tasks">
+            <h3 id="project-tasks">Tasks</h3>
+            <Board project={p.id} variant="tile" label={`${p.name} tasks`} />
+          </section>
+          <section className="project-section" aria-labelledby="project-notes">
+            <h3 id="project-notes">Notes</h3>
+            <NotesPanel scope={{ type: 'project', id: p.id }} />
+          </section>
+        </div>
       </div>
     </div>
   )

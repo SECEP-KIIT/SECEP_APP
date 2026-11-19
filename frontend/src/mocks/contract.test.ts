@@ -60,7 +60,7 @@ const demoEmails = () => [...db.emails.values()].filter((e) => e.user_id === db.
 const inboxEmails = () => demoEmails().filter((e) => !db.handled.get(db.users[0].id)?.has(e.id))
 
 // Key sets copied from SRS §6.4.1.
-const LIST_KEYS = ['id', 'thread_id', 'from', 'to', 'cc', 'recipient_position', 'subject', 'received_at', 'status', 'security_flag', 'duplicate_count', 'attachment_count', 'reply_count', 'has_masked_secret', 'triage', 'summary_one_line', 'proposed_action_count', 'jira_key', 'pinned', 'snoozed_until', 'due_date', 'handled', 'read', 'projects', 'tags']
+const LIST_KEYS = ['id', 'thread_id', 'from', 'to', 'cc', 'recipient_position', 'subject', 'received_at', 'status', 'security_flag', 'duplicate_count', 'attachment_count', 'reply_count', 'has_masked_secret', 'triage', 'summary_one_line', 'proposed_action_count', 'jira_key', 'pinned', 'snoozed_until', 'due_date', 'handled', 'read', 'projects', 'tags', 'note_count']
 const DETAIL_KEYS = [...LIST_KEYS, 'body_text', 'summary_short', 'actions', 'links', 'attachments', 'masked_secrets', 'open_url', 'auth_results', 'thread']
 const TRIAGE_KEYS = ['email_type', 'urgency', 'sentiment', 'needs_review', 'model_version', 'processed_at']
 const LINK_KEYS = ['check_id', 'anchor_text', 'host', 'verdict', 'go_url']
@@ -695,5 +695,35 @@ describe('user cards (FR-CNT-002, proposals §19.1)', () => {
     expect((await call('DELETE', `/actions/${card.id}`, { token: t })).status).toBe(204)
     expect(db.actions.has(card.id as string)).toBe(false)
     expect(db.projectItems.some((i) => i.action_id === card.id)).toBe(false)
+  })
+})
+
+describe('notes (FR-CNT-003/005, proposals §19.2)', () => {
+  it('masks on save, scopes by target, counts on the email, guards ownership', async () => {
+    const t = await login('demo')
+    const email = [...db.emails.values()].find((e) => e.user_id === db.users[0].id)!
+    const made = await call('POST', '/notes', { token: t, body: { target_type: 'email', target_id: email.id, body: 'VPN password: hunter2\n- [ ] book room' } })
+    expect(made.status).toBe(201)
+    expect(made.json!.body).toBe('VPN password: [MASKED:password]\n- [ ] book room')
+    expect(Object.keys(made.json!).sort()).toEqual(['body', 'created_at', 'id', 'target_id', 'target_type', 'updated_at'])
+    expect((await call('GET', `/emails/${email.id}`, { token: t })).json!.note_count).toBe(1)
+
+    const loose = await call('POST', '/notes', { token: t, body: { body: 'standalone' } })
+    expect(loose.json!.target_type).toBeNull()
+    const standalone = (await call('GET', '/notes?target_type=none', { token: t })).json!.items as Json[]
+    expect(standalone.map((n) => n.id)).toEqual([loose.json!.id])
+    const onEmail = (await call('GET', `/notes?target_type=email&target_id=${email.id}`, { token: t })).json!.items as Json[]
+    expect(onEmail.map((n) => n.id)).toEqual([made.json!.id])
+
+    expect((await call('POST', '/notes', { token: t, body: { target_type: 'email', body: 'x' } })).status).toBe(422)
+    expect((await call('POST', '/notes', { token: t, body: { body: 'x'.repeat(20_001) } })).status).toBe(422)
+    const sam = await login('sam')
+    expect((await call('POST', '/notes', { token: sam, body: { target_type: 'email', target_id: email.id, body: 'x' } })).status).toBe(404)
+    expect((await call('PATCH', `/notes/${made.json!.id}`, { token: sam, body: { body: 'x' } })).status).toBe(404)
+
+    const patched = await call('PATCH', `/notes/${made.json!.id}`, { token: t, body: { body: 'OTP 123456' } })
+    expect(patched.json!.body).toBe('OTP [MASKED:otp]')
+    expect((await call('DELETE', `/notes/${made.json!.id}`, { token: t })).status).toBe(204)
+    expect((await call('GET', `/emails/${email.id}`, { token: t })).json!.note_count).toBe(0)
   })
 })

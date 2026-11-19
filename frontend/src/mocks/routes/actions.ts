@@ -216,6 +216,7 @@ export const actionRoutes = [
     removeFromBoard(a)
     db.actions.delete(a.id)
     db.projectItems = db.projectItems.filter((i) => i.action_id !== a.id)
+    db.notes = db.notes.filter((n) => !(n.target_type === 'card' && n.target_id === a.id))
     await audit(user.id, 'action.delete', a.id, { type: a.type })
     changed()
     return undefined
