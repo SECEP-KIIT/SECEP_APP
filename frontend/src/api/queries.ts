@@ -490,7 +490,7 @@ export async function deleteNote(scope: NoteScope, note: Note) {
 
 // ── Files (FR-CNT-006–008, proposals §19.3) ────────────────────────────────────────────────────────────────────
 
-export type FileScope = { type: 'card' | 'project'; id: string }
+export type FileScope = { type: 'email' | 'card' | 'project'; id: string }
 export const MAX_FILE_BYTES = 25 * 1024 * 1024
 
 export const filesOptions = (scope: FileScope) =>

@@ -213,14 +213,11 @@ describe('M6 API', { skip: !reachable && 'no test database' }, () => {
     assert.ok(!(await api('/actions?status=done&column=todo&limit=50')).body.items.some((a) => a.id === card.id));
   });
 
-  test('notes: masked on save with type-only secret rows, scoped lists, note_count, 404 for others, 422s', async () => {
+  test('notes: stored as typed, scoped lists, note_count, 404 for others, 422s', async () => {
     const email = (await api('/emails?limit=1')).body.items[0];
     const made = await api('/notes', { method: 'POST', body: JSON.stringify({ target_type: 'email', target_id: email.id, body: 'VPN password: hunter2\n- [ ] book room' }) });
     assert.equal(made.status, 201);
-    assert.equal(made.body.body, 'VPN password: [MASKED:password]\n- [ ] book room');
-    const { pool } = await import('../src/services/db.js');
-    const secrets = (await pool.query('SELECT secret_type FROM masked_secrets WHERE note_id = $1', [made.body.id])).rows;
-    assert.deepEqual(secrets, [{ secret_type: 'password' }]);
+    assert.equal(made.body.body, 'VPN password: hunter2\n- [ ] book room');
     assert.equal((await api(`/emails/${email.id}`)).body.note_count, 1);
     const loose = (await api('/notes', { method: 'POST', body: JSON.stringify({ body: 'standalone' }) })).body;
     assert.deepEqual((await api('/notes?target_type=none')).body.items.map((n) => n.id), [loose.id]);
@@ -228,8 +225,7 @@ describe('M6 API', { skip: !reachable && 'no test database' }, () => {
     assert.equal((await api('/notes', { method: 'POST', body: JSON.stringify({ target_type: 'email', body: 'x' }) })).status, 422);
     assert.equal((await api('/notes', { method: 'POST', body: JSON.stringify({ target_type: 'project', target_id: '00000000-0000-4000-8000-000000000000', body: 'x' }) })).status, 404);
     const patched = await api(`/notes/${made.body.id}`, { method: 'PATCH', body: JSON.stringify({ body: 'OTP 123456' }) });
-    assert.equal(patched.body.body, 'OTP [MASKED:otp]');
-    assert.deepEqual((await pool.query('SELECT secret_type FROM masked_secrets WHERE note_id = $1', [made.body.id])).rows, [{ secret_type: 'otp' }]);
+    assert.equal(patched.body.body, 'OTP 123456');
     assert.equal((await api(`/notes/${made.body.id}`, { method: 'DELETE' })).status, 204);
     assert.equal((await api(`/emails/${email.id}`)).body.note_count, 0);
     assert.equal((await api(`/notes/${made.body.id}`, { method: 'DELETE' })).status, 404);
@@ -271,6 +267,23 @@ describe('M6 API', { skip: !reachable && 'no test database' }, () => {
     // Deleting the card takes its files with it.
     assert.equal((await api(`/actions/${card.id}`, { method: 'DELETE' })).status, 204);
     assert.equal((await api(`/files/${png.id}`)).status, 404);
+  });
+
+  test('files: an email is a target too; someone else\'s email is a 404', async () => {
+    const email = (await api('/emails?limit=1')).body.items[0];
+    const send = (target) => {
+      const form = new FormData();
+      form.append('target_type', 'email');
+      form.append('target_id', target);
+      form.append('file', new Blob(['hello'], { type: 'text/plain' }), 'note.txt');
+      return fetch(`${base}/api/v1/files`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form });
+    };
+    const made = await send(email.id);
+    assert.equal(made.status, 201);
+    const ref = await made.json();
+    assert.deepEqual((await api(`/files?target_type=email&target_id=${email.id}`)).body.items.map((f) => f.id), [ref.id]);
+    assert.equal((await send('00000000-0000-4000-8000-000000000000')).status, 404);
+    assert.equal((await api(`/files/${ref.id}`, { method: 'DELETE' })).status, 204);
   });
 
   test('layouts: starter by default; full replace; stale save 409; bad stack 422', async () => {

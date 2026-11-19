@@ -698,13 +698,13 @@ describe('user cards (FR-CNT-002, proposals §19.1)', () => {
   })
 })
 
-describe('notes (FR-CNT-003/005, proposals §19.2)', () => {
-  it('masks on save, scopes by target, counts on the email, guards ownership', async () => {
+describe('notes (FR-CNT-003, proposals §19.2)', () => {
+  it('stores as typed, scopes by target, counts on the email, guards ownership', async () => {
     const t = await login('demo')
     const email = [...db.emails.values()].find((e) => e.user_id === db.users[0].id)!
     const made = await call('POST', '/notes', { token: t, body: { target_type: 'email', target_id: email.id, body: 'VPN password: hunter2\n- [ ] book room' } })
     expect(made.status).toBe(201)
-    expect(made.json!.body).toBe('VPN password: [MASKED:password]\n- [ ] book room')
+    expect(made.json!.body).toBe('VPN password: hunter2\n- [ ] book room')
     expect(Object.keys(made.json!).sort()).toEqual(['body', 'created_at', 'id', 'target_id', 'target_type', 'updated_at'])
     expect((await call('GET', `/emails/${email.id}`, { token: t })).json!.note_count).toBe(1)
 
@@ -722,7 +722,7 @@ describe('notes (FR-CNT-003/005, proposals §19.2)', () => {
     expect((await call('PATCH', `/notes/${made.json!.id}`, { token: sam, body: { body: 'x' } })).status).toBe(404)
 
     const patched = await call('PATCH', `/notes/${made.json!.id}`, { token: t, body: { body: 'OTP 123456' } })
-    expect(patched.json!.body).toBe('OTP [MASKED:otp]')
+    expect(patched.json!.body).toBe('OTP 123456')
     expect((await call('DELETE', `/notes/${made.json!.id}`, { token: t })).status).toBe(204)
     expect((await call('GET', `/emails/${email.id}`, { token: t })).json!.note_count).toBe(0)
   })

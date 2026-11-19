@@ -1,7 +1,5 @@
-// Notes (FR-CNT-003/005, proposals §19.2): on an email, card or project, or standalone. Masked on save; the value
-// of a secret is never kept (§18.4).
+// Notes (FR-CNT-003, proposals §19.2): on an email, card or project, or standalone. Stored as typed (no masking).
 import type { Note } from '../../api/types'
-import { maskSecrets } from '../../lib/maskSecrets'
 import { page } from '../http/cursor'
 import { Fail, own, route } from '../http/route'
 import { isStr, object } from '../http/validate'
@@ -55,7 +53,7 @@ export const noteRoutes = [
     const at = new Date().toISOString()
     const n: NoteRow = {
       id: crypto.randomUUID(), owner_user_id: user.id, target_type: type as Target | null, target_id: id,
-      body: maskSecrets(f.body.body as string).masked_text, created_at: at, updated_at: at,
+      body: f.body.body as string, created_at: at, updated_at: at,
     }
     db.notes.push(n)
     changed()
@@ -68,7 +66,7 @@ export const noteRoutes = [
     const f = object(body).only(['body'])
     if (!isStr(f.body.body, MAX)) f.add('body', `Text, at most ${MAX} characters`)
     f.done()
-    n.body = maskSecrets(f.body.body as string).masked_text
+    n.body = f.body.body as string
     n.updated_at = new Date().toISOString()
     changed()
     return toNote(n)
