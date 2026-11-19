@@ -36,6 +36,8 @@ export const STARTERS: { name: string; widgets: StarterWidget[] }[] = [
       // due=next_7_days: a rolling 7 days from today (proposals §15.1).
       column('Due this week', '🗓️', 'amber', 'due=next_7_days', 'newest', 'medium'),
       column('Needs my reply', '↩️', 'teal', 'view=needs_reply', 'newest'),
+      // The Metrics page became this widget (19 Nov 2026).
+      { type: 'stats', size: 'small', title: 'Stats', icon: '📊', colour: null, filter: null, sort: null, density: null },
     ],
   },
   {

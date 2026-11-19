@@ -1,3 +1,4 @@
+import { Hint, Key } from '../onboarding/Hint'
 import { Board } from '../board/Board'
 import { InboxHost } from '../inbox/InboxHost'
 
@@ -8,6 +9,9 @@ export function Component() {
       <div className="board-page">
         <Board label="Board" />
       </div>
+      <Hint id="remind" target=".board-item">
+        Tip: hover a card and click ⏰, or press <Key id="remind" />, to be reminded about it later.
+      </Hint>
     </InboxHost>
   )
 }

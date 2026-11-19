@@ -14,7 +14,8 @@ import {
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useQuery } from '@tanstack/react-query'
-import { CalendarPlus, ListChecks, SquareCheck, Zap } from 'lucide-react'
+import { matches } from '../lib/keybinds'
+import { AlarmClock, CalendarPlus, ListChecks, SquareCheck, Zap } from 'lucide-react'
 import { memo, useMemo, useState, type DragEvent, type ReactNode } from 'react'
 import { boardOptions, boardPosition, isCard, moveCard } from '../api/queries'
 import type { Action, BoardColumn } from '../api/types'
@@ -23,6 +24,8 @@ import { hasFiles, uploadAll } from '../files/upload'
 import { SOURCE_ICON } from '../cards/sourceIcon'
 import { dueTag } from '../inbox/cardModel'
 import { errorText, useInbox } from '../inbox/inboxContext'
+import type { PickerAt } from '../inbox/ProjectPicker'
+import { RemindPicker } from '../inbox/RemindPicker'
 import { BOARD_COLUMNS, byColumn, cardDue } from '../projects/projectModel'
 import { useMinuteClock } from '../shell/useMinuteClock'
 // Tags, buttons and column states share the inbox's styles (also when /board is opened directly).
@@ -191,6 +194,10 @@ function BoardLane({ column, title, count, empty, onEmailDrop, children }: { col
 function SortableCard({ action, column, dragging }: { action: Action; column: BoardColumn; dragging: boolean }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: action.id })
   const { open, toast } = useInbox()
+  // "Remind me" on a board card (19 Nov 2026): right-click, r, or the ⏰ button. An email's card reminds about the email.
+  const [remind, setRemind] = useState<PickerAt | null>(null)
+  const remindTarget = action.email_id ? { type: 'email' as const } : isCard(action) ? { type: 'card' as const, title: action.payload.title } : null
+  const remindAt = (x: number, y: number) => remindTarget && setRemind({ ids: [action.email_id ?? action.id], x, y })
   // An email's card opens the email; a user card opens its sheet (FR-CNT-002).
   const openAction = (a: Action) => (a.email_id ? open(a.email_id) : isCard(a) ? openCard(a.id) : undefined)
   // FR-UI-028: files dropped from the desktop onto a card you made are attached to it.
@@ -226,12 +233,41 @@ function SortableCard({ action, column, dragging }: { action: Action; column: Bo
       {...listeners}
       aria-roledescription="Board card"
       onClick={() => openAction(action)}
+      onContextMenu={(e) => {
+        if (!remindTarget) return
+        e.preventDefault()
+        remindAt(e.clientX, e.clientY)
+      }}
       onKeyDown={(e) => {
         listeners?.onKeyDown?.(e)
-        if (!e.defaultPrevented && e.key === 'Enter') openAction(action)
+        if (e.defaultPrevented) return
+        if (e.key === 'Enter') openAction(action)
+        else if (matches(e, 'remind')) {
+          const r = e.currentTarget.getBoundingClientRect()
+          remindAt(r.left, r.bottom)
+        }
       }}
     >
       <CardFace action={action} column={column} />
+      {remindTarget && (
+        <button
+          type="button"
+          className="board-remind"
+          title="Remind me (r)"
+          aria-keyshortcuts="r"
+          onPointerDown={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation()
+            const r = e.currentTarget.getBoundingClientRect()
+            remindAt(r.left, r.bottom)
+          }}
+        >
+          <AlarmClock size={14} aria-hidden="true" />
+          <span className="sr-only">Remind me</span>
+        </button>
+      )}
+      {remind && remindTarget && <RemindPicker at={remind} target={remindTarget} onClose={() => setRemind(null)} />}
     </li>
   )
 }

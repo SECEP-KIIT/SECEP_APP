@@ -1,4 +1,4 @@
-import { AlarmClock, CalendarClock, X } from 'lucide-react'
+import { AlarmClock, CalendarClock, Mail, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router'
 import { markNotificationsRead } from '../api/queries'
@@ -19,7 +19,7 @@ export function TopAlerts() {
   if (alerts.length === 0) return null
   const dismiss = (id: string) => setAlerts((cur) => cur.filter((x) => x.id !== id))
   return (
-    <div className="top-alerts" role="region" aria-label="Reminders">
+    <div className="top-alerts" role="region" aria-label="Alerts">
       {alerts.map((a) => (
         <Alert key={a.id} alert={a} onDone={() => dismiss(a.id)} />
       ))}
@@ -56,13 +56,13 @@ function Alert({ alert: a, onDone }: { alert: TopAlert; onDone: () => void }) {
       onFocus={() => setPaused(true)}
       onBlur={(e) => !e.currentTarget.contains(e.relatedTarget) && setPaused(false)}
     >
-      {a.title.startsWith('Meeting') ? <CalendarClock size={18} aria-hidden="true" /> : <AlarmClock size={18} aria-hidden="true" />}
+      {a.kind === 'email' ? <Mail size={18} aria-hidden="true" /> : a.title.startsWith('Meeting') ? <CalendarClock size={18} aria-hidden="true" /> : <AlarmClock size={18} aria-hidden="true" />}
       <button
         type="button"
         className="top-alert-main"
         onClick={() => {
           onDone()
-          void markNotificationsRead([a.id]).catch(() => {})
+          if (a.kind === 'notification') void markNotificationsRead([a.id]).catch(() => {})
           openNotificationTarget(a.target, pathname)
         }}
       >

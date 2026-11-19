@@ -19,6 +19,8 @@ const STARTERS = [
   { name: 'Planning', widgets: [
     column('Due this week', '🗓️', 'amber', 'due=next_7_days', 'newest', 'medium'),
     column('Needs my reply', '↩️', 'teal', 'view=needs_reply', 'newest'),
+    // The Metrics page became this widget (19 Nov 2026).
+    { type: 'stats', size: 'small', title: 'Stats', icon: '📊', colour: null, filter: null, sort: null, density: null },
   ] },
   // QA pass 5: where "See" on a Mark-handled toast goes. Only the Handled view, full width.
   { name: 'Handled', widgets: [

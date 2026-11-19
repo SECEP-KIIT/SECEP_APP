@@ -1,3 +1,4 @@
+import { markDone } from '../onboarding/onboarding'
 import { useQuery } from '@tanstack/react-query'
 import { CircleCheck, Mail, MailOpen, Paperclip, Pin, PinOff, ShieldAlert, ShieldX, Undo2, X, BellRing, FolderPlus } from 'lucide-react'
 import { useContext, useEffect, useRef, useState, type ReactNode } from 'react'
@@ -45,6 +46,7 @@ export default function EmailDrawer({ id, compose, onClose }: { id: string; comp
     const d = ref.current
     if (d && !d.open) d.showModal()
     setContainer(d)
+    markDone('open_email')
   }, [])
 
   // Focus stays in the drawer (QA pass 3). An action button that is clicked and then disappears or is replaced
@@ -74,6 +76,7 @@ export default function EmailDrawer({ id, compose, onClose }: { id: string; comp
     <dialog
       ref={ref}
       className="drawer"
+      data-email-id={id}
       aria-labelledby="drawer-title"
       onClose={onClose}
       onClick={(e) => e.target === ref.current && ref.current.close()}

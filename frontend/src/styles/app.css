@@ -997,3 +997,74 @@ html[data-motion='off'] .alert-ring circle {
 .nav-float-icon {
   margin-right: 0.35em;
 }
+
+/* Lock screen glance (readability): frosted chips per fact, and the opted-in subjects as one card. */
+.lock-glance {
+  display: grid;
+  justify-items: center;
+  gap: 0.75rem;
+}
+.lock-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+}
+.lock-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.85rem;
+  border-radius: 999px;
+  background: var(--lock-card);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  color: var(--lock-ink, inherit);
+  font-weight: 500;
+}
+.lock-chip[data-kind='crit']::before {
+  content: '';
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 2px;
+  background: #c4271b;
+  transform: rotate(45deg);
+}
+.lock-chip-detail {
+  padding-left: 0.5rem;
+  border-left: 1px solid currentColor;
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+}
+.lock-subjects {
+  display: grid;
+  gap: 0.35rem;
+  width: min(420px, 86vw);
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  background: var(--lock-card);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  text-align: left;
+  font-size: 0.875rem;
+}
+.lock-subjects-head {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+  text-transform: uppercase;
+}
+.lock-subject {
+  overflow: hidden;
+  padding-left: 0.6rem;
+  border-left: 2px solid #c4271b;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lock-more {
+  opacity: 0.7;
+}
+html[data-device='phone'] .lock-now {
+  display: none;
+}

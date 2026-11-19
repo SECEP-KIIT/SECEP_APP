@@ -1,3 +1,4 @@
+import { OnboardingHost } from '../onboarding/OnboardingHost'
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Outlet, useMatch, useNavigate } from 'react-router'
 import { onAnyCardRequest, openQuickAdd } from '../cards/cardBus'
@@ -11,6 +12,9 @@ import { anyLayerOpen, isTypingTarget } from './focusKeys'
 import { FocusContext, useFocusMode } from './focusMode'
 import { LockSlots } from './LockSlots'
 import { TopAlerts } from './TopAlerts'
+import { hasModifier, matches } from '../lib/keybinds'
+import { setPopupFocus } from '../lib/popupGate'
+import { useLockLayers } from '../lib/lockLayers'
 import { useApplyPrefs, usePrefs } from './prefs'
 import { Sidebar } from './Sidebar'
 import { TabBar } from './TabBar'
@@ -42,6 +46,8 @@ function SignedInShell() {
   useBootSteps()
   useApplyPrefs()
   const focused = useFocusMode()
+  useEffect(() => setPopupFocus(focused), [focused])
+  useLockLayers()
   const announcement = useFocusAnnouncement(focused)
   const { sidebar_collapsed } = usePrefs()
   const navigate = useNavigate()
@@ -62,6 +68,7 @@ function SignedInShell() {
       <CardsSlot />
       <PreviewSlot />
       <TopAlerts />
+      <OnboardingHost />
       <p className="sr-only" aria-live="polite">
         {announcement}
       </p>
@@ -90,9 +97,9 @@ function CardsSlot() {
   const project = useMatch('/projects/:id')?.params.id
   useEffect(() => onAnyCardRequest(() => setWanted(true)), [])
   useEffect(() => {
-    // n: quick-add (decisions item 11), never while typing or with a dialog open.
+    // n (or the Settings key): quick-add (decisions item 11), never while typing or with a dialog open.
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'n' || e.ctrlKey || e.metaKey || e.altKey || isTypingTarget(e.target) || anyLayerOpen()) return
+      if (e.defaultPrevented || !matches(e, 'quick_add') || (!hasModifier('quick_add') && (isTypingTarget(e.target) || anyLayerOpen()))) return
       e.preventDefault()
       openQuickAdd({ projectId: project })
     }

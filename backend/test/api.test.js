@@ -79,6 +79,18 @@ describe('M6 API', { skip: !reachable && 'no test database' }, () => {
     assert.ok(all.body.items.every((e) => !e.handled));
     assert.equal((await api('/emails?type=Spam')).status, 400);
     assert.equal((await api('/emails?view=nope')).body.error.code, 'invalid_parameter');
+    // Proposals §26: q_in=subject searches subjects only; other values are 422.
+    const titled = all.body.items.find((e) => e.subject);
+    const word = titled.subject.split(/\s+/).find((w) => w.length > 3) ?? titled.subject;
+    const bySubject = await api(`/emails?q=${encodeURIComponent(word)}&q_in=subject&limit=50`);
+    assert.ok(bySubject.body.items.some((e) => e.id === titled.id));
+    assert.ok(bySubject.body.items.every((e) => (e.subject ?? '').toLowerCase().includes(word.toLowerCase())));
+    assert.equal((await api('/emails?q=x&q_in=body')).status, 422);
+    // Proposals §27: include_handled=true returns open and handled mail together.
+    const handledCount = (await api('/emails?view=handled&limit=50')).body.items.length;
+    const both = await api('/emails?include_handled=true&limit=50');
+    assert.ok(both.body.items.some((e) => e.handled) === handledCount > 0);
+    assert.equal((await api('/emails?include_handled=yes')).status, 422);
     const page1 = await api('/emails?limit=5');
     const page2 = await api(`/emails?limit=5&cursor=${encodeURIComponent(page1.body.next_cursor)}`);
     assert.equal(new Set([...page1.body.items, ...page2.body.items].map((e) => e.id)).size, 10);
@@ -284,6 +296,24 @@ describe('M6 API', { skip: !reachable && 'no test database' }, () => {
     assert.equal((await api('/notifications/read', { method: 'POST', body: JSON.stringify({ ids: ['x'] }) })).status, 422);
     assert.equal((await api('/notifications/read', { method: 'POST', body: JSON.stringify({}) })).status, 204);
     assert.deepEqual(await unread(), []);
+  });
+
+  test('preferences: pop-up rules, quiet hours and key binds are stored; bad shapes are 422 (proposals §28)', async () => {
+    const patch = (body) => api('/me/preferences', { method: 'PATCH', body: JSON.stringify(body) });
+    const rules = { normal: { urgency: 'high', sentiment: 'frustrated' }, focus: { urgency: 'critical', sentiment: 'off' }, quiet: { urgency: 'none', sentiment: 'off' } };
+    const ok = await patch({ popup_rules: rules, quiet_hours: { start: '22:00', end: '08:00' }, keybinds: { lock: 'Alt+Q' } });
+    assert.equal(ok.status, 200);
+    assert.deepEqual(ok.body.ui_prefs.popup_rules, rules);
+    assert.deepEqual(ok.body.ui_prefs.keybinds, { lock: 'Alt+Q' });
+    assert.equal((await patch({ quiet_hours: null })).body.ui_prefs.quiet_hours, null);
+    for (const body of [{ popup_rules: { normal: rules.normal } }, { quiet_hours: { start: '9am', end: '08:00' } }, { keybinds: { teleport: 'T' } }]) {
+      assert.equal((await patch(body)).status, 422);
+    }
+    await patch({ keybinds: {} });
+    const onb = await patch({ onboarding: { tour: 'paused', tour_step: 2, done: ['search'] } });
+    assert.equal(onb.status, 200);
+    assert.deepEqual(onb.body.ui_prefs.onboarding, { tour: 'paused', tour_step: 2, done: ['search'] });
+    assert.equal((await patch({ onboarding: { tour: 'later' } })).status, 422);
   });
 
   test('files: an email is a target too; someone else\'s email is a 404', async () => {

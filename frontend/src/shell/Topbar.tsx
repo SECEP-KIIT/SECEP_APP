@@ -1,13 +1,19 @@
 import { useQueryClient, type QueryCache } from '@tanstack/react-query'
-import { Plus, Search } from 'lucide-react'
+import { Lock, Plus, Search } from 'lucide-react'
+import { lock } from '../boot/lock'
 import { Bell } from './Bell'
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
+import { anyLayerOpen, isTypingTarget } from './focusKeys'
+import { onOpenSearch } from '../search/searchBus'
 import { useMatch, useMatches } from 'react-router'
 import { openQuickAdd } from '../cards/cardBus'
 import { useMinuteClock } from './useMinuteClock'
+import { display, hasModifier, matches, useBindings, type KeyActionId } from '../lib/keybinds'
+
+// Search loads on first use (NFR-PERF-010: the palette is not in the initial bundle).
+const SearchPalette = lazy(() => import('../search/SearchPalette').then((m) => ({ default: m.SearchPalette })))
 
 const timeFmt = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' })
-const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent)
 
 const latestUpdate = (cache: QueryCache) => Math.max(0, ...cache.getAll().map((q) => q.state.dataUpdatedAt))
 
@@ -51,7 +57,31 @@ function SyncIndicator() {
 // (task 16). The pill and bell are laid out now so nothing shifts later; the bell arrives with task 13.
 // Quick-add (task 12) opens the quick-add dialog, filed into the open project.
 export function Topbar() {
+  // null: closed; a string: open, starting with these words (the Inbox's search pill reopens it).
+  const [search, setSearch] = useState<string | null>(null)
+  useEffect(() => onOpenSearch((q) => setSearch(q)), [])
+  // Keys from Settings (proposals §28.3); by default Alt+L locks, Ctrl/⌘+K and / open search. A key without Ctrl/⌘
+  // or Alt never fires while typing or with a dialog open.
+  useEffect(() => {
+    const free = (e: KeyboardEvent, id: KeyActionId) => matches(e, id) && (hasModifier(id) || (!isTypingTarget(e.target) && !anyLayerOpen()))
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return
+      if (free(e, 'lock')) {
+        e.preventDefault()
+        lock.now()
+      } else if (!lock.isOpen()) {
+        return
+      } else if (free(e, 'search') || free(e, 'search_alt')) {
+        e.preventDefault()
+        setSearch('')
+      }
+    }
+    addEventListener('keydown', onKey)
+    return () => removeEventListener('keydown', onKey)
+  }, [])
   const now = useMinuteClock()
+  const bindings = useBindings()
+  const keys = { search: display(bindings.search), lock: display(bindings.lock), quick_add: display(bindings.quick_add) }
   const project = useMatch('/projects/:id')?.params.id
   const title = useMatches()
     .map((m) => (m.handle as { title?: string } | undefined)?.title)
@@ -68,16 +98,25 @@ export function Topbar() {
       <div className="topbar-centre">
         {/* Contextual mode (item 1): the inbox page renders its selection bar here, over the search pill. */}
         <div id="topbar-context" className="topbar-context" />
-        <button type="button" className="search-pill" disabled title="Search arrives with the command palette">
+        <button type="button" className="search-pill" onClick={() => setSearch('')} aria-haspopup="dialog">
           <Search aria-hidden="true" size={16} />
           <span className="search-pill-label">Search</span>
-          <kbd>{isMac ? '⌘K' : 'Ctrl K'}</kbd>
+          <kbd>{keys.search}</kbd>
         </button>
       </div>
+      {search !== null && (
+        <Suspense fallback={null}>
+          <SearchPalette initialQuery={search} onClose={() => setSearch(null)} />
+        </Suspense>
+      )}
       <div className="topbar-right">
         <SyncIndicator />
         <Bell />
-        <button type="button" className="icon-button" aria-label="Quick add a card" title="Quick add (N)" onClick={() => openQuickAdd({ projectId: project })}>
+        {/* Lock now before stepping away, instead of waiting for the idle timer (desktop only; phones have no lock). */}
+        <button type="button" className="icon-button lock-now" aria-label="Lock screen" title={`Lock screen (${keys.lock})`} onClick={() => lock.now()}>
+          <Lock aria-hidden="true" size={17} />
+        </button>
+        <button type="button" className="icon-button" aria-label="Quick add a card" title={`Quick add (${keys.quick_add})`} onClick={() => openQuickAdd({ projectId: project })}>
           <Plus aria-hidden="true" size={18} />
         </button>
       </div>

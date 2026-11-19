@@ -1,5 +1,6 @@
+import { display, useBindings } from '../lib/keybinds'
 import * as Popover from '@radix-ui/react-popover'
-import { BellRing, CalendarPlus, ChevronRight, CircleCheck, Copy, ExternalLink, FolderPlus, Mail, MailOpen, Pin, PinOff, SquareCheck, Undo2, X, Zap } from 'lucide-react'
+import { BellRing, ChevronRight, CircleCheck, Copy, ExternalLink, FolderPlus, Mail, MailOpen, Pin, PinOff, SquareCheck, Undo2, X, Zap } from 'lucide-react'
 import { useRef, type KeyboardEvent, type ReactNode } from 'react'
 import type { EmailListItem } from '../api/types'
 import { copySummary } from './cardKeys'
@@ -62,6 +63,8 @@ function SingleItems({ at, onClose }: { at: { email: EmailListItem; x: number; y
   const { toast, pickProject, pickRemind } = useInbox()
   const { selected, toggle } = useSelection()
   const { send, toggleHandled, togglePin, toggleRead, open } = useQuickActions(email, () => {})
+  const b = useBindings()
+  const k = { jira: display(b.jira), project: display(b.project), remind: display(b.remind), done: display(b.done), select: display(b.select) }
   const run = (fn: () => unknown) => () => {
     onClose()
     void fn()
@@ -73,21 +76,20 @@ function SingleItems({ at, onClose }: { at: { email: EmailListItem; x: number; y
       {email.jira_key ? (
         <Item icon={<Zap size={14} />} label={`In Jira as ${email.jira_key}`} disabled />
       ) : (
-        <Item icon={<Zap size={14} />} label="Send to Jira" keys="⇧J" onSelect={run(() => send('create_jira_issue'))} />
+        <Item icon={<Zap size={14} />} label="Send to Jira" keys={k.jira} onSelect={run(() => send('create_jira_issue'))} />
       )}
-      <Item icon={<CalendarPlus size={14} />} label="Add to Calendar" keys="⇧C" onSelect={run(() => send('add_calendar_event'))} />
-      <Item icon={<FolderPlus size={14} />} label="Add to project" keys="P" more onSelect={() => pickProject([email.id], at.x, at.y)} />
-      <Item icon={<BellRing size={14} />} label="Remind me" keys="R" more onSelect={() => pickRemind([email.id], at.x, at.y)} />
+      <Item icon={<FolderPlus size={14} />} label="Add to project" keys={k.project} more onSelect={() => pickProject([email.id], at.x, at.y)} />
+      <Item icon={<BellRing size={14} />} label="Remind me" keys={k.remind} more onSelect={() => pickRemind([email.id], at.x, at.y)} />
       <Item
         icon={email.handled ? <Undo2 size={14} /> : <CircleCheck size={14} />}
         label={email.handled ? 'Restore to inbox' : 'Mark as handled'}
-        keys="E"
+        keys={k.done}
         onSelect={run(toggleHandled)}
       />
       <Item icon={email.pinned ? <PinOff size={14} /> : <Pin size={14} />} label={email.pinned ? 'Unpin' : 'Pin'} onSelect={run(togglePin)} />
       <Item icon={email.read ? <Mail size={14} /> : <MailOpen size={14} />} label={email.read ? 'Mark as unread' : 'Mark as read'} onSelect={run(toggleRead)} />
       <hr className="menu-sep" />
-      <Item icon={<SquareCheck size={14} />} label={selected.has(email.id) ? 'Deselect' : 'Select'} keys="X" onSelect={run(() => toggle(email.id))} />
+      <Item icon={<SquareCheck size={14} />} label={selected.has(email.id) ? 'Deselect' : 'Select'} keys={k.select} onSelect={run(() => toggle(email.id))} />
       <Item icon={<Copy size={14} />} label="Copy summary" keys="Ctrl C" onSelect={run(() => copySummary(email, toast))} />
     </>
   )
@@ -105,7 +107,6 @@ function BulkItems({ at, onClose }: { at: { x: number; y: number }; onClose: () 
     <>
       <p className="menu-title">{selected.size} selected</p>
       <Item icon={<Zap size={14} />} label="Send each to Jira" onSelect={run(() => bulk.send('create_jira_issue'))} />
-      <Item icon={<CalendarPlus size={14} />} label="Add each to Calendar" onSelect={run(() => bulk.send('add_calendar_event'))} />
       <Item icon={<FolderPlus size={14} />} label="Add all to project" more onSelect={() => pickProject([...selected], at.x, at.y)} />
       <Item icon={<BellRing size={14} />} label="Remind me about all" more onSelect={() => pickRemind([...selected], at.x, at.y)} />
       <Item icon={<CircleCheck size={14} />} label="Mark all as handled" onSelect={run(() => bulk.done())} />

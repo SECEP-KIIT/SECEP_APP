@@ -247,3 +247,43 @@
   background: var(--tag-muted-bg);
   color: var(--ink);
 }
+
+/* Send to (proposals §27.2): Jira, Calendar, Remind me, and what was already sent. */
+.card-send {
+  display: grid;
+  gap: var(--space-2);
+}
+.card-send-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.card-sends {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.875rem;
+}
+.card-sends li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.card-send-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.card-send-state {
+  flex: none;
+  color: var(--ink-muted);
+  font-size: 0.8125rem;
+}
+.card-sends li[data-status='failed'] .card-send-state {
+  color: var(--danger, #c4271b);
+}

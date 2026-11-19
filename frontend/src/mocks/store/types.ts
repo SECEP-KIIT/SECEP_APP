@@ -93,8 +93,10 @@ export interface SecretRow {
   secret_type: string
 }
 
-export interface ActionRow extends Omit<Action, 'projects'> {
+export interface ActionRow extends Omit<Action, 'projects' | 'card_id'> {
   user_id: string
+  /** Proposals §27.2: the user card a Jira issue or event was sent from. */
+  card_id?: string | null
   /** §6.6 v1.1 `actions.undo_until`: until when POST /actions/:id/undo may delete the created issue or event. */
   undo_until?: string | null
 }

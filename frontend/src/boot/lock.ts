@@ -112,7 +112,11 @@ function dispatch(e: LockEvent) {
   const next = reduce(state, e)
   if (next === state) return
   const entering = next.view === 'done' && state.view !== 'done'
+  const was = state.view
   state = next
+  // The app hears the curtain come down and go up (lib/lockLayers.ts closes dialogs and reopens the email panel).
+  if (was === 'open' && next.view !== 'open') dispatchEvent(new Event(LOCKING))
+  else if (was !== 'open' && next.view === 'open') dispatchEvent(new Event(UNLOCKED))
   render()
   // Spinner → green tick → slide up: hold the tick briefly, then release into the dashboard.
   if (entering) setTimeout(() => dispatch({ type: 'release' }), DONE_HOLD_MS)
@@ -133,18 +137,24 @@ function tickClock() {
   setTimeout(tickClock, 60_000 - (Date.now() % 60_000))
 }
 
+/** The lock's refresh button (top right) refreshes without opening the lock. */
+const onRefresh = (t: EventTarget | null) => !!(t as Element | null)?.closest?.('#lock-refresh')
+
 function onKey(e: KeyboardEvent) {
+  // Synthetic keys (the Escape that closes menus as the lock comes down) never open it again.
+  if (!e.isTrusted) return
   lastActive = Date.now()
   if (state.view === 'open') return
+  if (onRefresh(e.target) && (e.key === 'Enter' || e.key === ' ')) return
   // The key only opens the lock; it must not also reach the app (e.g. F would toggle focus mode).
   e.stopPropagation()
   if (!e.ctrlKey && !e.metaKey && !e.altKey) e.preventDefault()
   dispatch({ type: 'request' })
 }
 
-function onPointerDown() {
+function onPointerDown(e: PointerEvent) {
   lastActive = Date.now()
-  if (state.view !== 'open') dispatch({ type: 'request' })
+  if (state.view !== 'open' && !onRefresh(e.target)) dispatch({ type: 'request' })
 }
 
 const markActive = () => {
@@ -174,10 +184,20 @@ export function initLock() {
   render()
 }
 
+/** Window events: the lock has come down over the dashboard / gone up again. */
+export const LOCKING = 'secep:locking'
+export const UNLOCKED = 'secep:unlocked'
+
 export const lock = {
+  /** True while the dashboard is showing (no lock or loading curtain over it). */
+  isOpen: () => state.view === 'open',
   /** Report a finished boot step (FR-WP-003 progress). */
   step(step: Step) {
     dispatch({ type: 'step', step })
+  },
+  /** "Lock now" (topbar button, Alt+L): the same privacy curtain as the idle return, without the wait. */
+  now() {
+    if (state.view === 'open') dispatch({ type: 'idle' })
   },
   /** Apply ui_prefs once /me arrives, and mirror the boot-relevant ones for the next static paint. */
   configure(next: BootPrefs) {

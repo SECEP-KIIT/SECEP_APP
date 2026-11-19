@@ -86,6 +86,40 @@ describe('drawer and quick actions (task 7)', () => {
     spy.mockRestore()
   })
 
+  it('accept routes a Jira issue to the given project, or the primary project, and validates the target (§25.2)', async () => {
+    const { toAction } = await import('../mocks/store/serialize')
+    const { jiraTarget } = await import('../mocks/routes/actions')
+    const me = db.users[0]
+    const proposals = [...db.actions.values()].filter((a) => a.user_id === me.id && a.type === 'create_jira_issue' && a.status === 'proposed')
+    await expect(acceptAction(toAction(proposals[0]), undefined, { project_key: 'bad key', epic: null })).rejects.toMatchObject({ status: 422 })
+    const done = await acceptAction(toAction(proposals[0]), undefined, { project_key: 'ONB', epic: 'ONB-7' })
+    expect(done.external_ref).toMatch(/^ONB-\d+$/)
+    // Without a target: the primary project's Jira project and epic, else the tenant default.
+    const project = db.projects.find((p) => p.user_id === me.id && p.jira_project_key === 'ATL' && p.jira_epic)!
+    const row = proposals[1]
+    db.projectItems = db.projectItems.filter((i) => i.email_id !== row.email_id)
+    expect(jiraTarget(row, me)).toEqual({ project_key: db.settings.jira.project_key, epic: null })
+    db.projectItems.push({ project_id: project.id, email_id: row.email_id, action_id: null, is_primary: true, added_at: new Date().toISOString() })
+    expect(jiraTarget(row, me)).toEqual({ project_key: 'ATL', epic: project.jira_epic })
+  })
+
+  it('sends a card to Jira and Calendar (§27.2): off the board, listed under the card, validated', async () => {
+    const { createCard, sendCard } = await import('../api/queries')
+    const card = await createCard({ title: 'Call vendor', urgency: 'High' })
+    const jira = await sendCard(card.id, 'create_jira_issue', { title: 'Call vendor' })
+    expect(jira).toMatchObject({ status: 'done', card_id: card.id, email_id: null, board_column: null, external_ref: expect.stringMatching(/^[A-Z]+-\d+$/) })
+    expect((db.actions.get(jira.id)!.payload as DecoderActionPayload).priority).toBe('High')
+    const start = new Date(Date.now() + 86_400_000).toISOString()
+    const ev = await sendCard(card.id, 'add_calendar_event', { title: 'Call vendor', start, end: new Date(Date.parse(start) + 3_600_000).toISOString(), attendees: [db.users[0].email] })
+    expect(ev.status).toBe('done')
+    const { api } = await import('../api/client')
+    const listed = await api<Page<{ id: string }>>(`/actions?card=${card.id}`)
+    expect(listed.items.map((a) => a.id).sort()).toEqual([jira.id, ev.id].sort())
+    // Not a card you made → 409; an email's action can't be sent from a card.
+    const emailAction = [...db.actions.values()].find((a) => a.email_id)!
+    await expect(sendCard(emailAction.id, 'create_jira_issue', { title: 'x' })).rejects.toMatchObject({ status: 409 })
+  })
+
   it('reject marks the proposal declined', async () => {
     const row = [...db.actions.values()].find((a) => a.user_id === db.users[0].id && a.status === 'proposed')!
     const { toAction } = await import('../mocks/store/serialize')

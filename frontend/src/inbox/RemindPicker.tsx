@@ -3,6 +3,7 @@ import { AlarmClock, CalendarClock } from 'lucide-react'
 import { useRef, useState, type KeyboardEvent } from 'react'
 import { createReminder, deleteReminder, emailSubject } from '../api/queries'
 import { remindChoices, whenText } from '../reminders/remindChoices'
+import { shellToast } from '../lib/toastBus'
 import { errorText, useInbox } from './inboxContext'
 import type { PickerAt } from './ProjectPicker'
 
@@ -12,8 +13,23 @@ const localInput = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 6
  * "Remind me" (FR-REM-002, decisions item 13): Later today, Tomorrow 9 am, Next week, Pick a time. The email stays
  * where it is and a reminder pops up at that time. Snooze was dropped (19 Nov 2026). Undo deletes the reminder.
  */
-export function RemindPicker({ at, onClose, container }: { at: PickerAt; onClose: () => void; container?: HTMLElement | null }) {
-  const { toast } = useInbox()
+export function RemindPicker({
+  at,
+  onClose,
+  container,
+  target,
+}: {
+  at: PickerAt
+  onClose: () => void
+  container?: HTMLElement | null
+  /** Board and card-sheet use (19 Nov 2026): `at.ids` are cards, or the board's email cards; title shown in the reminder. */
+  target?: { type: 'email' | 'card'; title?: string }
+}) {
+  const inbox = useInbox()
+  // Outside the inbox (the card sheet) the shell's toaster shows the undo.
+  const toast = target ? shellToast : inbox.toast
+  const kind = target?.type ?? 'email'
+  const noun = kind === 'card' ? 'card' : 'email'
   const ref = useRef<HTMLDivElement>(null)
   const [picking, setPicking] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -24,9 +40,9 @@ export function RemindPicker({ at, onClose, container }: { at: PickerAt; onClose
     setBusy(true)
     try {
       // The email stays where it is; a notification arrives at `until` (proposals §21).
-      const made = await Promise.all(at.ids.map((id) => createReminder({ type: 'email', id }, emailSubject(id), until)))
+      const made = await Promise.all(at.ids.map((id) => createReminder({ type: kind, id }, kind === 'card' || target?.title ? (target?.title ?? 'Card') : emailSubject(id), until)))
       onClose()
-      toast(`Reminder${n === 1 ? '' : `s for ${n} emails`} set for ${whenText(until, now)}`, 'info', {
+      toast(`Reminder${n === 1 ? '' : `s for ${n} ${noun}s`} set for ${whenText(until, now)}`, 'info', {
         label: 'Undo',
         run: () => void Promise.all(made.map((r) => deleteReminder(r.id))).catch((err: unknown) => toast(errorText(err), 'error')),
       })
@@ -54,7 +70,7 @@ export function RemindPicker({ at, onClose, container }: { at: PickerAt; onClose
           ref={ref}
           className="menu remind-picker"
           role="menu"
-          aria-label={n === 1 ? 'Remind me' : `Remind me about ${n} emails`}
+          aria-label={n === 1 ? 'Remind me' : `Remind me about ${n} ${noun}s`}
           side="bottom"
           align="start"
           sideOffset={4}
@@ -65,7 +81,7 @@ export function RemindPicker({ at, onClose, container }: { at: PickerAt; onClose
             ref.current?.querySelector<HTMLElement>('[role="menuitem"], input')?.focus()
           }}
         >
-          <p className="menu-title">{n === 1 ? 'Remind me' : `Remind me about ${n} emails`}</p>
+          <p className="menu-title">{n === 1 ? 'Remind me' : `Remind me about ${n} ${noun}s`}</p>
           {!picking &&
             remindChoices(now).map((c) => (
               <button key={c.id} type="button" role="menuitem" className="menu-item" disabled={busy} onClick={() => void apply(c.at)}>
