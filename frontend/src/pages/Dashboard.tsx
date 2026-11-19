@@ -1,3 +1,4 @@
+import { Checklist } from '../onboarding/Checklist'
 import { ArrowLeft, ArrowRight, Check, LayoutGrid, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import { useSearchParams } from 'react-router'
@@ -217,6 +218,7 @@ function Dashboard() {
 
   return (
     <div className="dash" data-editing={editing || undefined}>
+      <Checklist />
       {phone ? (
         // Phone: one slim header row, the page switcher and Edit (proposals §16.4).
         <div className="dash-bar phone-bar">

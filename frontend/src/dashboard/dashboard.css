@@ -9,6 +9,13 @@
      Windows precision touchpad navigates on the root scroller otherwise (QA pass 3). */
   overscroll-behavior-x: none;
 }
+/* Getting started (onboarding §29.2) sits above the page bar when shown. */
+.dash:has(> .checklist) {
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+.dash > .checklist {
+  margin: 0;
+}
 html:has(.dash),
 html:has(.dash) body {
   overscroll-behavior-x: none;

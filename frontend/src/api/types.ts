@@ -1,3 +1,4 @@
+import type { Onboarding } from '../onboarding/onboarding'
 import type { KeyActionId } from '../lib/keybinds'
 import type { PopupRules, QuietHours } from '../lib/popupRules'
 // Wire types for the public API: SRS §6.4.1 (shapes) and §6.6 (enums and nullability). snake_case on purpose:
@@ -305,6 +306,8 @@ export interface UiPrefs {
   quiet_hours?: QuietHours | null
   /** PROPOSED (proposals §28.3): action id → key combo, overrides of the defaults only. */
   keybinds?: Partial<Record<KeyActionId, string>>
+  /** PROPOSED (proposals §29): tour, Getting started checklist and first-use hint progress. */
+  onboarding?: Onboarding
 }
 
 /** GET /admin/metrics (§6.5, admin): the classifier over `window_days`. Shown in the Stats widget. */

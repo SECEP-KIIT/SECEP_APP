@@ -1,3 +1,4 @@
+import { OnboardingHost } from '../onboarding/OnboardingHost'
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Outlet, useMatch, useNavigate } from 'react-router'
 import { onAnyCardRequest, openQuickAdd } from '../cards/cardBus'
@@ -13,7 +14,8 @@ import { LockSlots } from './LockSlots'
 import { TopAlerts } from './TopAlerts'
 import { hasModifier, matches } from '../lib/keybinds'
 import { setPopupFocus } from '../lib/popupGate'
-import { useApplyPrefs, usePopupIntro, usePrefs } from './prefs'
+import { useLockLayers } from '../lib/lockLayers'
+import { useApplyPrefs, usePrefs } from './prefs'
 import { Sidebar } from './Sidebar'
 import { TabBar } from './TabBar'
 import { Topbar } from './Topbar'
@@ -45,7 +47,7 @@ function SignedInShell() {
   useApplyPrefs()
   const focused = useFocusMode()
   useEffect(() => setPopupFocus(focused), [focused])
-  usePopupIntro()
+  useLockLayers()
   const announcement = useFocusAnnouncement(focused)
   const { sidebar_collapsed } = usePrefs()
   const navigate = useNavigate()
@@ -66,6 +68,7 @@ function SignedInShell() {
       <CardsSlot />
       <PreviewSlot />
       <TopAlerts />
+      <OnboardingHost />
       <p className="sr-only" aria-live="polite">
         {announcement}
       </p>

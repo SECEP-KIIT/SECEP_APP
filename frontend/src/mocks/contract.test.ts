@@ -724,6 +724,13 @@ describe('ui_prefs.theme (PROPOSED, proposals §16.6)', () => {
       expect((await call('PATCH', '/me/preferences', { token, body })).status).toBe(422)
     }
   })
+  it('PATCH /me/preferences: onboarding progress (proposals §29)', async () => {
+    const token = await login()
+    const ok = await call('PATCH', '/me/preferences', { token, body: { onboarding: { tour: 'done', done: ['open_email'], hints: ['remind'] } } })
+    expect(ok.status).toBe(200)
+    expect(ok.json.ui_prefs.onboarding).toEqual({ tour: 'done', done: ['open_email'], hints: ['remind'] })
+    expect((await call('PATCH', '/me/preferences', { token, body: { onboarding: { done: ['teleport'] } } })).status).toBe(422)
+  })
 })
 
 describe('user cards (FR-CNT-002, proposals §19.1)', () => {

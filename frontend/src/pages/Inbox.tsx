@@ -1,3 +1,4 @@
+import { Hint, Key } from '../onboarding/Hint'
 import { Search, X } from 'lucide-react'
 import { useMemo } from 'react'
 import { useLocation } from 'react-router'
@@ -29,6 +30,9 @@ export function Component() {
           badge={found ? <SearchPill words={words} /> : undefined}
         />
       </div>
+      <Hint id="card_keys" target=".column .card">
+        Tip: <Key id="next" />/<Key id="prev" /> move between cards, <Key id="done" /> marks one handled, right-click shows everything else. Keys can be changed in Settings.
+      </Hint>
     </InboxHost>
   )
 }

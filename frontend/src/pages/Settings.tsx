@@ -1,4 +1,6 @@
-import { BellRing, Keyboard, Lock, Monitor, Moon, Palette, Sparkles, Sun, SunMedium } from 'lucide-react'
+import { useLocation } from 'react-router'
+import { CHECKLIST, markDone, saveOnboarding, startTour, useOnboarding } from '../onboarding/onboarding'
+import { BellRing, GraduationCap, Keyboard, Lock, Monitor, Moon, Palette, Sparkles, Sun, SunMedium } from 'lucide-react'
 import { useEffect, useId, useState, type ReactNode } from 'react'
 import { useUpdatePreferences } from '../api/queries'
 import type { UiPrefs } from '../api/types'
@@ -18,9 +20,10 @@ export function Component() {
   const update = useUpdatePreferences()
   const set = (patch: UiPrefs) => update.mutate(patch)
   // /settings#notifications (the first-run toast's Change) and #keyboard land on their section.
+  const { hash } = useLocation()
   useEffect(() => {
-    if (location.hash) document.getElementById(location.hash.slice(1))?.scrollIntoView({ block: 'start' })
-  }, [])
+    if (hash) document.getElementById(hash.slice(1))?.scrollIntoView({ block: 'start' })
+  }, [hash])
 
   return (
     <div className="settings">
@@ -75,12 +78,16 @@ export function Component() {
       </Section>
 
       <Section icon={<BellRing size={18} aria-hidden="true" />} title="Notifications" id="notifications">
-        <PopupTable rules={prefs.popup_rules} onChange={(popup_rules) => set({ popup_rules })} />
-        <QuietHoursRow value={prefs.quiet_hours} onChange={(quiet_hours) => set({ quiet_hours })} />
+        <PopupTable rules={prefs.popup_rules} onChange={(popup_rules) => (markDone('popup_rules'), set({ popup_rules }))} />
+        <QuietHoursRow value={prefs.quiet_hours} onChange={(quiet_hours) => (quiet_hours && markDone('quiet_hours'), set({ quiet_hours }))} />
       </Section>
 
       <Section icon={<Keyboard size={18} aria-hidden="true" />} title="Keyboard shortcuts" id="keyboard">
         <KeybindList overrides={prefs.keybinds} onChange={(keybinds) => set({ keybinds })} />
+      </Section>
+
+      <Section icon={<GraduationCap size={18} aria-hidden="true" />} title="Tutorial" id="tutorial">
+        <TutorialRow />
       </Section>
 
       <Section icon={<SunMedium size={18} aria-hidden="true" />} title="Wallpaper">
@@ -300,6 +307,39 @@ function KeybindList({ overrides, onChange }: { overrides: Partial<Record<KeyAct
           Reset all shortcuts
         </button>
       )}
+    </div>
+  )
+}
+
+/** Proposals §29: start or resume the tour, bring back Getting started, show the tips again. */
+function TutorialRow() {
+  const o = useOnboarding()
+  if (!o) return null
+  const paused = o.tour === 'paused' && (o.tour_step ?? 0) > 0
+  const done = o.done?.length ?? 0
+  return (
+    <div className="settings-row">
+      <div className="tutorial-buttons">
+        <button type="button" className="primary-button" onClick={() => startTour(0)}>
+          Start the tour
+        </button>
+        {paused && (
+          <button type="button" className="ghost-button" onClick={() => startTour(o.tour_step)}>
+            Resume from step {(o.tour_step ?? 0) + 1}
+          </button>
+        )}
+        {o.checklist_hidden && (
+          <button type="button" className="ghost-button" onClick={() => saveOnboarding({ checklist_hidden: false })}>
+            Show Getting started on Home ({done} of {CHECKLIST.length} done)
+          </button>
+        )}
+        {(o.hints?.length ?? 0) > 0 && (
+          <button type="button" className="text-button" onClick={() => saveOnboarding({ hints: [] })}>
+            Show tips again
+          </button>
+        )}
+      </div>
+      <p className="settings-hint">A one-minute tour of where things are. You can also start it by searching "tutorial".</p>
     </div>
   )
 }

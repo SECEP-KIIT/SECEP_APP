@@ -1,14 +1,12 @@
-import { useEffect, useRef } from 'react'
-import { useMe, useUpdatePreferences } from '../api/queries'
-import { goTo } from '../lib/navigate'
-import { shellToast } from '../lib/toastBus'
+import { useEffect } from 'react'
+import { useMe } from '../api/queries'
 import type { UiPrefs } from '../api/types'
 import { lock } from '../boot/lock'
 import { isKeybinds, setBindings } from '../lib/keybinds'
 import { configurePopups } from '../lib/popupGate'
-import { DEFAULT_POPUP_RULES, DEFAULT_QUIET, isPopupRules, isQuietHours } from '../lib/popupRules'
+import { DEFAULT_POPUP_RULES, isPopupRules, isQuietHours } from '../lib/popupRules'
 
-export type ResolvedPrefs = Required<Omit<UiPrefs, 'motion'>> & { motion?: Exclude<UiPrefs['motion'], null> }
+export type ResolvedPrefs = Required<Omit<UiPrefs, 'motion' | 'onboarding'>> & { motion?: Exclude<UiPrefs['motion'], null> }
 
 const DEFAULTS: ResolvedPrefs = {
   motion: undefined, // follow the OS
@@ -18,7 +16,8 @@ const DEFAULTS: ResolvedPrefs = {
   sidebar_collapsed: false,
   theme: 'auto',
   popup_rules: DEFAULT_POPUP_RULES,
-  quiet_hours: DEFAULT_QUIET,
+  // Off for new users (19 Nov 2026, proposals §29); Settings fills in 22:00–08:00 when turned on.
+  quiet_hours: null,
   keybinds: {},
 }
 
@@ -56,26 +55,3 @@ export function useApplyPrefs() {
   useEffect(() => setBindings(keybinds), [keybinds])
 }
 
-/**
- * FR-REM-007 "asked on first sign-in", lean: the first time ui_prefs has no pop-up rules, the defaults are saved and a
- * toast says what they are, with Change → Settings. It shows once: after the save, the rules are set.
- */
-export function usePopupIntro() {
-  const { data: me } = useMe()
-  const update = useUpdatePreferences()
-  const asked = useRef(false)
-  useEffect(() => {
-    if (!me || asked.current || me.ui_prefs.popup_rules !== undefined) return
-    asked.current = true
-    update.mutate(
-      { popup_rules: DEFAULT_POPUP_RULES, quiet_hours: me.ui_prefs.quiet_hours === undefined ? DEFAULT_QUIET : (me.ui_prefs.quiet_hours as UiPrefs['quiet_hours']) },
-      {
-        onSuccess: () =>
-          shellToast('New emails pop up when High or Critical, or frustrated. Quiet hours 22:00–08:00: nothing pops up.', 'info', {
-            label: 'Change',
-            run: () => goTo('/settings#notifications'),
-          }),
-      },
-    )
-  }, [me, update])
-}

@@ -1,5 +1,6 @@
+import { markDone, startTour } from '../onboarding/onboarding'
 import { useInfiniteQuery } from '@tanstack/react-query'
-import { Archive, FolderOpen, Mail, Search, SlidersHorizontal } from 'lucide-react'
+import { Archive, FolderOpen, Mail, Search, SlidersHorizontal, GraduationCap, Keyboard } from 'lucide-react'
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { api } from '../api/client'
 import { useProjects } from '../api/queries'
@@ -20,7 +21,7 @@ function useDebounced<T>(value: T, ms: number) {
   return v
 }
 
-type Row = { kind: 'project'; project: Project } | { kind: 'email'; email: EmailListItem } | { kind: 'deeper' }
+type Row = { kind: 'help'; what: 'tour' | 'keys' } | { kind: 'project'; project: Project } | { kind: 'email'; email: EmailListItem } | { kind: 'deeper' }
 
 /**
  * Search (FR-UI-025, lean, 19 Nov 2026): one box for emails and projects. Typing searches email subjects (handled
@@ -42,6 +43,7 @@ export function SearchPalette({ initialQuery = '', onClose }: { initialQuery?: s
   useEffect(() => {
     const d = ref.current
     if (d && !d.open) d.showModal()
+    markDone('search')
   }, [])
 
   // One list, paged; stale requests are cancelled by TanStack Query's signal when the key changes.
@@ -65,7 +67,15 @@ export function SearchPalette({ initialQuery = '', onClose }: { initialQuery?: s
 
   const found = useMemo(() => emails.data?.pages.flatMap((p) => p.items) ?? [], [emails.data])
   const canGoDeeper = query.length > 0 && !deep && emails.isSuccess && found.length === 0
+  // Help results (proposals §29.4): "tutorial", "tour", "help"… start the tour; "shortcuts", "keys"… open the key binds.
+  const help = useMemo(() => {
+    const out: Row[] = []
+    if (/^(tut|tour|help|guid|onboard|getting|walk)/i.test(query)) out.push({ kind: 'help', what: 'tour' })
+    if (/^(short|key|hotkey|keyboard)/i.test(query)) out.push({ kind: 'help', what: 'keys' })
+    return out
+  }, [query])
   const rows: Row[] = [
+    ...help,
     ...projects.map((project) => ({ kind: 'project' as const, project })),
     ...found.map((email) => ({ kind: 'email' as const, email })),
     ...(canGoDeeper ? [{ kind: 'deeper' as const }] : []),
@@ -83,7 +93,10 @@ export function SearchPalette({ initialQuery = '', onClose }: { initialQuery?: s
       return
     }
     close()
-    if (row.kind === 'project') goTo(`/projects/${row.project.id}`)
+    if (row.kind === 'help') {
+      if (row.what === 'tour') startTour()
+      else goTo('/settings#keyboard')
+    } else if (row.kind === 'project') goTo(`/projects/${row.project.id}`)
     else showSearchResult(row.email, query)
   }
   const onKeyDown = (e: React.KeyboardEvent) => {
@@ -181,6 +194,19 @@ export function SearchPalette({ initialQuery = '', onClose }: { initialQuery?: s
           }}
         >
           {!searching && <p className="sp-hint">Type to search email subjects and project names. Enter opens, Esc closes.</p>}
+          {help.length > 0 && <p className="sp-group">Help</p>}
+          {help.map((h) => {
+            const at = ++i
+            return (
+              <Option key={h.kind === 'help' ? h.what : at} id={rowId(at)} active={at === current} onPick={() => choose(h)} onHover={() => setActive(at)}>
+                <span className="sp-icon" aria-hidden="true">
+                  {h.kind === 'help' && h.what === 'tour' ? <GraduationCap size={15} /> : <Keyboard size={15} />}
+                </span>
+                <span className="sp-main">{h.kind === 'help' && h.what === 'tour' ? 'Start the tutorial' : 'Keyboard shortcuts'}</span>
+                <span className="sp-meta">{h.kind === 'help' && h.what === 'tour' ? 'A one-minute tour' : 'Settings'}</span>
+              </Option>
+            )
+          })}
           {projects.length > 0 && <p className="sp-group">Projects</p>}
           {projects.map((p) => {
             const at = ++i

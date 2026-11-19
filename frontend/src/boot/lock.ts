@@ -112,7 +112,11 @@ function dispatch(e: LockEvent) {
   const next = reduce(state, e)
   if (next === state) return
   const entering = next.view === 'done' && state.view !== 'done'
+  const was = state.view
   state = next
+  // The app hears the curtain come down and go up (lib/lockLayers.ts closes dialogs and reopens the email panel).
+  if (was === 'open' && next.view !== 'open') dispatchEvent(new Event(LOCKING))
+  else if (was !== 'open' && next.view === 'open') dispatchEvent(new Event(UNLOCKED))
   render()
   // Spinner → green tick → slide up: hold the tick briefly, then release into the dashboard.
   if (entering) setTimeout(() => dispatch({ type: 'release' }), DONE_HOLD_MS)
@@ -137,6 +141,8 @@ function tickClock() {
 const onRefresh = (t: EventTarget | null) => !!(t as Element | null)?.closest?.('#lock-refresh')
 
 function onKey(e: KeyboardEvent) {
+  // Synthetic keys (the Escape that closes menus as the lock comes down) never open it again.
+  if (!e.isTrusted) return
   lastActive = Date.now()
   if (state.view === 'open') return
   if (onRefresh(e.target) && (e.key === 'Enter' || e.key === ' ')) return
@@ -177,6 +183,10 @@ export function initLock() {
   tickClock()
   render()
 }
+
+/** Window events: the lock has come down over the dashboard / gone up again. */
+export const LOCKING = 'secep:locking'
+export const UNLOCKED = 'secep:unlocked'
 
 export const lock = {
   /** True while the dashboard is showing (no lock or loading curtain over it). */

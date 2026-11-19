@@ -1,3 +1,4 @@
+import { markDone } from '../onboarding/onboarding'
 import { QueryClient, infiniteQueryOptions, keepPreviousData, queryOptions, useMutation, useQuery } from '@tanstack/react-query'
 import { ApiError, api, apiBlob } from './client'
 import { patchActionCache, patchEmailCache, settleLists } from './realtime'
@@ -98,6 +99,7 @@ export function acceptAction(action: Action, payload?: Partial<DecoderActionPayl
   return api<Action>(`/actions/${action.id}/accept`, json({ ...(payload && { payload }), ...(jira && { jira }) })).then(
     (updated) => {
       patchActionCache(queryClient, updated)
+      if (updated.type === 'create_jira_issue') markDone('send_jira')
       return updated
     },
     (err: unknown) => {
@@ -421,7 +423,8 @@ export function useUpdatePreferences() {
     },
     onSuccess: ({ ui_prefs }) => {
       const me = queryClient.getQueryData<Me>(['me'])
-      if (me) queryClient.setQueryData<Me>(['me'], { ...me, ui_prefs: { ...ui_prefs } })
+      // Onboarding progress is written by its own queue (onboarding.ts); the client's copy is the newest.
+      if (me) queryClient.setQueryData<Me>(['me'], { ...me, ui_prefs: { ...ui_prefs, ...(me.ui_prefs.onboarding !== undefined && { onboarding: me.ui_prefs.onboarding }) } })
       // Glance hides or shows subjects depending on glance_subjects.
       void queryClient.invalidateQueries({ queryKey: ['glance'] })
     },

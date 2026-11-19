@@ -3,10 +3,10 @@
 import type { EmailListItem } from '../api/types'
 import { lock } from '../boot/lock'
 import { raiseAlert } from './alertBus'
-import { DEFAULT_POPUP_RULES, DEFAULT_QUIET, popupMode, shouldPopUp, type PopupRules, type QuietHours } from './popupRules'
+import { DEFAULT_POPUP_RULES, popupMode, shouldPopUp, type PopupRules, type QuietHours } from './popupRules'
 
 let rules: PopupRules = DEFAULT_POPUP_RULES
-let quiet: QuietHours | null = DEFAULT_QUIET
+let quiet: QuietHours | null = null
 let focused = false
 const shown = new Set<string>()
 

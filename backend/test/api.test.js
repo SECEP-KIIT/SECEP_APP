@@ -310,6 +310,10 @@ describe('M6 API', { skip: !reachable && 'no test database' }, () => {
       assert.equal((await patch(body)).status, 422);
     }
     await patch({ keybinds: {} });
+    const onb = await patch({ onboarding: { tour: 'paused', tour_step: 2, done: ['search'] } });
+    assert.equal(onb.status, 200);
+    assert.deepEqual(onb.body.ui_prefs.onboarding, { tour: 'paused', tour_step: 2, done: ['search'] });
+    assert.equal((await patch({ onboarding: { tour: 'later' } })).status, 422);
   });
 
   test('files: an email is a target too; someone else\'s email is a 404', async () => {

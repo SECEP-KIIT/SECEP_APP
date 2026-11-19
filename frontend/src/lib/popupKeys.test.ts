@@ -1,6 +1,7 @@
 // Pop-up rules (FR-REM-007, §28.1) and key binds (§28.3): the pure parts.
 import { afterEach, describe, expect, it } from 'vitest'
 import { comboOf, comboProblem, display, isKeybinds, matches, overridesOf, resolveBindings, setBindings, usedBy } from './keybinds'
+import { isOnboarding } from '../onboarding/onboarding'
 import { DEFAULT_POPUP_RULES, inQuietHours, isPopupRules, isQuietHours, popupMode, shouldPopUp } from './popupRules'
 
 const at = (h: number, m = 0) => new Date(2026, 10, 19, h, m)
@@ -89,5 +90,16 @@ describe('key binds', () => {
     expect(display('Shift+J', false)).toBe('⇧J')
     expect(display('Alt+L', true)).toBe('⌥L')
     expect(display('PAGEDOWN', false)).toBe('Pagedown')
+  })
+})
+
+describe('onboarding progress (§29)', () => {
+  it('accepts partial progress and refuses unknown keys or ids', () => {
+    expect(isOnboarding({})).toBe(true)
+    expect(isOnboarding({ tour: 'paused', tour_step: 2, done: ['open_email', 'search'], hints: ['remind'], checklist_hidden: false })).toBe(true)
+    expect(isOnboarding({ tour: 'maybe' })).toBe(false)
+    expect(isOnboarding({ tour_step: -1 })).toBe(false)
+    expect(isOnboarding({ done: ['fly'] })).toBe(false)
+    expect(isOnboarding({ extra: 1 })).toBe(false)
   })
 })

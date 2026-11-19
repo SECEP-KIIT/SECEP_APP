@@ -534,3 +534,25 @@ A round button top right of the lock screen, shown once the app has loaded. It r
 - Wire: `{ [action]: combo }`, **overrides only**; a combo is `(Mod+)?(Alt+)?(Shift+)?KEY`, KEY one character or a named key in capitals (e.g. `F2`). Unknown actions or bad combos → 422. `{}` resets all.
 - Fixed and not bindable: Esc, Tab, Enter, Space, arrows, Backspace/Delete, Ctrl/⌘+C/V/X/A/Z, Shift+F10 and the menu key. Settings refuses a combo another action already uses.
 - A combo without Mod or Alt never fires while typing or with a dialog open.
+
+## 29. Lock over dialogs, quiet hours default, first-run help (19 Nov 2026) (PROPOSED for v1.3)
+
+### 29.0 Corrections
+- **Lock vs dialogs:** browser dialogs sit in the top layer, above the lock's z-index. When the lock comes down (idle, Alt+L, button) the client closes every open dialog and sends Escape to menus; an open email panel is remembered and reopens on the same email after unlock. `lock.ts` emits `secep:locking` / `secep:unlocked`; synthetic keys never open the lock.
+- **Quiet hours default off** (changes FR-REM-007's "default 22:00–08:00"): unset `quiet_hours` = `null`. Turning them on fills in 22:00–08:00.
+- The §28.1 first-run toast (and its automatic save of the pop-up defaults) is removed; the tour below replaces it.
+
+### 29.1 Tour
+Five "where things are" steps (Inbox, opening an email, Board, Search, Pop-ups and privacy) plus Admin for admins. Spotlight + card beside it; centred when the part isn't on screen; bottom sheet on phones. Not modal; Esc closes (paused, Settings offers Resume), ←/→ move. The last step has the Normal pop-up level and quiet-hours switch inside the card. Offered once after the lock first opens (Take the tour / Not now); never starts by itself. Lazy chunk (~2.7 KB gz).
+
+### 29.2 Getting started checklist (Home)
+Open an email · Send a task to Jira · Add a card of your own · Search your mail · Choose which emails pop up · Turn on quiet hours. Ticked automatically when done, each with a Go button; hideable.
+
+### 29.3 First-use hints
+Inbox (card keys, shown with the user's own bindings) and Board (Remind me). Once each; not during the tour or before it has been offered.
+
+### 29.4 Ways back in
+Settings › Tutorial: Start the tour, Resume from step n, Show Getting started, Show tips again. Search: "tutorial", "tour", "help", "guide"… → Start the tutorial; "shortcuts", "keys"… → Keyboard shortcuts.
+
+### 29.5 `ui_prefs.onboarding`
+`{ tour?: "done" | "skipped" | "paused", tour_step?: 0–19, checklist_hidden?: boolean, done?: ChecklistId[], hints?: ("card_keys" | "remind")[] }`, ChecklistId ∈ `open_email, send_jira, quick_add, search, popup_rules, quiet_hours`. Unknown keys/ids → 422. The client sends the whole object, one write at a time. Mock and M6 validate it.

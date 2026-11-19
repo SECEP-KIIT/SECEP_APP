@@ -1,3 +1,4 @@
+import { isOnboarding } from '../../onboarding/onboarding'
 // Auth, the caller's profile and preferences, glance, notifications, mailbox (§6.5, §6.4.1 + PROPOSED).
 import type { PreferencesResponse, RefreshResponse, UiPrefs } from '../../api/types'
 import { computeGlance } from '../glance'
@@ -21,6 +22,7 @@ const PREF_CHECKS: Record<keyof UiPrefs, (v: unknown) => boolean> = {
   popup_rules: isPopupRules,
   quiet_hours: (v) => v === null || isQuietHours(v),
   keybinds: isKeybinds,
+  onboarding: isOnboarding,
 }
 
 export const meRoutes = [
