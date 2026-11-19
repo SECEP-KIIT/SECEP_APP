@@ -9,7 +9,7 @@ import { changed, db } from '../store/db'
 import { toMe } from '../store/serialize'
 
 const PREF_CHECKS: Record<keyof UiPrefs, (v: unknown) => boolean> = {
-  motion: (v) => v === 'full' || v === 'reduced' || v === 'off',
+  motion: (v) => v === null || v === 'full' || v === 'reduced' || v === 'off',
   skip_lock: (v) => typeof v === 'boolean',
   idle_minutes: (v) => v === null || isInt(v, 1, 240),
   glance_subjects: (v) => typeof v === 'boolean',

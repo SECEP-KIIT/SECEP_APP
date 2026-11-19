@@ -23,7 +23,7 @@ const router = createBrowserRouter([
       { path: 'security', lazy: () => import('./pages/Security'), handle: { title: 'Security' } },
       { path: 'metrics', lazy: placeholder, handle: { title: 'Metrics' } },
       { path: 'projects/:id', lazy: () => import('./pages/Project'), handle: { title: 'Project' } },
-      { path: 'settings', lazy: placeholder, handle: { title: 'Settings' } },
+      { path: 'settings', lazy: () => import('./pages/Settings'), handle: { title: 'Settings' } },
       { path: 'admin', lazy: placeholder, handle: { title: 'Admin' } },
       { path: 'more', lazy: () => import('./pages/More'), handle: { title: 'More' } },
     ],

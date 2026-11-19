@@ -6,6 +6,7 @@ import { csv, isDate, isDateTime, object } from '../http/validate'
 import { changed, db, emailsOf, readsOf } from '../store/db'
 import { publish } from '../store/events'
 import { handledOf } from '../store/generate'
+import { cardFollowsEmail } from '../store/emailCards'
 import { localDate, toDetail, toListItem, dueDateOf } from '../store/serialize'
 import { matchesDue } from '../../lib/due'
 import type { EmailRow } from '../store/types'
@@ -202,6 +203,7 @@ export const emailRoutes = [
       const handled = handledOf(db, user.id)
       if (f.body.handled) handled.set(email.id, handled.get(email.id) ?? new Date().toISOString())
       else handled.delete(email.id)
+      cardFollowsEmail(user.id, email.id, f.body.handled)
     }
     if (typeof f.body.read === 'boolean') {
       if (f.body.read) readsOf(user.id).add(email.id)

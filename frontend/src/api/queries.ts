@@ -142,7 +142,16 @@ export async function updateEmail(id: string, patch: EmailPatch, opts: { restore
     settleLists(queryClient, detail, opts)
     void queryClient.invalidateQueries({ queryKey: ['glance'] }) // sidebar badge and lock glance counts
   }
+  // Its board card follows handled (proposals §23): Done, or back to To do. Project progress changes with it.
+  if (patch.handled !== undefined) refreshBoards()
   return detail
+}
+
+/** Boards and project progress, after a change that may have moved a card. */
+function refreshBoards() {
+  void queryClient.invalidateQueries({ queryKey: ['actions', 'board'] })
+  void queryClient.invalidateQueries({ queryKey: ['projects'] })
+  void queryClient.invalidateQueries({ queryKey: ['project'] })
 }
 
 /** GET /emails/:id/ics (FR-ORC-017), saved through a temporary object URL; nothing is opened or rendered. */
@@ -275,6 +284,8 @@ export async function setEmailsInProject(project: Pick<Project, 'id' | 'name' | 
     ),
   )
   for (const id of ids) patchEmailCache(queryClient, id, { projects: withProject(emailProjects(id), project, add) })
+  // Added emails get a card in the project's To do (proposals §23).
+  if (add) void queryClient.invalidateQueries({ queryKey: ['actions', 'board'] })
   void queryClient.invalidateQueries({ queryKey: ['projects'] })
   void queryClient.invalidateQueries({ queryKey: ['project', project.id] })
   // A project's own email list (project=id) gains or loses them: reload it the next time it's shown.
@@ -308,6 +319,25 @@ export const boardOptions = (project?: string) =>
   })
 
 /**
+ * Emails dropped on a project's board column (proposals §23): they join the project (which gives each a card in
+ * To do), then each card moves to the bottom of that column. Returns how many moved.
+ */
+export async function dropEmailsOnBoard(project: Pick<Project, 'id' | 'name' | 'colour'>, ids: readonly string[], column: BoardColumn) {
+  const missing = ids.filter((id) => !emailProjects(id).some((r) => r.id === project.id))
+  if (missing.length) await setEmailsInProject(project, missing, true)
+  const board = await queryClient.fetchQuery({ ...boardOptions(project.id), staleTime: 0 })
+  let moved = 0
+  for (const id of ids) {
+    const card = board.items.find((a) => a.email_id === id)
+    if (!card || card.board_column === column) continue
+    const last = board.items.filter((a) => a.board_column === column).length
+    await moveCard(card, column, last)
+    moved++
+  }
+  return moved
+}
+
+/**
  * PATCH /actions/:id {board_column, board_position} (FR-ORC-007): a move on the board, applied to every cached board
  * first. `position` is the card's index among the other cards of that column, over all the user's cards (positions
  * are dense per user, so a project's board computes it with boardPosition). Every board then reloads, so a
@@ -323,6 +353,12 @@ export async function moveCard(action: Action, column: BoardColumn, position: nu
       body: JSON.stringify({ board_column: column, board_position: position }),
     })
     patchActionCache(queryClient, updated)
+    // An email's card into or out of Done marks the email handled or not (proposals §23): reload its lists.
+    if (updated.email_id && (updated.board_column === 'done') !== (action.board_column === 'done')) {
+      void queryClient.invalidateQueries({ queryKey: ['emails'] })
+      void queryClient.invalidateQueries({ queryKey: ['email', updated.email_id] })
+      void queryClient.invalidateQueries({ queryKey: ['glance'] })
+    }
     void queryClient.invalidateQueries({ queryKey: ['actions', 'board'] })
     void queryClient.invalidateQueries({ queryKey: ['projects'] })
     void queryClient.invalidateQueries({ queryKey: ['project'] })

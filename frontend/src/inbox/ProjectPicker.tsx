@@ -16,7 +16,7 @@ export interface PickerAt {
  * a card's Project button, the card menu, the selection bar or `p`. Each project shows whether all, some or none of
  * the emails are in it; choosing it adds the rest, or removes all when every one is already in. Undo reverses it.
  */
-export function ProjectPicker({ at, onClose, onCreate }: { at: PickerAt; onClose: () => void; onCreate?: (ids: readonly string[]) => void }) {
+export function ProjectPicker({ at, onClose, onCreate, container }: { at: PickerAt; onClose: () => void; onCreate?: (ids: readonly string[]) => void; container?: HTMLElement | null }) {
   const { toast } = useInbox()
   const projects = useProjects()
   const active = (projects.data?.items ?? []).filter((p) => !p.archived_at)
@@ -58,7 +58,7 @@ export function ProjectPicker({ at, onClose, onCreate }: { at: PickerAt; onClose
       <Popover.Anchor asChild>
         <div style={{ position: 'fixed', left: at.x, top: at.y, width: 0, height: 0 }} aria-hidden="true" />
       </Popover.Anchor>
-      <Popover.Portal>
+      <Popover.Portal container={container ?? undefined}>
         <Popover.Content
           ref={ref}
           className="menu project-picker"

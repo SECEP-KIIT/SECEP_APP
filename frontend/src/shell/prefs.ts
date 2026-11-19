@@ -3,7 +3,7 @@ import { useMe } from '../api/queries'
 import type { UiPrefs } from '../api/types'
 import { lock } from '../boot/lock'
 
-export type ResolvedPrefs = Required<Omit<UiPrefs, 'motion'>> & Pick<UiPrefs, 'motion'>
+export type ResolvedPrefs = Required<Omit<UiPrefs, 'motion'>> & { motion?: Exclude<UiPrefs['motion'], null> }
 
 const DEFAULTS: ResolvedPrefs = {
   motion: undefined, // follow the OS

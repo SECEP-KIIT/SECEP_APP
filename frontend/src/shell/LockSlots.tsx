@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useGlance, useNotifications } from '../api/queries'
 import { glanceLine, lockNotificationText } from './lockText'
 import { usePrefs } from './prefs'
+import { subjectsShown } from './lockSubjects'
 
 const timeFmt = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' })
 const RECENT = 3
@@ -24,11 +25,13 @@ export function LockSlots() {
         createPortal(
           <>
             <span>{glanceLine(glance, now)}</span>
-            {glance.subjects?.map((s) => (
+            {/* Opted-in subjects: three distinct ones at most, so the clock stays the lock screen's focus. */}
+            {subjectsShown(glance.subjects).shown.map((s) => (
               <span key={s} className="lock-subject">
                 {s}
               </span>
             ))}
+            {subjectsShown(glance.subjects).more > 0 && <span className="lock-subject lock-more">and {subjectsShown(glance.subjects).more} more</span>}
           </>,
           glanceEl,
         )}
@@ -50,3 +53,4 @@ export function LockSlots() {
     </>
   )
 }
+

@@ -439,6 +439,27 @@ describe('actions (FR-ORC-001–007)', () => {
 })
 
 describe('projects (FR-UI-016–017, proposals §18)', () => {
+  it('an email in a project is a task: card in To do, handled ⇄ Done both ways (proposals §23)', async () => {
+    const token = await login()
+    const proj = (await call('POST', '/projects', { token, body: { name: 'Tasks', colour: '#123456' } })).json
+    const email = (await call('GET', '/emails?limit=1', { token })).json.items[0]
+    await call('POST', `/projects/${proj.id}/items`, { token, body: { email_id: email.id } })
+    const cards = async () => (await call('GET', `/actions?status=done&project=${proj.id}&limit=50`, { token })).json.items as Json[]
+    let [card] = (await cards()).filter((c) => c.email_id === email.id)
+    expect(card).toMatchObject({ board_column: 'todo', origin: 'rule', type: 'add_board_card' })
+    // Adding it again (or to another project) never makes a second card.
+    await call('POST', `/projects/${proj.id}/items`, { token, body: { email_id: email.id } })
+    expect((await cards()).filter((c) => c.email_id === email.id)).toHaveLength(1)
+    await call('PATCH', `/emails/${email.id}`, { token, body: { handled: true } })
+    ;[card] = (await cards()).filter((c) => c.email_id === email.id)
+    expect(card.board_column).toBe('done')
+    expect((await call('GET', `/projects/${proj.id}`, { token })).json.progress).toEqual({ done: 1, total: 1 })
+    await call('PATCH', `/actions/${card.id}`, { token, body: { board_column: 'in_progress', board_position: 0 } })
+    expect((await call('GET', `/emails/${email.id}`, { token })).json.handled).toBe(false)
+    await call('PATCH', `/actions/${card.id}`, { token, body: { board_column: 'done', board_position: 0 } })
+    expect((await call('GET', `/emails/${email.id}`, { token })).json.handled).toBe(true)
+  })
+
   it('creates, edits and archives a project; validates fields; another user gets 404', async () => {
     const token = await login()
     const bad = await call('POST', '/projects', { token, body: { name: '', colour: 'blue', extra: 1 } })
@@ -659,6 +680,13 @@ describe('ui_prefs.theme (PROPOSED, proposals §16.6)', () => {
     expect((await call('GET', '/me', { token })).json.ui_prefs.theme).toBe('dark')
     expect((await call('PATCH', '/me/preferences', { token, body: { theme: 'auto' } })).json.ui_prefs.theme).toBe('auto')
     expect((await call('PATCH', '/me/preferences', { token, body: { theme: 'sepia' } })).status).toBe(422)
+  })
+
+  it('PATCH /me/preferences: motion null goes back to following the system (Settings, proposals §22)', async () => {
+    const token = await login()
+    expect((await call('PATCH', '/me/preferences', { token, body: { motion: 'off' } })).json.ui_prefs.motion).toBe('off')
+    expect((await call('PATCH', '/me/preferences', { token, body: { motion: null } })).json.ui_prefs.motion).toBeNull()
+    expect((await call('PATCH', '/me/preferences', { token, body: { motion: 'wobbly' } })).status).toBe(422)
   })
 })
 

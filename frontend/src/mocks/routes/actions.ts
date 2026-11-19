@@ -7,6 +7,7 @@ import { errorResponse, Fail, own, route } from '../http/route'
 import { isDate, isDateTime, isEmail, isInt, isOptStr, isStr, object, type Fields } from '../http/validate'
 import { audit } from '../store/audit'
 import { changed, db } from '../store/db'
+import { emailFollowsCard } from '../store/emailCards'
 import { publish } from '../store/events'
 import { projectCards, toAction, toListItem } from '../store/serialize'
 import type { ActionRow, UserRow } from '../store/types'
@@ -305,6 +306,7 @@ export const actionRoutes = [
     if (move) {
       if (a.status !== 'done') throw new Fail(409, 'conflict', 'Only cards on the board can move')
       boardMove(a, f.body.board_column as BoardColumn, f.body.board_position as number)
+      emailFollowsCard(a)
     }
     a.updated_at = now()
     changed()

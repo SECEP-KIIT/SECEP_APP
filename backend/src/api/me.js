@@ -17,7 +17,7 @@ export const toMe = (u) => ({
 });
 
 const PREF_CHECKS = {
-  motion: (v) => ['full', 'reduced', 'off'].includes(v),
+  motion: (v) => v === null || ['full', 'reduced', 'off'].includes(v),
   skip_lock: (v) => typeof v === 'boolean',
   idle_minutes: (v) => v === null || isInt(v, 1, 240),
   glance_subjects: (v) => typeof v === 'boolean',
