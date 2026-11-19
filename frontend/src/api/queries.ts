@@ -2,6 +2,7 @@ import { QueryClient, infiniteQueryOptions, keepPreviousData, queryOptions, useM
 import { ApiError, api, apiBlob } from './client'
 import { patchActionCache, patchEmailCache, settleLists } from './realtime'
 import type {
+  JiraTarget,
   BoardColumn,
   EmailProjectRef,
   Action,
@@ -93,8 +94,8 @@ const json = (body: unknown): RequestInit => ({ method: 'POST', headers: { 'Cont
  * POST /actions/:id/accept (FR-ORC-012). `payload` holds only the edited fields. A 502 upstream_error means the
  * server marked the action failed after its retries (FR-ORC-006), so the detail is refetched to show that.
  */
-export function acceptAction(action: Action, payload?: Partial<DecoderActionPayload>) {
-  return api<Action>(`/actions/${action.id}/accept`, json(payload ? { payload } : {})).then(
+export function acceptAction(action: Action, payload?: Partial<DecoderActionPayload>, jira?: JiraTarget) {
+  return api<Action>(`/actions/${action.id}/accept`, json({ ...(payload && { payload }), ...(jira && { jira }) })).then(
     (updated) => {
       patchActionCache(queryClient, updated)
       return updated

@@ -1,5 +1,5 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
-import type { ActionType, DecoderActionPayload, JiraPriority } from '../api/types'
+import type { ActionType, DecoderActionPayload, JiraPriority, JiraTarget } from '../api/types'
 
 const PRIORITIES: JiraPriority[] = ['Highest', 'High', 'Medium', 'Low']
 
@@ -19,7 +19,9 @@ interface Props {
   busy: boolean
   /** Field errors from a 422 (`details.fields`, keys like "payload.title"). */
   errors: Record<string, string>
-  onSubmit: (payload: DecoderActionPayload) => void
+  /** Jira issues only: where it goes, prefilled from the email's primary project (`from` names it). */
+  jira?: JiraTarget & { from: string | null }
+  onSubmit: (payload: DecoderActionPayload, jira?: JiraTarget) => void
   onCancel: () => void
 }
 
@@ -27,17 +29,20 @@ interface Props {
  * The ⇧J / Shift+click mini composer (FR-ORC-012, item 10), prefilled from the decoder's proposal. Fields follow the
  * enrich.v1 payload (§6.4): title, description, priority and due date for Jira; start, end and attendees for a
  * calendar event. The issue is always assigned to the user (proposals §12.2), shown read-only, with nothing on the wire.
- * The primary project's Jira project and epic come with task 10 (FR-ORC-012 partly met until then). The server
- * validates everything again (FR-ORC-002).
+ * The Jira project and epic are prefilled from the email's primary project and sent as `jira` (proposals §25.2); empty
+ * project means the tenant default. The server validates everything again (FR-ORC-002).
  */
-export function Composer({ type, initial, submitLabel, busy, errors, onSubmit, onCancel }: Props) {
+export function Composer({ type, initial, submitLabel, busy, errors, jira, onSubmit, onCancel }: Props) {
   const [p, setP] = useState(initial)
+  const [key, setKey] = useState(jira?.project_key ?? '')
+  const [epic, setEpic] = useState(jira?.epic ?? '')
   const set = <K extends keyof DecoderActionPayload>(k: K, v: DecoderActionPayload[K]) => setP((x) => ({ ...x, [k]: v }))
   const err = (k: string) => errors[`payload.${k}`] ?? errors[k]
   const id = (k: string) => `composer-${type}-${k}`
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    onSubmit({ ...p, title: p.title?.trim() || null, description: p.description?.trim() || null })
+    const target = type === 'create_jira_issue' ? { project_key: key.trim().toUpperCase() || null, epic: epic.trim().toUpperCase() || null } : undefined
+    onSubmit({ ...p, title: p.title?.trim() || null, description: p.description?.trim() || null }, target)
   }
 
   return (
@@ -65,7 +70,22 @@ export function Composer({ type, initial, submitLabel, busy, errors, onSubmit, o
           </Field>
         </div>
       )}
-      {type === 'create_jira_issue' && <p className="composer-note">Assignee: you</p>}
+      {type === 'create_jira_issue' && (
+        <>
+          <div className="composer-row">
+            <Field id={id('jira-project')} label="Jira project" error={errors['jira.project_key']}>
+              <input id={id('jira-project')} value={key} maxLength={10} placeholder="Default" autoComplete="off" onChange={(e) => setKey(e.target.value)} />
+            </Field>
+            <Field id={id('jira-epic')} label="Epic" error={errors['jira.epic']}>
+              <input id={id('jira-epic')} value={epic} maxLength={20} placeholder="None" autoComplete="off" onChange={(e) => setEpic(e.target.value)} />
+            </Field>
+          </div>
+          <p className="composer-note">
+            Assignee: you
+            {jira?.from && key.trim().toUpperCase() === (jira.project_key ?? '') && ` · project and epic from ${jira.from}`}
+          </p>
+        </>
+      )}
       {type === 'add_calendar_event' && (
         <>
           <div className="composer-row">

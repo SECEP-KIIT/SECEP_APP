@@ -1,8 +1,8 @@
 import { CalendarPlus, Download, LayoutList, Pencil, Plus, Zap } from 'lucide-react'
 import { useState } from 'react'
 import { ApiError } from '../api/client'
-import { acceptAction, createAction, downloadIcs, rejectAction } from '../api/queries'
-import type { Action, ActionType, DecoderActionPayload, EmailDetail, JiraPriority, Urgency } from '../api/types'
+import { acceptAction, createAction, downloadIcs, rejectAction, useProjects } from '../api/queries'
+import type { Action, ActionType, DecoderActionPayload, EmailDetail, JiraPriority, JiraTarget, Urgency } from '../api/types'
 import { errorText, useInbox, type OpenOptions } from '../inbox/inboxContext'
 import { Composer } from './Composer'
 
@@ -27,6 +27,21 @@ function diff(from: DecoderActionPayload, to: DecoderActionPayload): Partial<Dec
   return out
 }
 
+type Target = JiraTarget & { from: string | null }
+
+/**
+ * FR-ORC-012 / FR-UI-017: the Jira target shown before sending, from the email's primary project (its Jira project and
+ * epic); none → the tenant default, which the server fills in (proposals §25.2).
+ */
+function useJiraTarget(email: EmailDetail): Target {
+  const { data } = useProjects()
+  const primary = email.projects.find((p) => p.is_primary)
+  const p = primary && data?.items.find((x) => x.id === primary.id)
+  return p?.jira_project_key ? { project_key: p.jira_project_key, epic: p.jira_epic, from: p.name } : { project_key: null, epic: null, from: null }
+}
+
+const targetText = (t: Target) => `to ${t.project_key ?? 'the default project'}${t.epic ? ` › ${t.epic}` : ''}`
+
 const fieldErrors = (err: unknown): Record<string, string> =>
   err instanceof ApiError && (err.code === 'validation_failed' || err.code === 'action_invalid')
     ? (((err.details as { fields?: Record<string, string> } | null)?.fields) ?? {})
@@ -46,13 +61,14 @@ export function ActionList({ email, compose }: { email: EmailDetail; compose?: O
   const [creating, setCreating] = useState<OpenOptions['compose']>(compose && !editFirst ? compose : undefined)
   const meeting = email.actions.find((a) => a.type === 'add_calendar_event' && 'start' in a.payload && a.payload.start && a.payload.end)
   const { toast } = useInbox()
+  const target = useJiraTarget(email)
 
   return (
     <div className="actions">
       {live.length === 0 && !creating && <p className="drawer-muted">No proposed actions for this email.</p>}
       <ul className="action-list">
         {live.map((a) => (
-          <ActionRow key={a.id} action={a} startEditing={a.id === editFirst} />
+          <ActionRow key={a.id} action={a} target={target} startEditing={a.id === editFirst} />
         ))}
       </ul>
       {declined > 0 && <p className="drawer-muted">{declined === 1 ? '1 declined proposal' : `${declined} declined proposals`}</p>}
@@ -87,7 +103,7 @@ export function ActionList({ email, compose }: { email: EmailDetail; compose?: O
   )
 }
 
-function ActionRow({ action, startEditing }: { action: Action; startEditing: boolean }) {
+function ActionRow({ action, target, startEditing }: { action: Action; target: Target; startEditing: boolean }) {
   const [editing, setEditing] = useState(startEditing)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<unknown>(null)
@@ -118,6 +134,7 @@ function ActionRow({ action, startEditing }: { action: Action; startEditing: boo
             {p.priority && ` · ${p.priority} priority`}
             {p.due_date && ` · due ${new Date(`${p.due_date}T00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`}
             {p.start && ` · ${new Date(p.start).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`}
+            {action.type === 'create_jira_issue' && (action.status === 'proposed' || action.status === 'failed') && ` · ${targetText(target)}`}
             {action.origin === 'user' && ' · added by you'}
           </p>
         </div>
@@ -142,8 +159,9 @@ function ActionRow({ action, startEditing }: { action: Action; startEditing: boo
           submitLabel={SEND_LABEL[action.type]}
           busy={busy}
           errors={fieldErrors(error)}
+          jira={target}
           onCancel={() => setEditing(false)}
-          onSubmit={(next) => run(() => acceptAction(action, diff({ ...EMPTY, ...p }, next)))}
+          onSubmit={(next, jira) => run(() => acceptAction(action, diff({ ...EMPTY, ...p }, next), jira))}
         />
       ) : (
         open && (
@@ -202,6 +220,7 @@ function ActionStatus({ action }: { action: Action }) {
 
 /** A manual action (POST /emails/:id/actions), then accepted right away, which is what "Send" means to the user. */
 function NewAction({ email, type, onDone }: { email: EmailDetail; type: NonNullable<OpenOptions['compose']>; onDone: () => void }) {
+  const target = useJiraTarget(email)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<unknown>(null)
   const { toast } = useInbox()
@@ -214,12 +233,12 @@ function NewAction({ email, type, onDone }: { email: EmailDetail; type: NonNulla
       : { attendees: [email.from.address] }),
   }
 
-  const submit = async (payload: DecoderActionPayload) => {
+  const submit = async (payload: DecoderActionPayload, jira?: JiraTarget) => {
     setBusy(true)
     setError(null)
     try {
       const created = await createAction(email.id, type, payload)
-      const result = await acceptAction(created)
+      const result = await acceptAction(created, undefined, jira)
       if (result.status === 'failed') toast(`Couldn't send it: ${result.error ?? 'the action failed'}`, 'error')
       onDone()
     } catch (err) {
@@ -239,7 +258,7 @@ function NewAction({ email, type, onDone }: { email: EmailDetail; type: NonNulla
           {errorText(error)}
         </p>
       )}
-      <Composer type={type} initial={initial} submitLabel={SEND_LABEL[type]} busy={busy} errors={fieldErrors(error)} onSubmit={submit} onCancel={onDone} />
+      <Composer type={type} initial={initial} submitLabel={SEND_LABEL[type]} busy={busy} errors={fieldErrors(error)} jira={target} onSubmit={submit} onCancel={onDone} />
     </div>
   )
 }

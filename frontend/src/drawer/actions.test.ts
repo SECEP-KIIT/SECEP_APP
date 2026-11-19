@@ -86,6 +86,23 @@ describe('drawer and quick actions (task 7)', () => {
     spy.mockRestore()
   })
 
+  it('accept routes a Jira issue to the given project, or the primary project, and validates the target (§25.2)', async () => {
+    const { toAction } = await import('../mocks/store/serialize')
+    const { jiraTarget } = await import('../mocks/routes/actions')
+    const me = db.users[0]
+    const proposals = [...db.actions.values()].filter((a) => a.user_id === me.id && a.type === 'create_jira_issue' && a.status === 'proposed')
+    await expect(acceptAction(toAction(proposals[0]), undefined, { project_key: 'bad key', epic: null })).rejects.toMatchObject({ status: 422 })
+    const done = await acceptAction(toAction(proposals[0]), undefined, { project_key: 'ONB', epic: 'ONB-7' })
+    expect(done.external_ref).toMatch(/^ONB-\d+$/)
+    // Without a target: the primary project's Jira project and epic, else the tenant default.
+    const project = db.projects.find((p) => p.user_id === me.id && p.jira_project_key === 'ATL' && p.jira_epic)!
+    const row = proposals[1]
+    db.projectItems = db.projectItems.filter((i) => i.email_id !== row.email_id)
+    expect(jiraTarget(row, me)).toEqual({ project_key: db.settings.jira.project_key, epic: null })
+    db.projectItems.push({ project_id: project.id, email_id: row.email_id, action_id: null, is_primary: true, added_at: new Date().toISOString() })
+    expect(jiraTarget(row, me)).toEqual({ project_key: 'ATL', epic: project.jira_epic })
+  })
+
   it('reject marks the proposal declined', async () => {
     const row = [...db.actions.values()].find((a) => a.user_id === db.users[0].id && a.status === 'proposed')!
     const { toAction } = await import('../mocks/store/serialize')

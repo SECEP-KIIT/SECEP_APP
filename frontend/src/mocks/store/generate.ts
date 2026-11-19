@@ -164,12 +164,12 @@ export function securityFlagOf(db: Db, emailId: string): EmailRow['security_flag
 }
 
 let jiraSeq = 140
-export const nextJiraKey = () => `ATL-${++jiraSeq}`
+export const nextJiraKey = (projectKey = 'ATL') => `${projectKey}-${++jiraSeq}`
 
 /** After restoring persisted actions, continue numbering after the highest existing key, so keys never repeat. */
 export function syncJiraSeq(db: Db) {
   for (const a of db.actions.values()) {
-    const n = Number(/^ATL-(\d+)$/.exec(a.external_ref ?? '')?.[1])
+    const n = Number(/^[A-Z][A-Z0-9]+-(\d+)$/.exec(a.external_ref ?? '')?.[1])
     if (n > jiraSeq) jiraSeq = n
   }
 }

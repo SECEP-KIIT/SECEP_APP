@@ -84,12 +84,34 @@ function emitUpdated(a: ActionRow) {
   if (email) publish(a.user_id, 'email.triaged', { email_id: email.id, email: toListItem(db, email) })
 }
 
-async function execute(a: ActionRow, user: UserRow): Promise<Response | ActionRow> {
+const KEY_RE = /^[A-Z][A-Z0-9]{1,9}$/
+const EPIC_RE = /^[A-Z][A-Z0-9]{1,9}-\d+$/
+
+/** The caller's primary project for an email or card (FR-UI-017: it decides Jira routing). */
+function primaryProject(a: ActionRow, user: UserRow) {
+  const items = db.projectItems.filter((i) => i.is_primary && (a.email_id ? i.email_id === a.email_id : i.action_id === a.id))
+  return items.map((i) => db.projects.find((p) => p.id === i.project_id)).find((p) => p && p.user_id === user.id)
+}
+
+/**
+ * Proposals §25.2 (FR-ORC-012): where the issue goes. An explicit `jira` in the accept body wins; otherwise the primary
+ * project's Jira project and epic; otherwise the tenant default project with no epic.
+ */
+export function jiraTarget(a: ActionRow, user: UserRow, given?: { project_key: string | null; epic: string | null }) {
+  const p = primaryProject(a, user)
+  const fallback = db.settings.jira.project_key ?? 'ATL'
+  if (given) return { project_key: given.project_key ?? fallback, epic: given.epic }
+  return { project_key: p?.jira_project_key ?? fallback, epic: p?.jira_project_key ? p.jira_epic : null }
+}
+
+async function execute(a: ActionRow, user: UserRow, target?: { project_key: string; epic: string | null }): Promise<Response | ActionRow> {
   a.status = 'executing'
   a.updated_at = now()
   try {
     if (a.type === 'create_jira_issue') {
-      a.external_ref = await createIssue({ assignee: user.email }) // FR-ORC-003; assigned to the caller (§12.2)
+      const t = target ?? jiraTarget(a, user)
+      // FR-ORC-003; assigned to the caller (§12.2), in the target project and under its epic (§25.2).
+      a.external_ref = await createIssue({ assignee: user.email, project_key: t.project_key, epic: t.epic })
       a.external_status = 'To Do'
     } else if (a.type === 'add_calendar_event') {
       a.external_ref = `evt_${crypto.randomUUID().slice(0, 8)}` // simulated Google Calendar events.insert (FR-ORC-010)
@@ -230,10 +252,20 @@ export const actionRoutes = [
     if (a.status === 'executing') throw new Fail(409, 'conflict', 'Action is already executing')
     if (a.status === 'rejected') throw new Fail(409, 'conflict', 'Action was rejected')
 
-    const f = object(body ?? {}).only(['payload', 'mode'])
+    const f = object(body ?? {}).only(['payload', 'mode', 'jira'])
     const edits = (f.body.payload ?? {}) as Record<string, unknown>
     if (typeof edits !== 'object' || Array.isArray(edits)) f.add('payload', 'Must be an object')
     else checkPayloadFields(f, edits)
+    // Proposals §25.2: optional Jira target for create_jira_issue only.
+    const jira = f.body.jira as { project_key?: unknown; epic?: unknown } | undefined
+    if (jira !== undefined) {
+      if (a.type !== 'create_jira_issue') f.add('jira', 'Only for Jira issues')
+      else if (typeof jira !== 'object' || jira === null || Array.isArray(jira) || Object.keys(jira).some((k) => k !== 'project_key' && k !== 'epic')) f.add('jira', 'Must be { project_key, epic }')
+      else {
+        if (jira.project_key != null && !(typeof jira.project_key === 'string' && KEY_RE.test(jira.project_key))) f.add('jira.project_key', 'A Jira project key, like ATL')
+        if (jira.epic != null && !(typeof jira.epic === 'string' && EPIC_RE.test(jira.epic))) f.add('jira.epic', 'An issue key, like ATL-100')
+      }
+    }
     // mode "comment" (FR-ORC-013, S) is accepted and treated as "issue" until commenting is built.
     if (f.body.mode !== undefined && f.body.mode !== 'issue' && f.body.mode !== 'comment') f.add('mode', 'Must be issue or comment')
     f.done()
@@ -245,7 +277,8 @@ export const actionRoutes = [
     f.done('action_invalid', 'Action payload fails the per-type rules')
     a.payload = payload
 
-    const result = await execute(a, user)
+    const given = jira && { project_key: (jira.project_key as string | null | undefined) ?? null, epic: (jira.epic as string | null | undefined) ?? null }
+    const result = await execute(a, user, a.type === 'create_jira_issue' ? jiraTarget(a, user, given) : undefined)
     return result instanceof Response ? result : toAction(result)
   }),
 

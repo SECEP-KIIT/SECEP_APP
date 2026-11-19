@@ -295,11 +295,79 @@ export interface UiPrefs {
 }
 
 /** GET /admin/metrics (§6.5, admin): the classifier over `window_days`. Shown in the Stats widget. */
+/** GET /admin/settings (§6.5): secrets are never returned, only whether one is set. */
+export interface AdminSettings {
+  jira: { site_url: string | null; email: string | null; project_key: string | null; token_set: boolean }
+  llm: { base_url: string | null; model: string | null; api_style: 'ollama' | 'openai'; api_key_set: boolean }
+  confidence_threshold: number
+  protected_domains: string[]
+  poll_interval_s: number
+}
+
+/** PUT /admin/settings: the GET shape; secrets as `token` / `api_key` only when changing them. */
+export interface AdminSettingsInput {
+  jira?: Partial<Omit<AdminSettings['jira'], 'token_set'>> & { token?: string }
+  llm?: Partial<Omit<AdminSettings['llm'], 'api_key_set'>> & { api_key?: string }
+  confidence_threshold?: number
+  protected_domains?: string[]
+  poll_interval_s?: number
+}
+
+export interface SettingsTest {
+  jira: { ok: boolean; error: string | null }
+  llm: { ok: boolean; error: string | null }
+}
+
+/** GET /admin/users item (§6.5). */
+export interface AdminUser {
+  id: string
+  email: string
+  display_name: string | null
+  role_category: RoleCategory
+  is_admin: boolean
+  permissions: string[]
+  last_login_at: string | null
+}
+
+/** GET /admin/models item (§6.5); metrics as M1's model card reports them. */
+export interface ModelView {
+  id: string
+  version: string
+  status: 'candidate' | 'promoted' | 'retired'
+  metrics: { type_macro_f1: number; urgency_macro_f1: number; sentiment_macro_f1: number; per_class_f1: Record<string, number>; ece: number }
+  created_at: string
+  promoted_at: string | null
+}
+
+/**
+ * PROPOSED (proposals §25.2, FR-ORC-012): optional in `POST /actions/:id/accept` for create_jira_issue. Omitted, the
+ * server uses the primary project's Jira project and epic, else the tenant default project.
+ */
+export interface JiraTarget {
+  project_key: string | null
+  epic: string | null
+}
+
+export interface ConfidenceBin {
+  bin_start: number
+  bin_end: number
+  count: number
+}
+
+/** PROPOSED (proposals §25.1): the same three figures as the email-type fields, for urgency and for sentiment. */
+export interface HeadMetrics<L extends string> {
+  volume: Partial<Record<L, number>>
+  override_rate: Partial<Record<L, number>>
+  confidence_histogram: ConfidenceBin[]
+}
+
 export interface AdminMetrics {
   window_days: number
   volume_by_type: Partial<Record<EmailType, number>>
   override_rate_by_class: Partial<Record<EmailType, number>>
-  confidence_histogram: { bin_start: number; bin_end: number; count: number }[]
+  confidence_histogram: ConfidenceBin[]
+  urgency: HeadMetrics<Urgency>
+  sentiment: HeadMetrics<Sentiment>
 }
 
 /** PATCH /me/preferences: request is a partial UiPrefs; response is the full stored object. */

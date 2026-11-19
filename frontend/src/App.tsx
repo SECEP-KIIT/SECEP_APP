@@ -25,7 +25,7 @@ const router = createBrowserRouter([
       { path: 'metrics', element: <Navigate to="/" replace /> },
       { path: 'projects/:id', lazy: () => import('./pages/Project'), handle: { title: 'Project' } },
       { path: 'settings', lazy: () => import('./pages/Settings'), handle: { title: 'Settings' } },
-      { path: 'admin', lazy: placeholder, handle: { title: 'Admin' } },
+      { path: 'admin', lazy: () => import('./pages/Admin'), handle: { title: 'Admin' } },
       { path: 'more', lazy: () => import('./pages/More'), handle: { title: 'More' } },
     ],
   },

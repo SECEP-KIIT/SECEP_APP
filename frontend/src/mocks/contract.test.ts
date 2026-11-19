@@ -593,8 +593,13 @@ describe('admin', () => {
   it('metrics and .ics', async () => {
     const token = await login()
     const m = (await call('GET', '/admin/metrics?days=30', { token })).json
-    expect(keys(m)).toEqual(['confidence_histogram', 'override_rate_by_class', 'volume_by_type', 'window_days'])
+    expect(keys(m)).toEqual(['confidence_histogram', 'override_rate_by_class', 'sentiment', 'urgency', 'volume_by_type', 'window_days'])
     expect(m.confidence_histogram).toHaveLength(10)
+    for (const h of [m.urgency, m.sentiment]) {
+      expect(keys(h)).toEqual(['confidence_histogram', 'override_rate', 'volume'])
+      expect(h.confidence_histogram).toHaveLength(10)
+    }
+    expect(keys(m.urgency.volume)).toEqual(['Critical', 'High', 'Low', 'Medium'])
     const meeting = demoEmails().find((e) => e.triage?.email_type.label === 'Meeting' && [...db.actions.values()].some((a) => a.email_id === e.id))!
     const ics = await call('GET', `/emails/${meeting.id}/ics`, { token })
     expect(ics.headers.get('Content-Type')).toMatch(/^text\/calendar/)

@@ -138,12 +138,11 @@ html[data-motion='off'] .board-item {
   outline-offset: 2px;
 }
 
-/* Lightly colour-coded lanes (19 Nov 2026): a coloured top edge and a faint tint; the ○ ◐ ● shapes in the head
-   still carry the meaning, so colour is never alone. */
+/* Lightly colour-coded lanes (19 Nov 2026): a coloured top edge only (body keeps the neutral column background);
+   the ○ ◐ ● shapes in the head still carry the meaning, so colour is never alone. */
 .board-lane {
   --lane: #64748b;
   border-top: 3px solid var(--lane);
-  background: color-mix(in srgb, var(--lane) 7%, var(--col-bg));
 }
 .board-lane[data-column='in_progress'] {
   --lane: #e8890c;

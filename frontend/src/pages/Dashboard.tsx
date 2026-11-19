@@ -258,7 +258,7 @@ function Dashboard() {
           <h2 className="dash-title">{page.name}</h2>
         )}
         <SaveStatus state={state} isDefault={isDefault} />
-        {editing && (
+        {(editing || page.widgets.length === 0) && (
           <button type="button" className="ghost-button" onClick={() => setGallery(true)}>
             <Plus size={14} aria-hidden="true" /> Add widget
           </button>
@@ -275,9 +275,12 @@ function Dashboard() {
       <div className="dash-pages" ref={pagesRef} onPointerDown={onPointerDown} onPointerUp={onPointerUp}>
         <div key={page.id} className="dash-page" data-direction={direction}>
           {page.widgets.length === 0 ? (
+            // An empty page offers Add widget straight away, until its first widget is added (19 Nov 2026).
             <div className="col-state">
               <p className="col-state-title">An empty page</p>
-              <p>Choose Edit, then Add widget.</p>
+              <button type="button" className="primary-button" onClick={() => setGallery(true)}>
+                <Plus size={14} aria-hidden="true" /> Add widget
+              </button>
             </div>
           ) : phone ? (
             <PhonePage page={page} render={render} />

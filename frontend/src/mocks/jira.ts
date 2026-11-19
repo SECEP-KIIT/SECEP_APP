@@ -18,7 +18,7 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, scaled(ms)))
 
 let rateLimitedOnce = false
 
-function attempt(): string {
+function attempt(key: string): string {
   switch (control.jiraMode) {
     case 'unauthorized':
       throw new JiraError(401, 'Client must be authenticated to access this resource.')
@@ -31,10 +31,10 @@ function attempt(): string {
         rateLimitedOnce = true
         throw new JiraError(429, 'Rate limit exceeded.')
       }
-      return nextJiraKey()
+      return nextJiraKey(key)
     case 'ok':
       rateLimitedOnce = false
-      return nextJiraKey()
+      return nextJiraKey(key)
   }
 }
 
@@ -42,11 +42,11 @@ function attempt(): string {
  * POST /rest/api/3/issue, with retries. Resolves to the new issue key. The issue is assigned to the caller (proposals
  * §12.2, FR-ORC-012): M6 sets the assignee to the caller's linked Jira account; nothing about it goes on the wire.
  */
-export async function createIssue(_issue: { assignee: string }): Promise<string> {
+export async function createIssue(issue: { assignee: string; project_key: string; epic: string | null }): Promise<string> {
   for (let n = 1; ; n++) {
     try {
       await wait(400) // round trip to Jira
-      return attempt()
+      return attempt(issue.project_key)
     } catch (err) {
       if (!(err instanceof JiraError) || !err.retryable || n >= MAX_ATTEMPTS) throw err
       // Retry-After: 1 s on 429; exponential backoff on 5xx.
