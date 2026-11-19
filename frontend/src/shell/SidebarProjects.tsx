@@ -86,6 +86,7 @@ function ProjectLink({ project: p, now }: { project: Project; now: Date }) {
       <NavLink
         to={`/projects/${p.id}`}
         className="nav-link"
+        title={p.name}
         data-drop={over || undefined}
         data-archived={p.archived_at ? '' : undefined}
         onDragOver={(e) => {

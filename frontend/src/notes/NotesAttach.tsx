@@ -8,7 +8,11 @@ import { hasFiles, uploadAll, type Upload } from '../files/upload'
 import { NoteEditor } from './NotesPanel'
 import './notes.css'
 
-const title = (n: Note) => n.body.trim().split('\n')[0].replace(/^#+\s*/, '').slice(0, 40) || 'Empty note'
+// The first line with words in it; a note holding only attached files is "Note with files".
+const title = (n: Note) => {
+  const lines = n.body.replace(/\[file:[0-9a-f-]{36}\]/g, '').split('\n').map((l) => l.replace(/^#+\s*/, '').trim())
+  return lines.find(Boolean)?.slice(0, 40) ?? (/\[file:/.test(n.body) ? 'Note with files' : 'Empty note')
+}
 
 /**
  * Notes & attachments on an email or project (FR-CNT-003/006): a free place to jot things down, and 📎. Every note and

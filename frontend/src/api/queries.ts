@@ -231,19 +231,6 @@ export function withProject(refs: readonly EmailProjectRef[], project: Pick<Proj
   return [...refs, { id: project.id, name: project.name, colour: project.colour, is_primary: refs.length === 0 }]
 }
 
-/** An email's snooze time, wherever the client holds it. */
-export function emailSnoozedUntil(id: string): string | null {
-  const detail = queryClient.getQueryData<EmailDetail>(['email', id])
-  if (detail) return detail.snoozed_until
-  for (const [, data] of queryClient.getQueriesData<{ pages: Page<EmailListItem>[] } | Page<EmailListItem>>({ queryKey: ['emails'] })) {
-    if (!data) continue
-    const pages = 'pages' in data ? data.pages : [data]
-    const hit = pages.flatMap((p) => p.items).find((e) => e.id === id)
-    if (hit) return hit.snoozed_until
-  }
-  return null
-}
-
 /** An email's subject, wherever the client holds it (a reminder's title). */
 export function emailSubject(id: string): string {
   const detail = queryClient.getQueryData<EmailDetail>(['email', id])

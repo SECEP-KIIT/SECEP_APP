@@ -111,7 +111,17 @@ html[data-settled] .topbar {
   flex-direction: column;
   gap: var(--space-4);
   padding: var(--space-3) var(--space-2);
+  overflow: hidden;
+}
+/* Only the project list scrolls, so Settings, Admin and Collapse stay on screen however many projects there are. */
+.nav-projects {
+  flex: 0 1 auto;
+  min-height: 0;
   overflow: hidden auto;
+  scrollbar-width: thin;
+}
+.nav > li {
+  min-width: 0;
 }
 /* Collapsed: the 220 px panel is clipped to 64 px; hover-peek reveals it as an overlay, so content never moves.
    clip-path instead of scaleX, because scaling would distort the frosted blur and the corner radius. Clipped
@@ -381,6 +391,7 @@ html[data-settled] .topbar {
 }
 .nav-label {
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -839,6 +850,28 @@ html[data-motion='off'] .bell-badge {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.alert-ring {
+  flex: none;
+  transform: rotate(-90deg);
+}
+.alert-ring circle {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+  opacity: 0.55;
+  /* Runs once over the alert's lifetime; paused with the timer on hover or focus. */
+  animation: alert-ring linear forwards;
+}
+.top-alert[data-paused] .alert-ring circle {
+  animation-play-state: paused;
+}
+@keyframes alert-ring {
+  to {
+    stroke-dashoffset: 100;
+  }
+}
 @keyframes alert-in {
   from {
     opacity: 0;
@@ -846,11 +879,14 @@ html[data-motion='off'] .bell-badge {
   }
 }
 html[data-motion='reduced'] .top-alert,
-html[data-motion='off'] .top-alert {
+html[data-motion='off'] .top-alert,
+html[data-motion='reduced'] .alert-ring circle,
+html[data-motion='off'] .alert-ring circle {
   animation: none;
 }
 @media (prefers-reduced-motion: reduce) {
-  html:not([data-motion]) .top-alert {
+  html:not([data-motion]) .top-alert,
+  html:not([data-motion]) .alert-ring circle {
     animation: none;
   }
 }

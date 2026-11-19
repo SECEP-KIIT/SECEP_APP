@@ -1,52 +1,80 @@
 import { AlarmClock, CalendarClock, X } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router'
 import { markNotificationsRead } from '../api/queries'
 import { onAlert, type TopAlert } from '../lib/alertBus'
 import { openNotificationTarget } from '../lib/openTarget'
 
-const SHOW_MS = 12_000
+const SHOW_MS = 6_000
 const MAX = 3
 
 /**
- * Reminders and meetings that fire drop in from the top of the screen (FR-REM-004) and stay until dismissed or
- * 12 s pass; the bell keeps them either way. Shape icon + text, never colour alone. Motion is transform and opacity.
+ * Reminders and meetings that fire drop in from the top of the screen (FR-REM-004) and stay 6 s, or until dismissed;
+ * the bell keeps them either way. A ring beside the close button runs once over those 6 s; hovering or focusing the
+ * alert pauses both. Shape icon + text, never colour alone. Motion is transform, opacity and the ring's stroke.
  */
 export function TopAlerts() {
   const [alerts, setAlerts] = useState<TopAlert[]>([])
-  const { pathname } = useLocation()
-  useEffect(
-    () =>
-      onAlert((a) => {
-        setAlerts((cur) => [a, ...cur.filter((x) => x.id !== a.id)].slice(0, MAX))
-        setTimeout(() => setAlerts((cur) => cur.filter((x) => x.id !== a.id)), SHOW_MS)
-      }),
-    [],
-  )
+  useEffect(() => onAlert((a) => setAlerts((cur) => [a, ...cur.filter((x) => x.id !== a.id)].slice(0, MAX))), [])
   if (alerts.length === 0) return null
   const dismiss = (id: string) => setAlerts((cur) => cur.filter((x) => x.id !== id))
   return (
     <div className="top-alerts" role="region" aria-label="Reminders">
       {alerts.map((a) => (
-        <div key={a.id} className="top-alert" role="alert">
-          {a.title.startsWith('Meeting') ? <CalendarClock size={18} aria-hidden="true" /> : <AlarmClock size={18} aria-hidden="true" />}
-          <button
-            type="button"
-            className="top-alert-main"
-            onClick={() => {
-              dismiss(a.id)
-              void markNotificationsRead([a.id]).catch(() => {})
-              openNotificationTarget(a.target, pathname)
-            }}
-          >
-            <strong>{a.title}</strong>
-            {a.body && <span>{a.body}</span>}
-          </button>
-          <button type="button" className="toast-close" onClick={() => dismiss(a.id)} aria-label="Dismiss">
-            <X size={14} aria-hidden="true" />
-          </button>
-        </div>
+        <Alert key={a.id} alert={a} onDone={() => dismiss(a.id)} />
       ))}
+    </div>
+  )
+}
+
+function Alert({ alert: a, onDone }: { alert: TopAlert; onDone: () => void }) {
+  const { pathname } = useLocation()
+  const [paused, setPaused] = useState(false)
+  const left = useRef(SHOW_MS)
+  const done = useRef(onDone)
+  useEffect(() => {
+    done.current = onDone
+  })
+  // Count down only while not paused; on pause, keep what is left.
+  useEffect(() => {
+    if (paused) return
+    const start = Date.now()
+    const t = window.setTimeout(() => done.current(), left.current)
+    return () => {
+      window.clearTimeout(t)
+      left.current = Math.max(0, left.current - (Date.now() - start))
+    }
+  }, [paused])
+
+  return (
+    <div
+      className="top-alert"
+      role="alert"
+      data-paused={paused || undefined}
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onFocus={() => setPaused(true)}
+      onBlur={(e) => !e.currentTarget.contains(e.relatedTarget) && setPaused(false)}
+    >
+      {a.title.startsWith('Meeting') ? <CalendarClock size={18} aria-hidden="true" /> : <AlarmClock size={18} aria-hidden="true" />}
+      <button
+        type="button"
+        className="top-alert-main"
+        onClick={() => {
+          onDone()
+          void markNotificationsRead([a.id]).catch(() => {})
+          openNotificationTarget(a.target, pathname)
+        }}
+      >
+        <strong>{a.title}</strong>
+        {a.body && <span>{a.body}</span>}
+      </button>
+      <svg className="alert-ring" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
+        <circle cx="10" cy="10" r="8" pathLength="100" style={{ animationDuration: `${SHOW_MS}ms` }} />
+      </svg>
+      <button type="button" className="toast-close" onClick={onDone} aria-label="Dismiss">
+        <X size={14} aria-hidden="true" />
+      </button>
     </div>
   )
 }

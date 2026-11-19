@@ -48,7 +48,7 @@ export function Bell() {
           <BellIcon aria-hidden="true" size={18} />
           {unread > 0 && (
             <span key={unread} className="bell-badge" aria-hidden="true">
-              {unread > 9 ? '9+' : unread}
+              {unread}
             </span>
           )}
         </button>

@@ -1,10 +1,9 @@
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { AlarmClock, ArrowDownUp, ArrowUp, ChevronDown, CircleHelp, Rows3, X } from 'lucide-react'
+import { ArrowDownUp, ArrowUp, CircleHelp, Rows3, X } from 'lucide-react'
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { emailListOptions } from '../api/queries'
 import type { EmailListItem } from '../api/types'
-import { isSnoozed, splitSnoozed } from '../reminders/snooze'
 import { useFocused } from '../shell/focusMode'
 import { useMinuteClock } from '../shell/useMinuteClock'
 import {
@@ -62,11 +61,6 @@ interface Props {
   locked?: boolean
 }
 
-/** The "Snoozed · n" divider is a row of its own (FR-REM-002). */
-const DIVIDER = Symbol('snoozed-divider')
-/** The divider is a slim row, not a card-high one. */
-const DIVIDER_PITCH = 44
-
 /**
  * An inbox column widget (FR-UI-006 "a saved filter and sort"; item 6). Rendered here as the Inbox full view; the
  * tiling dashboard (task 8) places several side by side and persists their filters, sort and density.
@@ -108,10 +102,8 @@ export function Column({ title, state, onStateChange, initial, heading, tools, v
   const query = base === null || !scope ? base : [scope, base].filter(Boolean).join('&')
   const list = useInfiniteQuery({ ...emailListOptions(query ?? ''), enabled: query !== null })
   const loaded = useMemo(() => (query === null ? [] : (list.data?.pages.flatMap((p) => p.items) ?? [])), [query, list.data])
-  // FR-REM-002: snoozed cards sink below a collapsible "Snoozed · n" divider and stay out of the counts.
-  const { active: items, snoozed } = useMemo(() => splitSnoozed(loaded, now), [loaded, now])
-  const [snoozedOpen, setSnoozedOpen] = useState(false)
-  const view = useMemo<(EmailListItem | typeof DIVIDER)[]>(() => (snoozed.length ? [...items, DIVIDER, ...(snoozedOpen ? snoozed : [])] : items), [items, snoozed, snoozedOpen])
+  const items = loaded
+  const view = items
   const more = query !== null && list.hasNextPage
 
   // "↑ n new" (FR-UI-024): scroll to the top first, then reload page 1 only.
@@ -125,11 +117,11 @@ export function Column({ title, state, onStateChange, initial, heading, tools, v
   const virtualizer = useVirtualizer({
     count: rowCount,
     getScrollElement: () => scrollRef.current,
-    estimateSize: (i) => (view[i] === DIVIDER ? DIVIDER_PITCH : pitch),
+    estimateSize: () => pitch,
     overscan: 6,
   })
   // Every row's size changes together with the density; re-measure once rather than per row.
-  useEffect(() => virtualizer.measure(), [virtualizer, pitch, view])
+  useEffect(() => virtualizer.measure(), [virtualizer, pitch])
 
   const rows = virtualizer.getVirtualItems()
   const lastIndex = rows.at(-1)?.index ?? -1
@@ -280,28 +272,19 @@ export function Column({ title, state, onStateChange, initial, heading, tools, v
               style={{ height: virtualizer.getTotalSize() }}
             >
               {rows.map((row) => {
-                const entry = view[row.index]
-                const email = entry === DIVIDER ? undefined : entry
-                const divider = entry === DIVIDER
+                const email = view[row.index] as EmailListItem | undefined
                 return (
                   <div
-                    key={showSkeleton ? `skel-${row.index}` : divider ? 'snoozed-divider' : (email?.id ?? 'more')}
+                    key={showSkeleton ? `skel-${row.index}` : (email?.id ?? 'more')}
                     className="col-row"
                     role={showSkeleton ? undefined : 'listitem'}
                     aria-setsize={showSkeleton || !email ? undefined : more ? -1 : view.length}
                     aria-posinset={showSkeleton || !email ? undefined : row.index + 1}
                     data-email-id={showSkeleton ? undefined : email?.id}
                     data-pos={row.index}
-                    data-snoozed={email && isSnoozed(email, now) ? '' : undefined}
-                    style={{ transform: `translateY(${row.start}px)`, height: divider ? DIVIDER_PITCH : pitch }}
+                    style={{ transform: `translateY(${row.start}px)`, height: pitch }}
                   >
-                    {divider ? (
-                      <button type="button" className="snooze-divider" aria-expanded={snoozedOpen} onClick={() => setSnoozedOpen((o) => !o)}>
-                        <AlarmClock size={14} aria-hidden="true" />
-                        Snoozed · {snoozed.length}
-                        <ChevronDown size={14} aria-hidden="true" style={{ transform: snoozedOpen ? 'rotate(180deg)' : undefined }} />
-                      </button>
-                    ) : email && !showSkeleton ? (
+                    {email && !showSkeleton ? (
                       <EmailCard email={email} now={now} density={density} fresh={fresh.has(email.id)} onFilter={onFilter} />
                     ) : (
                       <SkeletonCard density={density} />

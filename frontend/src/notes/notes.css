@@ -45,6 +45,7 @@
 .note-foot {
   display: flex;
   align-items: center;
+  gap: var(--space-2);
   justify-content: space-between;
   padding: 0 var(--space-1) 2px var(--space-2);
   font-size: 0.75rem;
@@ -242,4 +243,9 @@ button.note-file {
   flex-wrap: wrap;
   gap: var(--space-1);
   padding: var(--space-1) 0;
+}
+
+.note-foot .note-save {
+  padding: 2px var(--space-3);
+  font-size: 0.75rem;
 }

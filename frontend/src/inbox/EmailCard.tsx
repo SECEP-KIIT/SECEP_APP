@@ -34,7 +34,7 @@ interface Props {
 export const EmailCard = memo(function EmailCard({ email, now, density, fresh, onFilter }: Props) {
   // Per card instance: the same email can sit in several columns on one dashboard page.
   const subjectId = useId()
-  const { open, menu, toast, pickProject, pickSnooze } = useInbox()
+  const { open, menu, toast, pickProject, pickRemind } = useInbox()
   const lift = useLift()
   const ref = useRef<HTMLElement>(null)
   const [leaving, setLeaving] = useState(false)
@@ -76,8 +76,7 @@ export const EmailCard = memo(function EmailCard({ email, now, density, fresh, o
         const row = ref.current?.closest<HTMLElement>('[data-pos]')
         const pos = Number(row?.dataset.pos) + (key === 'next' ? 1 : -1)
         const find = (p: number) => row?.parentElement?.querySelector<HTMLElement>(`[data-pos="${p}"] .card`)
-        // The "Snoozed · n" divider sits between two cards: step over it.
-        const to = find(pos) ?? find(pos + (key === 'next' ? 1 : -1))
+        const to = find(pos)
         to?.focus()
         to?.scrollIntoView({ block: 'nearest' })
       } else if (key === 'select') selection.toggle(email.id)
@@ -89,13 +88,10 @@ export const EmailCard = memo(function EmailCard({ email, now, density, fresh, o
         const r = ref.current?.getBoundingClientRect()
         const ids = selection.selected.has(email.id) ? [...selection.selected] : [email.id]
         if (r) pickProject(ids, r.left + 16, r.top + 24)
-      } else if (key === 'snooze') {
-        const r = ref.current?.getBoundingClientRect()
-        const ids = selection.selected.has(email.id) ? [...selection.selected] : [email.id]
-        if (r) pickSnooze(ids, r.left + 16, r.top + 24)
       } else if (key === 'remind') {
         const r = ref.current?.getBoundingClientRect()
-        if (r) pickSnooze([email.id], r.left + 16, r.top + 24, true)
+        const ids = selection.selected.has(email.id) ? [...selection.selected] : [email.id]
+        if (r) pickRemind(ids, r.left + 16, r.top + 24)
       }
       else openMenuAtCard()
       return

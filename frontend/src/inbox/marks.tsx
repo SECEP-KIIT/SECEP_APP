@@ -1,7 +1,6 @@
 // Visual channels from item 4 (FR-UI-013): type = icon shape, urgency = colour AND shape, security = shield.
 // Every mark is decorative (aria-hidden); the element using it supplies the text alternative.
 import {
-  AlarmClock,
   Angry,
   CalendarClock,
   CircleCheck,
@@ -82,7 +81,5 @@ export function TagIcon({ tag, size = 13 }: { tag: CardTag; size?: number }) {
       return <Copy {...props} />
     case 'masked':
       return <Lock {...props} />
-    case 'snoozed':
-      return <AlarmClock {...props} />
   }
 }
