@@ -660,6 +660,13 @@ describe('ui_prefs.theme (PROPOSED, proposals §16.6)', () => {
     expect((await call('PATCH', '/me/preferences', { token, body: { theme: 'auto' } })).json.ui_prefs.theme).toBe('auto')
     expect((await call('PATCH', '/me/preferences', { token, body: { theme: 'sepia' } })).status).toBe(422)
   })
+
+  it('PATCH /me/preferences: motion null goes back to following the system (Settings, proposals §22)', async () => {
+    const token = await login()
+    expect((await call('PATCH', '/me/preferences', { token, body: { motion: 'off' } })).json.ui_prefs.motion).toBe('off')
+    expect((await call('PATCH', '/me/preferences', { token, body: { motion: null } })).json.ui_prefs.motion).toBeNull()
+    expect((await call('PATCH', '/me/preferences', { token, body: { motion: 'wobbly' } })).status).toBe(422)
+  })
 })
 
 describe('user cards (FR-CNT-002, proposals §19.1)', () => {

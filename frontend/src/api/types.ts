@@ -283,7 +283,8 @@ export interface ApiErrorBody {
 /** users.ui_prefs keys named in the §6.6 comment, typed here; sidebar_collapsed is new. All optional on the wire. */
 export interface UiPrefs {
   /** Unset = follow the OS (FR-UI-032). */
-  motion?: 'full' | 'reduced' | 'off'
+  /** null clears it (back to following the OS; proposals §22). */
+  motion?: 'full' | 'reduced' | 'off' | null
   skip_lock?: boolean
   /** null = idle return off (FR-WP-004). */
   idle_minutes?: number | null

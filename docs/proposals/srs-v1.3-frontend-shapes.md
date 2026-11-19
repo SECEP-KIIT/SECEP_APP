@@ -465,3 +465,9 @@ The §6.6 tables (`actions` with `origin = user`, `notes`, `files`, `masked_secr
 - **Notes save on Save** (or Ctrl+Enter), not while typing. Cancel discards changes and deletes files attached during that edit. Closing the drawer with unsaved text still saves it, so nothing is lost. Escape closes only an unchanged note.
 - **Top alerts:** 5 s, a blue ring beside × that runs once over the 5 s, paused while hovered or focused.
 - **Bell badge:** the real count, no "9+" cap.
+
+## 22. Settings page (task 16, lean; 19 Nov 2026) (PROPOSED for v1.3)
+
+1. **`/settings`** edits the existing `ui_prefs` keys through `PATCH /me/preferences`, saved on change: theme (Light / Dark / Auto), motion (System / Full / Reduced / Off, FR-UI-032), sidebar collapsed, skip lock screen, idle return (Never / 5 / 15 / 30 / 60 min, FR-WP-004), lock-screen subjects (`glance_subjects`).
+2. **`ui_prefs.motion` accepts `null`** to clear it, meaning "follow the system". Mock and M6 validators updated.
+3. **Not built (v2):** wallpaper places with photos, EXIF suggestions, renditions, suncalc per place and the weather chip (FR-WP-006–009, `/me/places`); pop-up rules and quiet hours (FR-REM-007); digest time and reminder defaults. The wallpaper stays the built-in sun-phase gradient.
