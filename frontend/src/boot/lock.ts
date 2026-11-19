@@ -179,6 +179,10 @@ export const lock = {
   step(step: Step) {
     dispatch({ type: 'step', step })
   },
+  /** "Lock now" (topbar button, Alt+L): the same privacy curtain as the idle return, without the wait. */
+  now() {
+    if (state.view === 'open') dispatch({ type: 'idle' })
+  },
   /** Apply ui_prefs once /me arrives, and mirror the boot-relevant ones for the next static paint. */
   configure(next: BootPrefs) {
     prefs = next

@@ -14,6 +14,7 @@ import { BUILT_TYPES, fullViewHref, ICONS, SWATCHES, widgetTitle } from './layou
 
 // Standalone notes (FR-CNT-003): their own chunk, loaded when a Notes widget is on the page.
 const NotesPanel = lazy(() => import('../notes/NotesPanel').then((m) => ({ default: m.NotesPanel })))
+const StatsWidget = lazy(() => import('../stats/StatsWidget').then((m) => ({ default: m.StatsWidget })))
 
 const LONG_PRESS_MS = 500
 
@@ -143,6 +144,20 @@ export function WidgetFrame({ widget, device, editing, actions }: { widget: Widg
           <div className="col-body" ref={(n) => n && (n.inert = editing)}>
             <Suspense fallback={<p className="col-state">Loading notes…</p>}>
               <NotesPanel scope={null} />
+            </Suspense>
+          </div>
+        </section>
+      ) : widget.type === 'stats' ? (
+        <section className="column stats-widget" aria-labelledby={`w-${widget.id}`}>
+          <header className="col-head">
+            <div className="col-title-row">
+              {heading(`w-${widget.id}`)}
+              {tools}
+            </div>
+          </header>
+          <div className="col-body" ref={(n) => n && (n.inert = editing)}>
+            <Suspense fallback={<p className="col-state">Loading stats…</p>}>
+              <StatsWidget />
             </Suspense>
           </div>
         </section>

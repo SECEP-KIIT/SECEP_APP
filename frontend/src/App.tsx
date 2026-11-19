@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { createBrowserRouter } from 'react-router'
+import { createBrowserRouter, Navigate } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import { queryClient } from './api/queries'
 import { Shell } from './shell/Shell'
@@ -21,7 +21,8 @@ const router = createBrowserRouter([
       { path: 'board', lazy: () => import('./pages/Board'), handle: { title: 'Board' } },
       { path: 'calendar', lazy: placeholder, handle: { title: 'Calendar' } },
       { path: 'security', lazy: () => import('./pages/Security'), handle: { title: 'Security' } },
-      { path: 'metrics', lazy: placeholder, handle: { title: 'Metrics' } },
+      // Metrics is the Stats widget on Home now (19 Nov 2026); old links land there.
+      { path: 'metrics', element: <Navigate to="/" replace /> },
       { path: 'projects/:id', lazy: () => import('./pages/Project'), handle: { title: 'Project' } },
       { path: 'settings', lazy: () => import('./pages/Settings'), handle: { title: 'Settings' } },
       { path: 'admin', lazy: placeholder, handle: { title: 'Admin' } },

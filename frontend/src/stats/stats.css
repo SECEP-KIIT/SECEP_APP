@@ -1,0 +1,117 @@
+.stats {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-3);
+  overflow-y: auto;
+}
+.stats-head {
+  margin: 0 0 var(--space-2);
+  color: var(--ink-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.stats-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.stats-tile {
+  display: grid;
+  gap: 2px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--tile-radius);
+  background: var(--card-bg);
+}
+.stats-tile[data-tone='crit'] {
+  border-left: 3px solid #c4271b;
+}
+.stats-tile[data-tone='warn'] {
+  border-left: 3px solid #d9480f;
+}
+.stats-num {
+  font-size: 1.5rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.stats-label {
+  color: var(--ink-muted);
+  font-size: 0.8125rem;
+}
+.stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+.stats-table th,
+.stats-table td {
+  padding: 4px 6px;
+  text-align: left;
+}
+.stats-table thead th {
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+.stats-table td:last-child {
+  text-align: right;
+}
+.stats-bar {
+  display: inline-block;
+  width: 80px;
+  height: 8px;
+  margin-right: var(--space-2);
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--line);
+  vertical-align: middle;
+}
+.stats-bar > span,
+.stats-col > span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--accent);
+}
+.stats-bar > span {
+  transform-origin: left;
+}
+.stats-sub {
+  margin: var(--space-3) 0 var(--space-2);
+  color: var(--ink-muted);
+  font-size: 0.8125rem;
+}
+.stats-hist {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 3px;
+  height: 56px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.stats-hist li {
+  display: flex;
+}
+.stats-col {
+  display: block;
+  flex: 1;
+  overflow: hidden;
+  border-radius: 3px 3px 0 0;
+  background: var(--line);
+}
+.stats-col > span {
+  transform-origin: bottom;
+}
+.stats-axis {
+  display: flex;
+  justify-content: space-between;
+  margin: 2px 0 0;
+  color: var(--ink-muted);
+  font-size: 0.6875rem;
+}

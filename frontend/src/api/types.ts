@@ -294,6 +294,14 @@ export interface UiPrefs {
   theme?: 'light' | 'dark' | 'auto'
 }
 
+/** GET /admin/metrics (§6.5, admin): the classifier over `window_days`. Shown in the Stats widget. */
+export interface AdminMetrics {
+  window_days: number
+  volume_by_type: Partial<Record<EmailType, number>>
+  override_rate_by_class: Partial<Record<EmailType, number>>
+  confidence_histogram: { bin_start: number; bin_end: number; count: number }[]
+}
+
 /** PATCH /me/preferences: request is a partial UiPrefs; response is the full stored object. */
 export interface PreferencesResponse {
   ui_prefs: UiPrefs

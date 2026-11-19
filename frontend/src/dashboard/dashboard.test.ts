@@ -255,15 +255,16 @@ describe('layouts API (proposals §13)', () => {
       expect(layout.pages.map((p) => p.name)).toEqual(STARTERS.map((s) => s.name))
       for (const w of layout.pages.flatMap((p) => p.widgets)) {
         expect(BUILT_TYPES).toContain(w.type)
-        expect(filterError(w.filter!)).toBeNull()
+        if (w.type === 'inbox_column') expect(filterError(w.filter!)).toBeNull()
+        else expect(w.filter).toBeNull()
       }
     }
     expect((await get('desktop')).pages[0].widgets.map((w) => w.title)).toEqual(['Critical + High', 'Due today', 'Overdue'])
     expect((await get('desktop')).pages[1].widgets.map((w) => [w.title, w.filter, w.sort])).toContainEqual(['Needs review', 'needs_review=true', 'confidence'])
-    expect((await get('desktop')).pages[2].widgets.map((w) => [w.title, w.filter])).toEqual([['Due this week', 'due=next_7_days'], ['Needs my reply', 'view=needs_reply']])
+    expect((await get('desktop')).pages[2].widgets.map((w) => [w.title, w.filter])).toEqual([['Due this week', 'due=next_7_days'], ['Needs my reply', 'view=needs_reply'], ['Stats', null]])
     // Ordered tiles with a size, no positions (proposals §16.3): three small tiles fill Today's one row.
     expect((await get('desktop')).pages[0].widgets.map((w) => [w.size, w.hidden])).toEqual([['small', false], ['small', false], ['small', false]])
-    expect((await get('desktop')).pages[2].widgets.map((w) => w.size)).toEqual(['medium', 'small'])
+    expect((await get('desktop')).pages[2].widgets.map((w) => w.size)).toEqual(['medium', 'small', 'small'])
     expect((await get('tablet')).pages).toEqual((await get('desktop')).pages)
     expect(Object.keys((await get('phone')).pages[0].widgets[0])).not.toContain('x')
   })

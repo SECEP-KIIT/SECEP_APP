@@ -40,7 +40,7 @@ export function fullViewHref(w: Pick<Widget, 'filter' | 'sort'>) {
 }
 
 /** Widget types the client can render today. The gallery offers only these; tasks 10–15 add theirs. */
-export const BUILT_TYPES: WidgetType[] = ['inbox_column', 'board', 'notes']
+export const BUILT_TYPES: WidgetType[] = ['inbox_column', 'board', 'notes', 'stats']
 
 export interface WidgetPreset {
   key: string
@@ -57,6 +57,8 @@ export interface WidgetPreset {
 /** The Board widget (FR-ORC-007, task 10): the board as a tile; ⤢ opens /board. */
 export const BOARD_PRESET: WidgetPreset = { key: 'board', type: 'board', title: 'Board', icon: '📋', colour: null, filter: '', sort: null }
 export const NOTES_PRESET: WidgetPreset = { key: 'notes', type: 'notes', title: 'Notes', icon: '📝', colour: null, filter: '', sort: null }
+/** Stats (the former Metrics page): counts for everyone, classifier metrics for admins. */
+export const STATS_PRESET: WidgetPreset = { key: 'stats', type: 'stats', title: 'Stats', icon: '📊', colour: null, filter: '', sort: null }
 
 /** Gallery entries: inbox columns as saved filters (FR-UI-006), in the GET /emails vocabulary. */
 export const COLUMN_PRESETS: WidgetPreset[] = [

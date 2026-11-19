@@ -1,4 +1,4 @@
-import { CalendarDays, ChartColumn, Inbox, LayoutGrid, ShieldAlert, SquareKanban, type LucideIcon } from 'lucide-react'
+import { CalendarDays, Inbox, LayoutGrid, ShieldAlert, SquareKanban, type LucideIcon } from 'lucide-react'
 import type { Glance, Me } from '../api/types'
 
 export interface NavItem {
@@ -22,8 +22,6 @@ export const NAV: NavItem[] = [
   { to: '/board', label: 'Board', icon: SquareKanban, count: (g) => g.counts.board_todo },
   { to: '/calendar', label: 'Calendar', icon: CalendarDays },
   { to: '/security', label: 'Security', icon: ShieldAlert, visible: canReviewSecurity, count: (g) => g.counts.security_flags },
-  // GET /admin/metrics is admin-only (§6.5), so the page is too.
-  { to: '/metrics', label: 'Metrics', icon: ChartColumn, visible: isAdmin },
 ]
 
 export const visibleNav = (me: Me | undefined) => NAV.filter((i) => !i.visible || (me !== undefined && i.visible(me)))

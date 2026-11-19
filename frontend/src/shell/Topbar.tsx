@@ -1,5 +1,6 @@
 import { useQueryClient, type QueryCache } from '@tanstack/react-query'
-import { Plus, Search } from 'lucide-react'
+import { Lock, Plus, Search } from 'lucide-react'
+import { lock } from '../boot/lock'
 import { Bell } from './Bell'
 import { useEffect, useState } from 'react'
 import { useMatch, useMatches } from 'react-router'
@@ -51,6 +52,17 @@ function SyncIndicator() {
 // (task 16). The pill and bell are laid out now so nothing shifts later; the bell arrives with task 13.
 // Quick-add (task 12) opens the quick-add dialog, filed into the open project.
 export function Topbar() {
+  // Alt+L locks from anywhere (the topbar button's shortcut).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === 'KeyL') {
+        e.preventDefault()
+        lock.now()
+      }
+    }
+    addEventListener('keydown', onKey)
+    return () => removeEventListener('keydown', onKey)
+  }, [])
   const now = useMinuteClock()
   const project = useMatch('/projects/:id')?.params.id
   const title = useMatches()
@@ -77,6 +89,10 @@ export function Topbar() {
       <div className="topbar-right">
         <SyncIndicator />
         <Bell />
+        {/* Lock now before stepping away, instead of waiting for the idle timer (desktop only; phones have no lock). */}
+        <button type="button" className="icon-button lock-now" aria-label="Lock screen" title="Lock screen (Alt+L)" onClick={() => lock.now()}>
+          <Lock aria-hidden="true" size={17} />
+        </button>
         <button type="button" className="icon-button" aria-label="Quick add a card" title="Quick add (N)" onClick={() => openQuickAdd({ projectId: project })}>
           <Plus aria-hidden="true" size={18} />
         </button>

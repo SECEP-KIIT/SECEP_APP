@@ -479,3 +479,10 @@ The §6.6 tables (`actions` with `origin = user`, `notes`, `files`, `masked_secr
 3. **Project board accepts emails:** dropping emails from a list onto a To do / In progress / Done column files them in the project (rule 1) and moves their cards there.
 4. Seed data and saved mock snapshots are backfilled on load. **M6:** not built yet (same rules in `projects.js`, `emails.js`, `actions.js`, plus a one-off backfill).
 5. **Lock screen subjects** (when opted in) show at most three distinct subjects, then "and n more".
+
+## 24. Metrics as a widget, lock now, readable lock screen (19 Nov 2026) (PROPOSED for v1.3)
+
+1. **No Metrics page.** FR-UI-002's "Metrics" nav item is replaced by a **Stats** home widget (`type: "stats"`, already in the WidgetType enum): everyone sees today's counts from `GET /me/glance`; admins also see the classifier over 30 days from `GET /admin/metrics` (volume per type, correction rate, confidence histogram). `/metrics` redirects to Home. The Planning starter page gains the Stats tile (mock and M6 starters). Non-column widgets keep `filter: null`.
+2. **Lock now:** a lock button in the topbar and **Alt+L** bring up the lock screen at once (the same curtain as the idle return, FR-WP-004). Desktop only.
+3. **Lock screen glance:** one frosted chip per fact (Critical, next event with its time, due today, overdue); opted-in subjects in one card headed "Critical unread" (three distinct at most).
+4. **Board lanes** are lightly colour-coded (To do blue, In progress amber, Done green), with the existing ○ ◐ ● shapes kept.
