@@ -1,7 +1,7 @@
 import { X } from 'lucide-react'
-import type { Toast } from './inboxContext'
+import { UNDO_MS, type Toast } from './inboxContext'
 
-/** Toasts slide up from the bottom (item 9). Errors use role="alert"; everything else is a polite status. */
+/** Toasts slide up from the bottom (item 9); undo toasts show their remaining time as a shrinking bar. Errors use role="alert"; everything else is a polite status. */
 export function Toaster({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: number) => void }) {
   return (
     <div className="toaster">
@@ -35,6 +35,8 @@ export function Toaster({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id
           <button type="button" className="toast-close" onClick={() => onDismiss(t.id)} aria-label="Dismiss">
             <X size={14} aria-hidden="true" />
           </button>
+          {/* Undo toasts: a bar that shrinks (scaleX) over the undo window (item 9). */}
+          {t.action && <span className="toast-bar" aria-hidden="true" style={{ animationDuration: `${UNDO_MS}ms` }} />}
         </div>
       ))}
     </div>
