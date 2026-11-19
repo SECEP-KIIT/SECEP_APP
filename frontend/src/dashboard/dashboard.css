@@ -120,13 +120,39 @@ html[data-motion='off'] .dash-page {
   /* Room for the edit-mode wobble, so it never overflows into a scrollbar that would narrow the tiles. */
   padding: 3px;
 }
-.flow-tile {
+.flow-slot {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  gap: var(--space-3);
   min-width: 0;
   min-height: 0;
 }
-.flow-tile[data-size='small'] { grid-column: span 1; }
-.flow-tile[data-size='medium'] { grid-column: span 2; }
-.flow-tile[data-size='large'] { grid-column: span 3; }
+/* F18: two widgets in one slot, always equal halves. */
+.flow-slot[data-stacked] {
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+}
+.flow-tile {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+.flow-slot[data-size='small'] { grid-column: span 1; }
+.flow-slot[data-size='medium'] { grid-column: span 2; }
+.flow-slot[data-size='large'] { grid-column: span 3; }
+/* Drop target for stacking: the lower half of the tile under the pointer. */
+.stack-hint {
+  position: absolute;
+  inset: 50% 0 0;
+  display: grid;
+  place-items: center;
+  border: 2px dashed var(--accent);
+  border-radius: var(--tile-radius);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent-text);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  pointer-events: none;
+}
 /* The tile being dragged stays in its new place, faded; a light copy follows the pointer. */
 .flow-tile[data-dragging] {
   opacity: 0.35;
@@ -330,6 +356,54 @@ html[data-motion='off'] .dash[data-editing] .widget > .column {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 2px;
+}
+.picker-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.picker-label {
+  color: var(--ink-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.picker-current {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--card-bg);
+  color: var(--ink);
+  font-size: 0.75rem;
+}
+.picker-current:hover {
+  background: var(--tag-muted-bg);
+}
+.picker-current:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.picker-emoji {
+  font-size: 1rem;
+  line-height: 1;
+}
+.picker-menu {
+  width: 260px;
+}
+.swatch-dot[data-swatch='slate'] { --swatch: #5c677d; }
+.swatch-dot[data-swatch='blue'] { --swatch: #3b5bdb; }
+.swatch-dot[data-swatch='teal'] { --swatch: #0c8599; }
+.swatch-dot[data-swatch='green'] { --swatch: #2b8a3e; }
+.swatch-dot[data-swatch='amber'] { --swatch: #e09f00; }
+.swatch-dot[data-swatch='orange'] { --swatch: #e8590c; }
+.swatch-dot[data-swatch='red'] { --swatch: #e03131; }
+.swatch-dot[data-swatch='violet'] { --swatch: #7048e8; }
+.widget-menu .quick-chips {
+  flex-wrap: wrap;
 }
 .menu-note {
   color: var(--ink-muted);

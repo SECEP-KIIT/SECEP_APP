@@ -4,7 +4,7 @@
 import type { Layout, LayoutDeviceClass, LayoutPage, Widget, WidgetSize } from '../api/types'
 import { uid } from './store/random'
 
-type StarterWidget = Omit<Widget, 'id' | 'hidden'>
+type StarterWidget = Omit<Widget, 'id' | 'hidden' | 'stacked'>
 
 /** Desktop and tablet: rows of 3 slots (proposals §16.3). Phones stack the same widgets as sections. */
 const column = (title: string, icon: string, colour: Widget['colour'], filter: string, sort: Widget['sort'], size: WidgetSize = 'small'): StarterWidget => ({
@@ -49,7 +49,7 @@ export function starterLayout(device: LayoutDeviceClass): Layout {
     id: uid(NS_LAYOUT, 1000 + order),
     name: page.name,
     order,
-    widgets: page.widgets.map((w) => ({ id: uid(NS_LAYOUT, ++n), ...w, hidden: false })),
+    widgets: page.widgets.map((w) => ({ id: uid(NS_LAYOUT, ++n), ...w, hidden: false, stacked: false })),
   }))
   return { device_class: device, pages, updated_at: null, is_default: true }
 }

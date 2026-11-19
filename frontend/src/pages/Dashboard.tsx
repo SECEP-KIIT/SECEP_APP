@@ -14,7 +14,12 @@ import {
   removePage,
   removeWidget,
   renamePage,
+  resizeWidget,
   restorePage,
+  slots,
+  stackTargetBefore,
+  stackWidget,
+  unstackWidget,
   sortedPages,
   updatePage,
 } from '../dashboard/layoutModel'
@@ -142,7 +147,12 @@ function Dashboard() {
   const editPage = (fn: Parameters<typeof updatePage>[2]) => update((ps) => updatePage(ps, page.id, fn))
   const actionsFor = (w: Widget): WidgetActions => ({
     patch: (patch) => editPage((p) => patchWidget(p, w.id, patch)),
-    resize: (size) => editPage((p) => patchWidget(p, w.id, { size })),
+    resize: (size) => editPage((p) => resizeWidget(p, w.id, size)),
+    stack: (() => {
+      const target = stackTargetBefore(page, w.id)
+      return target ? () => editPage((p) => stackWidget(p, w.id, target)) : undefined
+    })(),
+    unstack: slots(page.widgets).some((s) => s.length === 2 && s.some((x) => x.id === w.id)) ? () => editPage((p) => unstackWidget(p, w.id)) : undefined,
     duplicate: () => {
       const next = duplicateWidget(page, w.id)
       if (next) editPage(() => next)

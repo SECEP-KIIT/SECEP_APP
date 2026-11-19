@@ -27,8 +27,14 @@ import {
   movePage,
   moveWidget,
   removePage,
+  removeWidget,
   reorderWidget,
+  resizeWidget,
   restorePage,
+  slots,
+  stackTargetBefore,
+  stackWidget,
+  unstackWidget,
 } from './layoutModel'
 import { pageKeyAction } from './pageKeys'
 
@@ -49,7 +55,7 @@ describe('the one breakpoint constant', () => {
 })
 
 const widget = (patch: Partial<Widget>): Widget => ({
-  id: crypto.randomUUID(), type: 'inbox_column', size: 'small', hidden: false, title: null, colour: null, icon: null, filter: '', sort: null, density: null, ...patch,
+  id: crypto.randomUUID(), type: 'inbox_column', size: 'small', hidden: false, stacked: false, title: null, colour: null, icon: null, filter: '', sort: null, density: null, ...patch,
 })
 const pageOf = (widgets: Widget[]): LayoutPage => ({ id: crypto.randomUUID(), name: 'P', order: 0, widgets })
 
@@ -121,7 +127,7 @@ describe('layout edits', () => {
 
   it('a layout saved before §16.3 converts: sorted by y, then x, sized by width (store schema 4 → 5)', () => {
     const placed = (x: number, y: number, w: number, h: number, title: string): PlacedWidget => {
-      const { size: _s, hidden: _h, ...rest } = widget({ title })
+      const { size: _s, hidden: _h, stacked: _k, ...rest } = widget({ title })
       return { ...rest, x, y, w, h }
     }
     const grid = fromPlaced([placed(8, 0, 4, 12, 'C'), placed(0, 12, 12, 6, 'D'), placed(0, 0, 8, 12, 'A')], false)
@@ -137,6 +143,41 @@ describe('layout edits', () => {
     expect(snap.schema).toBe(SCHEMA_VERSION)
     expect(snap.data.layouts.u1.desktop!.pages[0].widgets.map((w) => w.title)).toEqual(['First', 'Second'])
     expect(storage.removeItem).not.toHaveBeenCalled()
+    expect(snap.data.layouts.u1.desktop!.pages[0].widgets.every((w) => w.stacked === false)).toBe(true)
+
+    // A version 5 store (before F18) gains stacked: false on every widget.
+    const v5 = { ...v4, schema: 5, data: { ...v4.data, layouts: { u1: { desktop: { updated_at: '2026-11-02T10:00:00.000Z', pages: [{ id: 'p', name: 'P', order: 0, widgets: [{ ...widget({ title: 'Old' }), stacked: undefined }] }] } } } } }
+    const s5 = load({ getItem: () => JSON.stringify(v5), removeItem: vi.fn() }, 42)!
+    expect(s5.schema).toBe(SCHEMA_VERSION)
+    expect(s5.data.layouts.u1.desktop!.pages[0].widgets[0]).toMatchObject({ title: 'Old', stacked: false })
+  })
+
+  it('stacks (F18): two per slot, equal size; pairs move, resize and split as one slot', () => {
+    const [a, b, c] = [widget({ title: 'A', size: 'small' }), widget({ title: 'B', size: 'medium' }), widget({ title: 'C', size: 'small' })]
+    const page = pageOf([a, b, c])
+    const titles = (p: LayoutPage) => slots(p.widgets).map((s) => s.map((w) => w.title).join('+'))
+
+    // B under A takes A's width; C can't join the full pair.
+    const ab = stackWidget(page, b.id, a.id)
+    expect(titles(ab)).toEqual(['A+B', 'C'])
+    expect(ab.widgets.map((w) => [w.title, w.size, w.stacked])).toEqual([['A', 'small', false], ['B', 'small', true], ['C', 'small', false]])
+    expect(stackWidget(ab, c.id, a.id)).toBe(ab)
+    expect(stackTargetBefore(ab, c.id)).toBeNull()
+    expect(stackTargetBefore(page, b.id)).toBe(a.id)
+
+    // Resizing either resizes the slot; the pair moves as one; dragging B out leaves A behind.
+    expect(resizeWidget(ab, b.id, 'large').widgets.map((w) => w.size)).toEqual(['large', 'large', 'small'])
+    expect(titles(reorderWidget(ab, a.id, c.id))).toEqual(['C', 'A+B'])
+    expect(titles(reorderWidget(ab, b.id, c.id))).toEqual(['A', 'C', 'B'])
+    expect(reorderWidget(ab, b.id, a.id)).toBe(ab)
+
+    // Removing either gives the other the slot back, never joining the slot before.
+    const cab = stackWidget(pageOf([c, a, b]), b.id, a.id)
+    expect(titles(removeWidget(cab, a.id))).toEqual(['C', 'B'])
+    expect(removeWidget(cab, a.id).widgets.every((w) => !w.stacked)).toBe(true)
+    expect(titles(removeWidget(cab, b.id))).toEqual(['C', 'A'])
+    expect(titles(unstackWidget(cab, b.id))).toEqual(['C', 'A', 'B'])
+    expect(titles(duplicateWidget(cab, a.id)!)).toEqual(['C', 'A+B', 'A'])
   })
 
   it('a column filter is the GET /emails vocabulary, both ways; ⤢ links with it', () => {
@@ -254,6 +295,10 @@ describe('layouts API (proposals §13)', () => {
     expect(await field(put([{ colour: '#ff0000' as never }]))).toEqual(['pages.0.widgets.0.colour'])
     expect(await field(put([{ size: 'huge' as never }]))).toEqual(['pages.0.widgets.0.size'])
     expect(await field(put([{ hidden: 'no' as never }], 'phone'))).toEqual(['pages.0.widgets.0.hidden'])
+    // F18: a stacked widget follows an unstacked one of the same size.
+    expect(await field(put([{ stacked: true }]))).toEqual(['pages.0.widgets.0.stacked'])
+    expect(await field(put([{}, { stacked: true, size: 'medium' }]))).toEqual(['pages.0.widgets.1.size'])
+    expect(await field(put([{}, { stacked: true }, { stacked: true }]))).toEqual(['pages.0.widgets.2.stacked'])
     // The old free-placement fields are unknown now.
     expect(await field(put([{ x: 0 } as never]))).toEqual(['pages.0.widgets.0.x'])
     expect((await put(Array.from({ length: 25 }, () => ({}))))).toMatchObject({ status: 422 })

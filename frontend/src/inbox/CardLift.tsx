@@ -16,7 +16,8 @@ const TABBABLE = 'a[href], button:not([disabled]), input:not([disabled]), select
 
 /**
  * The hover lift (FR-UI-011 layer 2, QA pass 3), one per inbox page. On hover after the intent delay, or keyboard
- * focus, the card lifts into a floating copy in a portal: Jira · Calendar · Done · ⋯ above it, every tag below it.
+ * focus, the card lifts into a floating copy in a portal: Jira · Calendar · Done · ⋯ above it, and the copy's own tag
+ * strip opens to show every tag (F13), so the copy grows downwards over the cards below.
  *
  * - The copy covers its neighbours but never pushes them; the card in the list never changes (NFR-PERF-011).
  * - The portal sits outside the virtual list's scroller, so nothing clips it. The bar and the tags flip to the
@@ -128,9 +129,6 @@ export function CardLiftProvider({ children }: { children: ReactNode }) {
   )
 }
 
-interface Place extends LiftPlace {
-  barH: number
-}
 
 function Lift({ target, rect, rootRef, onPointerEnter, onPointerLeave, onClose }: {
   target: LiftTarget
@@ -143,21 +141,22 @@ function Lift({ target, rect, rootRef, onPointerEnter, onPointerLeave, onClose }
   const { email, now, density, el } = target
   const tags = cardTags(email, now)
   const barRef = useRef<HTMLDivElement>(null)
-  const tagsRef = useRef<HTMLUListElement>(null)
-  const [place, setPlace] = useState<Place | null>(null)
+  const cardRef = useRef<HTMLDivElement>(null)
+  const [place, setPlace] = useState<(LiftPlace & { top: number }) | null>(null)
 
-  // Flip where there's no room: the bar goes below the card, the tags above it.
+  // The copy grows down by its opened tag strip; near the bottom of the window it moves up instead. The bar goes
+  // above the copy, or below it where there's no room.
   useLayoutEffect(() => {
     const barH = barRef.current?.offsetHeight ?? 0
-    const tagsH = tagsRef.current?.offsetHeight ?? 0
-    setPlace({ ...placeLift(rect, barH, tagsH, innerHeight, GAP, MARGIN), barH })
+    const h = cardRef.current?.offsetHeight ?? rect.height
+    const top = Math.max(MARGIN, Math.min(rect.top, innerHeight - MARGIN - h))
+    setPlace({ ...placeLift({ top, bottom: top + h }, barH, 0, innerHeight, GAP, MARGIN), top })
   }, [rect, tags.length])
 
   const filter = (p: FilterPatch) => (e: MouseEvent) => {
     e.stopPropagation()
     target.onFilter(p)
   }
-  const tagsOffset = place && place.bar === place.tags ? place.barH + GAP : 0
 
   // Keyboard inside the bar: Tab past the end continues after the card, Shift+Tab before the start returns to it.
   const onKeyDown = (e: KeyboardEvent) => {
@@ -186,16 +185,13 @@ function Lift({ target, rect, rootRef, onPointerEnter, onPointerLeave, onClose }
       ref={rootRef}
       className="card-lift"
       data-placed={place ? '' : undefined}
-      style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height }}
+      style={{ left: rect.left, top: place?.top ?? rect.top, width: rect.width }}
       onKeyDown={onKeyDown}
       onBlur={(e) => {
         if (!(e.relatedTarget instanceof Node) || (!e.currentTarget.contains(e.relatedTarget) && e.relatedTarget !== el)) onClose()
       }}
     >
-      {/* The raised copy: looks like the card, lets the pointer through to it, never takes focus. */}
-      <div className="card lift-card" data-density={density} aria-hidden="true" ref={(n) => n?.setAttribute('inert', '')}>
-        <CardBody email={email} now={now} subjectId={undefined} filter={filter} />
-      </div>
+      {/* First in the DOM, so Tab from the card reaches the actions before the tags. */}
       <div
         ref={barRef}
         className="lift-bar"
@@ -205,23 +201,21 @@ function Lift({ target, rect, rootRef, onPointerEnter, onPointerLeave, onClose }
       >
         <CardActions email={email} onLeave={(leaving) => (target.onLeave(leaving), leaving && onClose())} />
       </div>
-      {tags.length > 0 && (
-        <ul
-          ref={tagsRef}
-          className="lift-tags"
-          aria-label="All tags"
-          data-place={place?.tags ?? 'below'}
-          style={place ? { [place.tags === 'below' ? 'top' : 'bottom']: `calc(100% + ${GAP + tagsOffset}px)` } : undefined}
-          onPointerEnter={onPointerEnter}
-          onPointerLeave={onPointerLeave}
-        >
-          {tags.map((t) => (
-            <li key={t.kind}>
-              <Tag tag={t} onFilter={filter} labelled />
-            </li>
-          ))}
-        </ul>
-      )}
+      {/* The raised copy: looks like the card and lets the pointer through to it; only its opened tags take clicks. */}
+      <div className="card lift-card" data-density={density} ref={cardRef} style={{ minHeight: rect.height }}>
+        <div className="lift-body" aria-hidden="true" ref={(n) => n?.setAttribute('inert', '')}>
+          <CardBody email={email} now={now} subjectId={undefined} filter={filter} tags={false} />
+        </div>
+        {tags.length > 0 && (
+          <ul className="tag-row lift-tags" aria-label="All tags" onPointerEnter={onPointerEnter} onPointerLeave={onPointerLeave}>
+            {tags.map((t) => (
+              <li key={t.kind}>
+                <Tag tag={t} onFilter={filter} />
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   )
 }
