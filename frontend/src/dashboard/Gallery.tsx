@@ -8,7 +8,7 @@ import { BOARD_PRESET, COLUMN_PRESETS, NOTES_PRESET, STATS_PRESET, type WidgetPr
 /**
  * "+ Add widget" (FR-UI-008, item 2): the widget gallery, with a live preview of what each column would show (its
  * first three subjects, fetched only while the gallery is open). Lists only widget types that exist today: inbox
- * columns as saved filters; Board, Calendar and the rest join with their tasks.
+ * columns as saved filters; Board, Notes and Stats are built; the rest join later.
  */
 export function Gallery({ open, onClose, onPick }: { open: boolean; onClose: () => void; onPick: (preset: WidgetPreset) => void }) {
   const ref = useRef<HTMLDialogElement>(null)
@@ -27,7 +27,7 @@ export function Gallery({ open, onClose, onPick }: { open: boolean; onClose: () 
           Close
         </button>
       </div>
-      <p className="drawer-muted">Inbox columns are saved filters. Calendar and the other widgets join as they are built.</p>
+      <p className="drawer-muted">Inbox columns are saved filters. More widgets join later.</p>
       <ul className="gallery-list">
         {open && (
           <li>

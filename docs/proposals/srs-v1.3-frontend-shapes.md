@@ -88,7 +88,7 @@ The frontend mirrors `skip_lock`, `idle_minutes` and `motion` in `localStorage` 
 
 ## 6. Other notes from task 4
 
-- **FR-UI-002 vs §6.7:** item 1 lists Calendar in the sidebar. It's now shown, since Calendar is being built (task 14).
+- **FR-UI-002 vs §6.7:** item 1 lists Calendar in the sidebar. It was shown while Calendar was being built (task 14); **Calendar is v2 (19 Nov 2026)**, so the sidebar entry, `/calendar` (redirects Home), the Calendar buttons, menu items, ⇧C key, "Download .ics" and calendar sends from cards are all hidden. The data shapes and mock routes stay for v2.
 - **Metrics visibility:** FR-UI-002 doesn't say who sees Metrics. The frontend shows it to admins only, because `GET /admin/metrics` is an admin route.
 
 ## 7. Found while building the mock backend (task 5)

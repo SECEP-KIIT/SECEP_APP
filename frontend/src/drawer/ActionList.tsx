@@ -1,7 +1,7 @@
-import { CalendarPlus, Download, LayoutList, Pencil, Plus, Zap } from 'lucide-react'
+import { LayoutList, Pencil, Plus, Zap } from 'lucide-react'
 import { useState } from 'react'
 import { ApiError } from '../api/client'
-import { acceptAction, createAction, downloadIcs, rejectAction, useProjects } from '../api/queries'
+import { acceptAction, createAction, rejectAction, useProjects } from '../api/queries'
 import type { Action, ActionType, DecoderActionPayload, EmailDetail, JiraPriority, JiraTarget, Urgency } from '../api/types'
 import { errorText, useInbox, type OpenOptions } from '../inbox/inboxContext'
 import { Composer } from './Composer'
@@ -14,7 +14,7 @@ const PRIORITY_FOR: Record<Urgency, JiraPriority> = { Critical: 'Highest', High:
 const EMPTY: DecoderActionPayload = { title: null, description: null, priority: null, due_date: null, start: null, end: null, attendees: null }
 
 function TypeGlyph({ type }: { type: ActionType }) {
-  const Icon = type === 'create_jira_issue' ? Zap : type === 'add_calendar_event' ? CalendarPlus : LayoutList
+  const Icon = type === 'create_jira_issue' ? Zap : LayoutList
   return <Icon size={16} aria-hidden="true" />
 }
 
@@ -53,14 +53,14 @@ const fieldErrors = (err: unknown): Record<string, string> =>
  * (FR-ORC-002). Jira and Calendar are simulated by the mock (fake keys, fake events).
  */
 export function ActionList({ email, compose }: { email: EmailDetail; compose?: OpenOptions['compose'] }) {
-  const live = email.actions.filter((a) => a.status !== 'rejected')
-  const declined = email.actions.length - live.length
+  // Calendar is v2 (19 Nov 2026): the decoder's calendar proposals stay in the data but are not shown.
+  const shown = email.actions.filter((a) => a.type !== 'add_calendar_event')
+  const live = shown.filter((a) => a.status !== 'rejected')
+  const declined = shown.length - live.length
   const has = (type: ActionType) => live.some((a) => a.type === type)
   // ⇧-click or "no proposal": edit the existing one of that type, or start a new one.
   const editFirst = compose ? live.find((a) => a.type === compose && (a.status === 'proposed' || a.status === 'failed'))?.id : undefined
   const [creating, setCreating] = useState<OpenOptions['compose']>(compose && !editFirst ? compose : undefined)
-  const meeting = email.actions.find((a) => a.type === 'add_calendar_event' && 'start' in a.payload && a.payload.start && a.payload.end)
-  const { toast } = useInbox()
   const target = useJiraTarget(email)
 
   return (
@@ -80,21 +80,6 @@ export function ActionList({ email, compose }: { email: EmailDetail; compose?: O
           {!has('create_jira_issue') && !email.jira_key && (
             <button type="button" className="ghost-button" onClick={() => setCreating('create_jira_issue')}>
               <Plus size={14} aria-hidden="true" /> Jira issue
-            </button>
-          )}
-          {!has('add_calendar_event') && (
-            <button type="button" className="ghost-button" onClick={() => setCreating('add_calendar_event')}>
-              <Plus size={14} aria-hidden="true" /> Calendar event
-            </button>
-          )}
-          {email.triage?.email_type.label === 'Meeting' && meeting && (
-            <button
-              type="button"
-              className="ghost-button"
-              onClick={() => downloadIcs(email.id).catch((err: unknown) => toast(errorText(err), 'error'))}
-              title="Download the meeting as an .ics file for any calendar app"
-            >
-              <Download size={14} aria-hidden="true" /> Download .ics
             </button>
           )}
         </div>

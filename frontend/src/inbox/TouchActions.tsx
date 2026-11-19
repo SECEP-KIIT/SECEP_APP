@@ -1,4 +1,4 @@
-import { CalendarPlus, CircleCheck, ExternalLink, Pin, PinOff, Undo2, Zap } from 'lucide-react'
+import { CircleCheck, ExternalLink, Pin, PinOff, Undo2, Zap } from 'lucide-react'
 import { useEffect, useRef, type MouseEvent } from 'react'
 import { MaskedText } from '../components/MaskedText'
 import type { LiftTarget } from './liftContext'
@@ -6,7 +6,7 @@ import { useQuickActions } from './quickActions'
 
 /**
  * Card actions on touch (QA pass 3): no hover bar; a tap opens the drawer and a long-press opens this menu: Jira,
- * Calendar, Done, Pin, Open. A native modal <dialog> at the bottom of the screen, so focus is trapped, Esc and the
+ * Done, Pin, Open. A native modal <dialog> at the bottom of the screen, so focus is trapped, Esc and the
  * backdrop close it, and Focus mode's keys wait for it (anyLayerOpen).
  */
 export function TouchActions({ target, onClose }: { target: LiftTarget; onClose: () => void }) {
@@ -45,9 +45,6 @@ export function TouchActions({ target, onClose }: { target: LiftTarget; onClose:
             <Zap size={18} aria-hidden="true" /> Send to Jira
           </button>
         )}
-        <button type="button" className="action-sheet-item" disabled={busy !== null} onClick={run(() => send('add_calendar_event'))}>
-          <CalendarPlus size={18} aria-hidden="true" /> Add to calendar
-        </button>
         <button type="button" className="action-sheet-item" disabled={busy !== null} onClick={run(toggleHandled)}>
           {email.handled ? <Undo2 size={18} aria-hidden="true" /> : <CircleCheck size={18} aria-hidden="true" />}
           {email.handled ? 'Restore to the inbox' : 'Done'}

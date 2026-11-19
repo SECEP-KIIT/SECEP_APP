@@ -1,4 +1,4 @@
-// What a notification points at: an email (inbox drawer), a user card (card dialog) or a calendar event.
+// What a notification points at: an email (inbox drawer) or a user card (card dialog). Calendar events are v2.
 import type { AppNotification } from '../api/types'
 import { openCard } from '../cards/cardBus'
 import { goTo } from './navigate'
@@ -9,5 +9,4 @@ export function openNotificationTarget(target: AppNotification['target'], pathna
     openEmail(target.id, pathname === '/inbox')
     if (pathname !== '/inbox') goTo('/inbox')
   } else if (target?.type === 'card') openCard(target.id)
-  else if (target?.type === 'event') goTo('/calendar')
 }

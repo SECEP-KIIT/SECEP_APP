@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { AlarmClock, CalendarPlus, Zap } from 'lucide-react'
+import { AlarmClock, Zap } from 'lucide-react'
 import { useState } from 'react'
 import { ApiError } from '../api/client'
 import { cardSendsOptions, sendCard, undoAction, useMe, useProjects } from '../api/queries'
@@ -52,20 +52,19 @@ export function CardSend({ card }: { card: Card }) {
     }
   }
 
-  const items = (sends.data?.items ?? []).filter((a) => a.status !== 'rejected')
+  // Calendar is v2: calendar sends are not listed.
+  const items = (sends.data?.items ?? []).filter((a) => a.status !== 'rejected' && a.type === 'create_jira_issue')
   return (
     <div className="card-send">
       {items.length > 0 && (
         <ul className="card-sends">
           {items.map((a) => (
             <li key={a.id} data-status={a.status}>
-              {a.type === 'create_jira_issue' ? <Zap size={14} aria-hidden="true" /> : <CalendarPlus size={14} aria-hidden="true" />}
+              <Zap size={14} aria-hidden="true" />
               <span className="card-send-title">{(a.payload as DecoderActionPayload).title ?? 'Untitled'}</span>
               <span className="card-send-state">
                 {a.status === 'done'
-                  ? a.type === 'create_jira_issue'
-                    ? `${a.external_ref ?? 'Jira'}${a.external_status ? ` · ${a.external_status}` : ''}`
-                    : 'In your calendar'
+                  ? `${a.external_ref ?? 'Jira'}${a.external_status ? ` · ${a.external_status}` : ''}`
                   : a.status === 'failed'
                     ? (a.error ?? 'Failed')
                     : a.status === 'executing'
@@ -101,9 +100,6 @@ export function CardSend({ card }: { card: Card }) {
         <div className="card-send-buttons">
           <button type="button" className="ghost-button" onClick={() => setComposing('create_jira_issue')}>
             <Zap size={14} aria-hidden="true" /> Jira
-          </button>
-          <button type="button" className="ghost-button" onClick={() => setComposing('add_calendar_event')}>
-            <CalendarPlus size={14} aria-hidden="true" /> Calendar
           </button>
           <button
             type="button"

@@ -61,15 +61,15 @@ describe('focus mode keys (FR-UI-004)', () => {
 describe('nav gating (sidebar and tab bar share it)', () => {
   const user = { ...me, is_admin: false, permissions: [] } satisfies Me
   it('hides Security without security.review', () => {
-    expect(visibleNav(user).map((i) => i.label)).toEqual(['Home', 'Inbox', 'Board', 'Calendar'])
+    expect(visibleNav(user).map((i) => i.label)).toEqual(['Home', 'Inbox', 'Board'])
     expect(visibleNav(me).map((i) => i.label)).toEqual(NAV.map((i) => i.label))
   })
   it('shows only ungated items before /me arrives', () => {
-    expect(visibleNav(undefined).map((i) => i.label)).toEqual(['Home', 'Inbox', 'Board', 'Calendar'])
+    expect(visibleNav(undefined).map((i) => i.label)).toEqual(['Home', 'Inbox', 'Board'])
   })
-  it('phone tabs are Home, Inbox, Board, Security; Calendar and the rest go under More (proposals §15.3)', () => {
+  it('phone tabs are Home, Inbox, Board, Security; the rest go under More (proposals §15.3)', () => {
     expect(phoneTabs(me).map((i) => i.label)).toEqual(['Home', 'Inbox', 'Board', 'Security'])
-    expect(moreNav(me).map((i) => i.label)).toEqual(['Calendar']) // Metrics is the Stats widget now
+    expect(moreNav(me).map((i) => i.label)).toEqual([]) // Calendar is v2; Metrics is the Stats widget now
     expect(phoneTabs(user).map((i) => i.label)).toEqual(['Home', 'Inbox', 'Board']) // no security.review
   })
 })

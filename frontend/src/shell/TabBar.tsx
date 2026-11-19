@@ -4,7 +4,7 @@ import { useGlance, useMe } from '../api/queries'
 import { phoneTabs } from './nav'
 
 // Phones (FR-UI-001): the sidebar becomes a bottom tab bar, with the same gating as the sidebar (nav.ts).
-// Home, Inbox, Board, Security (proposals §15.3); the rest (Calendar, Metrics, Admin, Settings, projects) sit under More.
+// Home, Inbox, Board, Security (proposals §15.3); the rest (Admin, Settings, projects) sit under More.
 export function TabBar() {
   const { data: me } = useMe()
   const { data: glance } = useGlance()

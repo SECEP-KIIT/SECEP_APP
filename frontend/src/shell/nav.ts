@@ -1,4 +1,4 @@
-import { CalendarDays, Inbox, LayoutGrid, ShieldAlert, SquareKanban, type LucideIcon } from 'lucide-react'
+import { Inbox, LayoutGrid, ShieldAlert, SquareKanban, type LucideIcon } from 'lucide-react'
 import type { Glance, Me } from '../api/types'
 
 export interface NavItem {
@@ -20,15 +20,14 @@ export const NAV: NavItem[] = [
   { to: '/', label: 'Home', icon: LayoutGrid },
   { to: '/inbox', label: 'Inbox', icon: Inbox, count: (g) => g.counts.inbox_unread },
   { to: '/board', label: 'Board', icon: SquareKanban, count: (g) => g.counts.board_todo },
-  { to: '/calendar', label: 'Calendar', icon: CalendarDays },
   { to: '/security', label: 'Security', icon: ShieldAlert, visible: canReviewSecurity, count: (g) => g.counts.security_flags },
 ]
 
 export const visibleNav = (me: Me | undefined) => NAV.filter((i) => !i.visible || (me !== undefined && i.visible(me)))
 
 /**
- * The phone tab bar (proposals §15.3): Home, Inbox, Board, Security, then More. Calendar sits under More until its
- * full view lands (task 14). Security shows only with security.review, like in the sidebar.
+ * The phone tab bar (proposals §15.3): Home, Inbox, Board, Security, then More. Security shows only with
+ * security.review, like in the sidebar. Calendar is v2: no sidebar entry, route or buttons until then.
  */
 const PHONE_TABS = ['/', '/inbox', '/board', '/security']
 export const phoneTabs = (me: Me | undefined) => visibleNav(me).filter((i) => PHONE_TABS.includes(i.to))

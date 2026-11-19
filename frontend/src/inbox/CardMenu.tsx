@@ -1,5 +1,5 @@
 import * as Popover from '@radix-ui/react-popover'
-import { BellRing, CalendarPlus, ChevronRight, CircleCheck, Copy, ExternalLink, FolderPlus, Mail, MailOpen, Pin, PinOff, SquareCheck, Undo2, X, Zap } from 'lucide-react'
+import { BellRing, ChevronRight, CircleCheck, Copy, ExternalLink, FolderPlus, Mail, MailOpen, Pin, PinOff, SquareCheck, Undo2, X, Zap } from 'lucide-react'
 import { useRef, type KeyboardEvent, type ReactNode } from 'react'
 import type { EmailListItem } from '../api/types'
 import { copySummary } from './cardKeys'
@@ -75,7 +75,6 @@ function SingleItems({ at, onClose }: { at: { email: EmailListItem; x: number; y
       ) : (
         <Item icon={<Zap size={14} />} label="Send to Jira" keys="⇧J" onSelect={run(() => send('create_jira_issue'))} />
       )}
-      <Item icon={<CalendarPlus size={14} />} label="Add to Calendar" keys="⇧C" onSelect={run(() => send('add_calendar_event'))} />
       <Item icon={<FolderPlus size={14} />} label="Add to project" keys="P" more onSelect={() => pickProject([email.id], at.x, at.y)} />
       <Item icon={<BellRing size={14} />} label="Remind me" keys="R" more onSelect={() => pickRemind([email.id], at.x, at.y)} />
       <Item
@@ -105,7 +104,6 @@ function BulkItems({ at, onClose }: { at: { x: number; y: number }; onClose: () 
     <>
       <p className="menu-title">{selected.size} selected</p>
       <Item icon={<Zap size={14} />} label="Send each to Jira" onSelect={run(() => bulk.send('create_jira_issue'))} />
-      <Item icon={<CalendarPlus size={14} />} label="Add each to Calendar" onSelect={run(() => bulk.send('add_calendar_event'))} />
       <Item icon={<FolderPlus size={14} />} label="Add all to project" more onSelect={() => pickProject([...selected], at.x, at.y)} />
       <Item icon={<BellRing size={14} />} label="Remind me about all" more onSelect={() => pickRemind([...selected], at.x, at.y)} />
       <Item icon={<CircleCheck size={14} />} label="Mark all as handled" onSelect={run(() => bulk.done())} />
