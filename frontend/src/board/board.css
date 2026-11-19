@@ -153,6 +153,4 @@ html[data-motion='off'] .board-item {
 .board-lane[data-column='todo'] {
   --lane: #3b5bdb;
 }
-.board-lane .board-lane-head {
-  color: color-mix(in srgb, var(--lane) 55%, var(--ink));
-}
+

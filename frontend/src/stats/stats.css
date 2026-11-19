@@ -5,9 +5,14 @@
   display: grid;
   align-content: start;
   gap: var(--space-4);
-  padding: var(--space-3);
+  padding: var(--space-3) var(--space-4) var(--space-3) var(--space-3);
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+/* Grid children default to min-width: auto, which let the table and histogram push past the tile's right edge. */
+.stats > * {
+  min-width: 0;
 }
 .stats-head {
   margin: 0 0 var(--space-2);
@@ -50,6 +55,7 @@
 }
 .stats-table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   font-size: 0.8125rem;
   font-variant-numeric: tabular-nums;
@@ -66,9 +72,18 @@
 .stats-table td:last-child {
   text-align: right;
 }
+.stats-table th:first-child {
+  width: 34%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stats-table td:nth-child(2) {
+  white-space: nowrap;
+}
 .stats-bar {
   display: inline-block;
-  width: 80px;
+  width: clamp(28px, 6vw, 72px);
   height: 8px;
   margin-right: var(--space-2);
   overflow: hidden;

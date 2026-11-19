@@ -495,3 +495,10 @@ The §6.6 tables (`actions` with `origin = user`, `notes`, `files`, `masked_secr
 4. **Board lanes:** coloured top edge only; the lane body keeps the neutral column background (amends §24.4).
 5. **An empty dashboard page** shows an Add widget button (in the page and the toolbar) until it has a widget.
 
+
+## 26. Search, lean (19 Nov 2026) (PROPOSED for v1.3)
+
+1. **`GET /emails` gains `q_in=subject|all`** (default `all`, today's behaviour: subject and masked body). `subject` matches the words against the subject only. Any other value → `422 invalid_parameter`. Implemented in the mock and M6.
+2. **The palette (FR-UI-025, cut down)** opens with Ctrl/⌘+K, `/` (when not typing) or the topbar pill, and loads on first use. It searches **email subjects** (open and handled mail; handled via a second `view=handled` request, merged newest first, at most 8) and **project names** (from `GET /projects`, archived included and labelled). When no subject matches, **Go deeper** repeats the search with `q_in=all`. **Filters:** type, urgency, unread / due today / overdue, include handled, mapped to the existing `GET /emails` parameters. Enter or click opens the email in the inbox drawer (whose People & thread section lists the earlier messages) or the project page. 150 ms debounce; stale requests cancelled; matches highlighted as plain text.
+3. **Not in the lean palette** (need `GET /search`, whose response shape §6.5 never defined): people, cards, actions, notes and attachment filenames, typed operators, typo tolerance, saved searches.
+4. **Lock screen:** the recent-notification cards are removed; the glance chips and the Critical unread card remain.

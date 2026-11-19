@@ -175,6 +175,8 @@ export function initLock() {
 }
 
 export const lock = {
+  /** True while the dashboard is showing (no lock or loading curtain over it). */
+  isOpen: () => state.view === 'open',
   /** Report a finished boot step (FR-WP-003 progress). */
   step(step: Step) {
     dispatch({ type: 'step', step })

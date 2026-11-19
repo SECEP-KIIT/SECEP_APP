@@ -856,3 +856,11 @@ html[data-motion='off'] .action-sheet {
   outline: 2px solid var(--focus-ring);
   outline-offset: -2px;
 }
+
+/* An empty page: Add widget and Delete page side by side (19 Nov 2026). */
+.dash-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+}

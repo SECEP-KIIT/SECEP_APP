@@ -278,9 +278,16 @@ function Dashboard() {
             // An empty page offers Add widget straight away, until its first widget is added (19 Nov 2026).
             <div className="col-state">
               <p className="col-state-title">An empty page</p>
-              <button type="button" className="primary-button" onClick={() => setGallery(true)}>
-                <Plus size={14} aria-hidden="true" /> Add widget
-              </button>
+              <div className="dash-empty-actions">
+                <button type="button" className="primary-button" onClick={() => setGallery(true)}>
+                  <Plus size={14} aria-hidden="true" /> Add widget
+                </button>
+                {sorted.length > 1 && (
+                  <button type="button" className="ghost-button" onClick={deletePage}>
+                    <Trash2 size={14} aria-hidden="true" /> Delete page
+                  </button>
+                )}
+              </div>
             </div>
           ) : phone ? (
             <PhonePage page={page} render={render} />

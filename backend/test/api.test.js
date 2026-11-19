@@ -79,6 +79,13 @@ describe('M6 API', { skip: !reachable && 'no test database' }, () => {
     assert.ok(all.body.items.every((e) => !e.handled));
     assert.equal((await api('/emails?type=Spam')).status, 400);
     assert.equal((await api('/emails?view=nope')).body.error.code, 'invalid_parameter');
+    // Proposals §26: q_in=subject searches subjects only; other values are 422.
+    const titled = all.body.items.find((e) => e.subject);
+    const word = titled.subject.split(/\s+/).find((w) => w.length > 3) ?? titled.subject;
+    const bySubject = await api(`/emails?q=${encodeURIComponent(word)}&q_in=subject&limit=50`);
+    assert.ok(bySubject.body.items.some((e) => e.id === titled.id));
+    assert.ok(bySubject.body.items.every((e) => (e.subject ?? '').toLowerCase().includes(word.toLowerCase())));
+    assert.equal((await api('/emails?q=x&q_in=body')).status, 422);
     const page1 = await api('/emails?limit=5');
     const page2 = await api(`/emails?limit=5&cursor=${encodeURIComponent(page1.body.next_cursor)}`);
     assert.equal(new Set([...page1.body.items, ...page2.body.items].map((e) => e.id)).size, 10);

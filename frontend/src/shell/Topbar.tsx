@@ -2,10 +2,14 @@ import { useQueryClient, type QueryCache } from '@tanstack/react-query'
 import { Lock, Plus, Search } from 'lucide-react'
 import { lock } from '../boot/lock'
 import { Bell } from './Bell'
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
+import { anyLayerOpen, isTypingTarget } from './focusKeys'
 import { useMatch, useMatches } from 'react-router'
 import { openQuickAdd } from '../cards/cardBus'
 import { useMinuteClock } from './useMinuteClock'
+
+// Search loads on first use (NFR-PERF-010: the palette is not in the initial bundle).
+const SearchPalette = lazy(() => import('../search/SearchPalette').then((m) => ({ default: m.SearchPalette })))
 
 const timeFmt = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' })
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent)
@@ -52,12 +56,21 @@ function SyncIndicator() {
 // (task 16). The pill and bell are laid out now so nothing shifts later; the bell arrives with task 13.
 // Quick-add (task 12) opens the quick-add dialog, filed into the open project.
 export function Topbar() {
-  // Alt+L locks from anywhere (the topbar button's shortcut).
+  const [search, setSearch] = useState(false)
+  // Alt+L locks from anywhere (the topbar button's shortcut). Ctrl/⌘+K opens search; so does / when not typing.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === 'KeyL') {
         e.preventDefault()
         lock.now()
+      } else if (!lock.isOpen()) {
+        return
+      } else if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setSearch(true)
+      } else if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey && !isTypingTarget(e.target) && !anyLayerOpen()) {
+        e.preventDefault()
+        setSearch(true)
       }
     }
     addEventListener('keydown', onKey)
@@ -80,12 +93,17 @@ export function Topbar() {
       <div className="topbar-centre">
         {/* Contextual mode (item 1): the inbox page renders its selection bar here, over the search pill. */}
         <div id="topbar-context" className="topbar-context" />
-        <button type="button" className="search-pill" disabled title="Search arrives with the command palette">
+        <button type="button" className="search-pill" onClick={() => setSearch(true)} aria-haspopup="dialog">
           <Search aria-hidden="true" size={16} />
           <span className="search-pill-label">Search</span>
           <kbd>{isMac ? '⌘K' : 'Ctrl K'}</kbd>
         </button>
       </div>
+      {search && (
+        <Suspense fallback={null}>
+          <SearchPalette onClose={() => setSearch(false)} />
+        </Suspense>
+      )}
       <div className="topbar-right">
         <SyncIndicator />
         <Bell />

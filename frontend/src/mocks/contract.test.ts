@@ -590,6 +590,19 @@ describe('admin', () => {
     expect(refused.json.error.details.failed_gates[0]).toMatch(/Approval/)
   })
 
+  it('q_in=subject searches subjects only; all also the body; anything else is 422 (§26)', async () => {
+    const token = await login()
+    const e = demoEmails().find((x) => x.subject && x.body_text.length > 40)!
+    const bodyWord = e.body_text.split(/\s+/).find((w) => /^[a-z]{6,}$/i.test(w) && !(e.subject ?? '').toLowerCase().includes(w.toLowerCase()))!
+    const get = async (qIn: string) => {
+      const q = `/emails?q=${encodeURIComponent(bodyWord)}&q_in=${qIn}&limit=50`
+      return [...(await call('GET', q, { token })).json.items, ...(await call('GET', `${q}&view=handled`, { token })).json.items]
+    }
+    expect((await get('all')).some((x: { id: string }) => x.id === e.id)).toBe(true)
+    for (const it of await get('subject')) expect((it.subject ?? '').toLowerCase()).toContain(bodyWord.toLowerCase())
+    expect((await call('GET', '/emails?q=x&q_in=body', { token })).status).toBe(422)
+  })
+
   it('metrics and .ics', async () => {
     const token = await login()
     const m = (await call('GET', '/admin/metrics?days=30', { token })).json

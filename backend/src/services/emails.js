@@ -234,6 +234,9 @@ export async function list(userId, params, { limit, offset }) {
   const sort = params.get('sort') || 'newest';
   if (!SORTS.includes(sort)) throw new Fail(422, 'invalid_parameter', 'sort must be smart, newest, oldest, due, urgency, sender or confidence', { parameter: 'sort' });
   const q = params.get('q')?.trim() || null;
+  // PROPOSED (proposals §26): q_in=subject searches subjects only; all (default) also the masked body (FR-UI-026).
+  const qIn = params.get('q_in') ?? 'all';
+  if (qIn !== 'subject' && qIn !== 'all') throw new Fail(422, 'invalid_parameter', 'q_in must be subject or all', { parameter: 'q_in' });
 
   const args = [userId];
   const arg = (v) => (args.push(v), `$${args.length}`);
@@ -263,7 +266,7 @@ export async function list(userId, params, { limit, offset }) {
     where.push(`(${f.due.map((b) => bucket[b]).join(' OR ')})`);
   }
   // Keyword search over masked text only (FR-UI-026): every term in the subject or the stored body.
-  if (q) for (const term of q.split(/\s+/).slice(0, 8)) where.push(`(coalesce(e.subject,'') || ' ' || e.body_text) ILIKE ${arg(`%${term.replace(/[\\%_]/g, '\\$&')}%`)}`);
+  if (q) for (const term of q.split(/\s+/).slice(0, 8)) where.push(`${qIn === 'subject' ? "coalesce(e.subject,'')" : "(coalesce(e.subject,'') || ' ' || e.body_text)"} ILIKE ${arg(`%${term.replace(/[\\%_]/g, '\\$&')}%`)}`);
   if (!f.view.includes('handled')) where.push('s.handled_at IS NULL');
   for (const v of f.view) {
     if (v === 'unread') where.push('s.read_at IS NULL');
