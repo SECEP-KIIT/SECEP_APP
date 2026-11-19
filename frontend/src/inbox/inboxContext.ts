@@ -18,19 +18,23 @@ export interface Toast {
   message: string
   tone: 'info' | 'error'
   action?: ToastAction
+  /** A second button, shown before `action` (e.g. See · Undo). */
+  extra?: ToastAction
 }
 
 /** What cards can ask the inbox page to do: open the drawer, show a toast. */
 export interface InboxApi {
   open: (id: string, opts?: OpenOptions) => void
-  toast: (message: string, tone?: Toast['tone'], action?: ToastAction) => void
+  toast: (message: string, tone?: Toast['tone'], action?: ToastAction, extra?: ToastAction) => void
+  /** The project picker (FR-UI-017), one per page, for these emails at a point on screen. */
+  pickProject: (ids: readonly string[], x: number, y: number) => void
   /** The `?` legend (FR-UI-014), one per page however many columns it has. */
   showLegend: () => void
   /** The card right-click menu (FR-UI-028), one per page, at a point on screen. */
   menu: (email: EmailListItem, x: number, y: number) => void
 }
 
-export const InboxContext = createContext<InboxApi>({ open: () => {}, toast: () => {}, showLegend: () => {}, menu: () => {} })
+export const InboxContext = createContext<InboxApi>({ open: () => {}, toast: () => {}, showLegend: () => {}, menu: () => {}, pickProject: () => {} })
 export const useInbox = () => useContext(InboxContext)
 
 const TOAST_MS = 5_000
@@ -50,10 +54,10 @@ export function useToasts() {
     setToasts((t) => t.filter((x) => x.id !== id))
   }, [])
   const push = useCallback(
-    (message: string, tone: Toast['tone'] = 'info', action?: ToastAction) => {
+    (message: string, tone: Toast['tone'] = 'info', action?: ToastAction, extra?: ToastAction) => {
       const id = ++next.current
       if (action?.label === 'Undo') lastUndo.current = { id, run: action.run }
-      setToasts((t) => [...t.slice(-2), { id, message, tone, action }])
+      setToasts((t) => [...t.slice(-2), { id, message, tone, action, extra }])
       setTimeout(() => dismiss(id), action ? UNDO_MS : TOAST_MS)
     },
     [dismiss],

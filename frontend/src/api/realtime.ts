@@ -137,7 +137,7 @@ export function stateAdmits(query: string, e: Pick<EmailListItem, 'handled' | 'r
  *   screen (a view not shown right now), the list is marked stale, so it reloads the next time it's shown. Lists
  *   are otherwise never refetched (staleTime: Infinity), so without this a cached view would stay wrong.
  */
-export function settleLists(qc: QueryClient, email: EmailListItem) {
+export function settleLists(qc: QueryClient, email: EmailListItem, opts: { restore?: boolean } = {}) {
   for (const [key, data] of qc.getQueriesData<InfiniteData<Page<EmailListItem>, unknown>>({ queryKey: ['emails', 'list'] })) {
     if (!data) continue
     const held = data.pages.some((p) => p.items.some((e) => e.id === email.id))
@@ -146,7 +146,10 @@ export function settleLists(qc: QueryClient, email: EmailListItem) {
       qc.setQueryData(key, { ...data, pages: data.pages.map((p) => ({ ...p, items: p.items.filter((e) => e.id !== email.id) })) })
     } else if (!held && admits) {
       const onScreen = (qc.getQueryCache().find({ queryKey: key, exact: true })?.getObserversCount() ?? 0) > 0
-      if (onScreen) signalArrival(email)
+      // An undo puts the email back where it was: the user asked for it, so it isn't new mail for the pill
+      // (QA pass 5). The list reloads in place.
+      if (onScreen && opts.restore) void qc.invalidateQueries({ queryKey: key, exact: true })
+      else if (onScreen) signalArrival(email)
       else void qc.invalidateQueries({ queryKey: key, exact: true, refetchType: 'none' })
     }
   }
@@ -154,8 +157,18 @@ export function settleLists(qc: QueryClient, email: EmailListItem) {
 
 /** Replaces an action in place in action lists and in its email's open detail. Exported for mutations. */
 export function patchActionCache(qc: QueryClient, action: Action) {
+  const onBoard = action.status === 'done' && action.board_column !== null
   for (const [key, data] of qc.getQueriesData<Page<Action>>({ queryKey: ['actions'] })) {
-    if (data?.items.some((a) => a.id === action.id)) {
+    if (!data) continue
+    const held = data.items.some((a) => a.id === action.id)
+    if (key[1] === 'board') {
+      // The board (FR-ORC-007) holds the cards placed in a column: a card joins when it lands in To do and leaves
+      // when an undo takes it off. A project's board can't tell membership from the action, so it reloads.
+      if (key[2] !== null && held !== onBoard) void qc.invalidateQueries({ queryKey: key, exact: true })
+      else if (held && !onBoard) qc.setQueryData<Page<Action>>(key, { ...data, items: data.items.filter((a) => a.id !== action.id) })
+      else if (held) qc.setQueryData<Page<Action>>(key, { ...data, items: data.items.map((a) => (a.id === action.id ? action : a)) })
+      else if (onBoard && key[2] === null) qc.setQueryData<Page<Action>>(key, { ...data, items: [...data.items, action] })
+    } else if (held) {
       qc.setQueryData<Page<Action>>(key, { ...data, items: data.items.map((a) => (a.id === action.id ? action : a)) })
     }
   }

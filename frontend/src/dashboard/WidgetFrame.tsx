@@ -115,7 +115,7 @@ export function WidgetFrame({ widget, device, editing, actions }: { widget: Widg
       {widget.type === 'inbox_column' && stack ? (
         <PhoneSection widget={widget} heading={heading} tools={tools} />
       ) : widget.type === 'inbox_column' ? (
-        <ColumnWidget widget={widget} title={title} heading={heading} tools={tools} onChange={actions.patch} />
+        <ColumnWidget widget={widget} title={title} heading={heading} tools={tools} onChange={actions.patch} locked={editing} />
       ) : (
         <section className="column widget-placeholder" aria-label={title}>
           <header className="col-head">
@@ -134,12 +134,13 @@ export function WidgetFrame({ widget, device, editing, actions }: { widget: Widg
 }
 
 /** The column's filter, sort and density live in the widget, so every change is saved with the layout. */
-function ColumnWidget({ widget, title, heading, tools, onChange }: {
+function ColumnWidget({ widget, title, heading, tools, onChange, locked }: {
   widget: Widget
   title: string
   heading: (titleId: string) => ReactNode
   tools: ReactNode
   onChange: WidgetActions['patch']
+  locked: boolean
 }) {
   const state = useMemo<ColumnState>(
     () => ({ filters: parseColumnQuery(widget.filter ?? '').filters, sort: sortKeyOf(widget.sort), density: widget.density ?? 'comfortable' }),
@@ -153,6 +154,7 @@ function ColumnWidget({ widget, title, heading, tools, onChange }: {
       heading={heading}
       tools={tools}
       variant="tile"
+      locked={locked}
     />
   )
 }

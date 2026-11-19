@@ -8,7 +8,7 @@ import { isDate, isDateTime, isEmail, isInt, isOptStr, isStr, object, type Field
 import { audit } from '../store/audit'
 import { changed, db } from '../store/db'
 import { publish } from '../store/events'
-import { toAction, toListItem } from '../store/serialize'
+import { projectCards, toAction, toListItem } from '../store/serialize'
 import type { ActionRow, UserRow } from '../store/types'
 
 const TYPES: ActionType[] = ['create_jira_issue', 'add_board_card', 'add_calendar_event']
@@ -132,8 +132,11 @@ export const actionRoutes = [
     const status = url.searchParams.get('status')
     const column = url.searchParams.get('column')
     if (column && !COLUMNS.includes(column as BoardColumn)) throw new Fail(400, 'bad_request', 'Unknown column')
+    // PROPOSED (proposals §18.3): a project's cards, from its emails or filed in it.
+    const projectId = url.searchParams.get('project')
+    const inProject = projectId ? new Set(projectCards(db, own(db.projects.find((p) => p.id === projectId), user, 'Project').id).map((a) => a.id)) : null
     const items = [...db.actions.values()]
-      .filter((a) => a.user_id === user.id && (!status || a.status === status) && (!column || a.board_column === column))
+      .filter((a) => a.user_id === user.id && (!status || a.status === status) && (!column || a.board_column === column) && (!inProject || inProject.has(a.id)))
       .sort((a, b) => (a.board_position ?? Infinity) - (b.board_position ?? Infinity) || b.created_at.localeCompare(a.created_at))
     return page(url, items.map(toAction))
   }),

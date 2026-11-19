@@ -1118,3 +1118,54 @@ html[data-motion='off'] .card[data-leaving] {
   outline: 2px solid #fff;
   outline-offset: 1px;
 }
+
+/* Projects on a card (FR-UI-017, item 5): a split dot, 10 px, 12 px when split; a numbered ring from 5 projects. */
+.project-split {
+  display: inline-block;
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+.project-split[data-split] {
+  width: 12px;
+  height: 12px;
+}
+.project-ring {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  font-size: 0.5625rem;
+  line-height: 1;
+}
+.tag[data-kind='project'] {
+  max-width: 14ch;
+}
+.tag[data-kind='project'] > span:not(.sr-only):not(.project-split):not(.project-ring) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The project picker (FR-UI-017): one row per project with its colour, emoji and an all / some / none mark. */
+.project-picker {
+  min-width: 220px;
+  max-height: min(360px, 70vh);
+  overflow-y: auto;
+}
+.project-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+.project-check {
+  display: inline-flex;
+  width: 14px;
+  margin-left: auto;
+  color: var(--accent);
+}

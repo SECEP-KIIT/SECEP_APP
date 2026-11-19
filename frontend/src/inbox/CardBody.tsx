@@ -125,14 +125,14 @@ export function Tag({ tag, onFilter, labelled = false }: { tag: CardTag; onFilte
   )
   if (tag.filter) {
     return (
-      <button type="button" className="tag" data-tone={tag.tone} title={`${tag.label}: click to filter`} onClick={onFilter(tag.filter)}>
+      <button type="button" className="tag" data-tone={tag.tone} data-kind={tag.kind} title={`${tag.label}: click to filter`} onClick={onFilter(tag.filter)}>
         {body}
         <span className="sr-only">{tag.label}. Filter by this</span>
       </button>
     )
   }
   return (
-    <span className="tag" data-tone={tag.tone} title={tag.label}>
+    <span className="tag" data-tone={tag.tone} data-kind={tag.kind} title={tag.label}>
       {body}
       <span className="sr-only">{tag.label}</span>
     </span>

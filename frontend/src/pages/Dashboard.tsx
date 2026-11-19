@@ -1,12 +1,15 @@
 import { ArrowLeft, ArrowRight, Check, LayoutGrid, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
+import { useSearchParams } from 'react-router'
 import type { Widget } from '../api/types'
 import { FlowPage } from '../dashboard/FlowPage'
 import { Gallery } from '../dashboard/Gallery'
 import { isPhoneLayout } from '../dashboard/grid'
 import {
+  addHandledPage,
   addPage,
   addWidget,
+  handledPage,
   duplicateWidget,
   MAX_PAGES,
   movePage,
@@ -29,6 +32,7 @@ import { PhonePage } from '../dashboard/PhonePage'
 import { useLayout, type SaveState } from '../dashboard/useLayout'
 import { WidgetFrame, type WidgetActions } from '../dashboard/WidgetFrame'
 import { useInbox } from '../inbox/inboxContext'
+import { goTo } from '../lib/navigate'
 import { anyLayerOpen } from '../shell/focusKeys'
 import { InboxHost } from '../inbox/InboxHost'
 import { useDeviceClass } from '../shell/useDeviceClass'
@@ -64,6 +68,22 @@ function Dashboard() {
   const sorted = pages ? sortedPages(pages) : []
   const index = Math.max(0, sorted.findIndex((p) => p.id === activeId))
   const page = sorted[index]
+
+  // `/?page=handled` (QA pass 5, "See" on a Mark-handled toast): go to the Handled page, adding it to a layout saved
+  // before it was a starter page; at the page cap, the Handled full view instead.
+  const [params, setParams] = useSearchParams()
+  const wanted = params.get('page')
+  useEffect(() => {
+    if (wanted !== 'handled' || !pages) return
+    setParams((p) => (p.delete('page'), p), { replace: true })
+    const found = handledPage(pages)
+    // oxlint-disable-next-line react/set-state-in-effect -- follows the URL (an external system) once, then clears it
+    if (found) return setActiveId(found.id)
+    const next = addHandledPage(pages)
+    if (!next) return void goTo('/inbox?view=handled')
+    update(() => next)
+    setActiveId(sortedPages(next).at(-1)!.id)
+  }, [wanted, pages, setParams, update])
 
   const go = (i: number) => {
     const target = sorted[Math.min(Math.max(i, 0), sorted.length - 1)]

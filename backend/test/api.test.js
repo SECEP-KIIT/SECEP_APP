@@ -121,18 +121,67 @@ describe('M6 API', { skip: !reachable && 'no test database' }, () => {
     socket.close();
   });
 
-  test('reveal needs a recent sign-in, returns the value for 60 s and audits without it', async () => {
+  test('no reveal route; secrets list only types; open_url links the message in Gmail', async () => {
     const db = new pg.Client({ connectionString: DB });
     await db.connect();
-    const { rows: [s] } = await db.query(`SELECT ms.id FROM masked_secrets ms JOIN users u ON u.id = ms.owner_user_id WHERE u.email = 'demo@northwind.example' LIMIT 1`);
-    const r = await api(`/secrets/${s.id}/reveal`, { method: 'POST' });
-    assert.equal(r.status, 200);
-    assert.equal(r.body.expires_in, 60);
-    const { rows: [a] } = await db.query(`SELECT details FROM audit_log WHERE event = 'secret.reveal' ORDER BY id DESC LIMIT 1`);
-    assert.ok(!JSON.stringify(a.details).includes(r.body.value));
+    const { rows: [s] } = await db.query(`SELECT ms.id, ms.email_id FROM masked_secrets ms JOIN users u ON u.id = ms.owner_user_id WHERE u.email = 'demo@northwind.example' LIMIT 1`);
+    assert.equal((await api(`/secrets/${s.id}/reveal`, { method: 'POST' })).status, 404);
+    const d = (await api(`/emails/${s.email_id}`)).body;
+    assert.deepEqual(Object.keys(d.masked_secrets[0]).sort(), ['id', 'secret_type']);
+    assert.match(d.open_url, /^https:\/\/mail\.google\.com\/mail\/\?authuser=demo%40northwind\.example#all\//);
     // The audit log is append-only (NFR-SEC-006).
     await assert.rejects(db.query('UPDATE audit_log SET event = event'));
     await db.end();
+  });
+
+  test('projects: seeded filing on cards; create; add (first is primary), filter, remove promotes; archive; 404/409/422', async () => {
+    const list = (await api('/projects')).body.items;
+    assert.equal(list.length, 3);
+    const board = list.find((p) => p.name === 'Q3 board meeting');
+    const pune = list.find((p) => p.name === 'Pune client visit');
+    const filed = (await api(`/emails?project=${board.id}&limit=50`)).body.items;
+    assert.ok(filed.length > 0, 'seeded emails in the board project');
+    assert.ok(filed.every((e) => e.projects.some((p) => p.id === board.id)));
+    assert.deepEqual(Object.keys(filed[0].projects[0]).sort(), ['colour', 'id', 'is_primary', 'name']);
+    assert.equal((await api('/emails?project=nope')).status, 422);
+
+    const created = await api('/projects', { method: 'POST', body: JSON.stringify({ name: '  Audit prep ', colour: '#AABBCC', icon: '🧾' }) });
+    assert.equal(created.status, 201);
+    assert.equal(created.body.name, 'Audit prep');
+    assert.equal(created.body.colour, '#aabbcc');
+    assert.deepEqual(created.body.progress, { done: 0, total: 0 });
+    const bad = await api('/projects', { method: 'POST', body: JSON.stringify({ name: '', colour: 'red', jira_project_key: 'x' }) });
+    assert.equal(bad.status, 422);
+    for (const k of ['name', 'colour', 'jira_project_key']) assert.ok(k in bad.body.error.details.fields, k);
+
+    const email = (await api('/emails?limit=50')).body.items.find((e) => e.projects.length === 0);
+    const audit = created.body.id;
+    const add = (pid, body) => api(`/projects/${pid}/items`, { method: 'POST', body: JSON.stringify(body) });
+    assert.equal((await add(audit, { email_id: email.id })).body.is_primary, true);
+    assert.equal((await add(pune.id, { email_id: email.id })).body.is_primary, false);
+    assert.equal((await add(audit, { email_id: email.id })).body.is_primary, true, 'adding twice changes nothing');
+    let refs = (await api(`/emails/${email.id}`)).body.projects;
+    assert.deepEqual(refs.map((r) => [r.id, r.is_primary]), [[audit, true], [pune.id, false]]);
+    assert.equal((await api(`/projects/${audit}/items/${email.id}`, { method: 'DELETE' })).status, 204);
+    refs = (await api(`/emails/${email.id}`)).body.projects;
+    assert.deepEqual(refs.map((r) => [r.id, r.is_primary]), [[pune.id, true]]);
+    assert.equal((await api(`/projects/${audit}/items/${email.id}`, { method: 'DELETE' })).status, 404);
+    assert.equal((await add(audit, { email_id: email.id, action_id: email.id })).status, 422);
+
+    // A card in a project shows on its board (GET /actions?project=).
+    const card = (await api('/actions?status=done&limit=50')).body.items.find((a) => a.board_column);
+    if (card) {
+      await add(audit, { action_id: card.id });
+      assert.ok((await api(`/actions?status=done&project=${audit}&limit=50`)).body.items.some((a) => a.id === card.id));
+      assert.equal((await api(`/projects/${audit}`)).body.progress.total, 1);
+    }
+
+    const archived = await api(`/projects/${audit}`, { method: 'PATCH', body: JSON.stringify({ archived: true, name: 'Audit 2026' }) });
+    assert.equal(archived.body.name, 'Audit 2026');
+    assert.ok(archived.body.archived_at);
+    assert.equal((await add(audit, { email_id: email.id })).status, 409);
+    assert.equal((await api('/projects')).body.items.at(-1).id, audit, 'archived last');
+    assert.equal((await api('/projects/00000000-0000-4000-8000-000000000000')).status, 404);
   });
 
   test('layouts: starter by default; full replace; stale save 409; bad stack 422', async () => {

@@ -31,3 +31,19 @@ export function columnOrder(el: Element | null): string[] {
   const rows = el?.closest('.column')?.querySelectorAll<HTMLElement>('[data-email-id]') ?? []
   return [...rows].sort((x, y) => Number(x.dataset.pos) - Number(y.dataset.pos)).map((r) => r.dataset.emailId!)
 }
+
+/** Dispatched on a column element to select all its loaded cards (Ctrl/⌘+A, InboxHost). */
+export const SELECT_ALL = 'secep:select-all'
+
+/** Where the pointer last was, for Ctrl/⌘+A over a column that doesn't have focus. */
+export const lastPointer = { x: -1, y: -1 }
+if (typeof window !== 'undefined') {
+  addEventListener(
+    'pointermove',
+    (e) => {
+      lastPointer.x = e.clientX
+      lastPointer.y = e.clientY
+    },
+    { passive: true, capture: true },
+  )
+}

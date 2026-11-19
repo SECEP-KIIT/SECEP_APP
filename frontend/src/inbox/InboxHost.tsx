@@ -5,8 +5,9 @@ import { CardLiftProvider } from './CardLift'
 import { CardMenu } from './CardMenu'
 import { InboxContext, useToasts, type InboxApi, type OpenOptions } from './inboxContext'
 import { SelectionBar } from './SelectionBar'
-import { selectRange, SelectionContext, type SelectionApi } from './selection'
+import { lastPointer, SELECT_ALL, selectRange, SelectionContext, type SelectionApi } from './selection'
 import { Legend } from './Legend'
+import { ProjectPicker, type PickerAt } from './ProjectPicker'
 import { Toaster } from './Toaster'
 
 // The drawer is its own chunk, fetched on the first open (NFR-PERF-010).
@@ -21,6 +22,7 @@ export function InboxHost({ children }: { children: ReactNode }) {
   const [drawer, setDrawer] = useState<({ id: string } & OpenOptions) | null>(null)
   const { toasts, push, dismiss, undo } = useToasts()
   const [menuAt, setMenuAt] = useState<{ email: EmailListItem; x: number; y: number } | null>(null)
+  const [pickerAt, setPickerAt] = useState<PickerAt | null>(null)
   // Selection (FR-UI-027): ids only; bulk actions fetch what they need.
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
   const anchor = useRef<string | null>(null)
@@ -57,6 +59,10 @@ export function InboxHost({ children }: { children: ReactNode }) {
       toast: push,
       showLegend: () => setLegend(true),
       menu: (email, x, y) => setMenuAt({ email, x, y }),
+      pickProject: (ids, x, y) => {
+        setMenuAt(null)
+        setPickerAt({ ids: [...ids], x, y })
+      },
     }),
     [push],
   )
@@ -88,6 +94,14 @@ export function InboxHost({ children }: { children: ReactNode }) {
       if (e.defaultPrevented || isTypingTarget(e.target)) return
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') {
         if (undo()) e.preventDefault()
+      } else if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'a' && !anyLayerOpen()) {
+        // Ctrl/⌘+A selects every loaded card in the column that has focus, else the one under the pointer, else
+        // the only column on the page (FR-UI-027). Never the page's text (QA pass 5).
+        const column = targetColumn()
+        if (column) {
+          e.preventDefault()
+          column.dispatchEvent(new CustomEvent(SELECT_ALL))
+        }
       } else if (e.key === 'Escape' && hasSelection && !anyLayerOpen()) {
         e.preventDefault()
         clearSelection()
@@ -105,6 +119,7 @@ export function InboxHost({ children }: { children: ReactNode }) {
       </p>
       <CardLiftProvider>{children}</CardLiftProvider>
       <SelectionBar />
+      {pickerAt && <ProjectPicker at={pickerAt} onClose={() => setPickerAt(null)} />}
       {menuAt && <CardMenu key={`${menuAt.email.id}-${menuAt.x}-${menuAt.y}`} at={menuAt} onClose={() => setMenuAt(null)} />}
       <Legend open={legend} onClose={() => setLegend(false)} />
       {drawer && (
@@ -116,4 +131,15 @@ export function InboxHost({ children }: { children: ReactNode }) {
       </SelectionContext.Provider>
     </InboxContext.Provider>
   )
+}
+
+/** The column Ctrl/⌘+A acts on: the one holding focus, else the one under the pointer, else the only one. */
+function targetColumn(): HTMLElement | null {
+  const focused = document.activeElement instanceof Element ? document.activeElement.closest<HTMLElement>('.column[data-selectable]') : null
+  if (focused) return focused
+  const { x, y } = lastPointer
+  const under = x >= 0 ? document.elementFromPoint(x, y)?.closest<HTMLElement>('.column[data-selectable]') : null
+  if (under) return under
+  const all = document.querySelectorAll<HTMLElement>('.column[data-selectable]')
+  return all.length === 1 ? all[0] : null
 }

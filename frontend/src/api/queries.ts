@@ -2,6 +2,8 @@ import { QueryClient, infiniteQueryOptions, keepPreviousData, queryOptions, useM
 import { ApiError, api, apiBlob } from './client'
 import { patchActionCache, patchEmailCache, settleLists } from './realtime'
 import type {
+  BoardColumn,
+  EmailProjectRef,
   Action,
   ActionType,
   AppNotification,
@@ -20,6 +22,9 @@ import type {
   Page,
   PreferencesResponse,
   Project,
+  ProjectInput,
+  ProjectItem,
+  ProjectPatch,
   UiPrefs,
 } from './types'
 
@@ -96,9 +101,6 @@ export function acceptAction(action: Action, payload?: Partial<DecoderActionPayl
   )
 }
 
-/** FR-SEC-008: the original value, for at most expires_in seconds. Never cached: the caller holds it in state. */
-export const revealSecret = (id: string) => api<{ value: string; expires_in: number }>(`/secrets/${id}/reveal`, { method: 'POST' })
-
 /** FR-UI-029: within ~10 s, deletes the created Jira issue or Calendar event; the action goes back to proposed. */
 export const undoAction = (action: Pick<Action, 'id'>) =>
   api<Action>(`/actions/${action.id}/undo`, { method: 'POST' }).then((updated) => {
@@ -127,12 +129,12 @@ export async function createAction(emailId: string, type: ActionType, payload: P
  * replaced with the response and every list copy patched in place; a handled or read change then settles list
  * membership (settleLists) and the unread counts.
  */
-export async function updateEmail(id: string, patch: EmailPatch) {
+export async function updateEmail(id: string, patch: EmailPatch, opts: { restore?: boolean } = {}) {
   const detail = await api<EmailDetail>(`/emails/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) })
   queryClient.setQueryData(['email', id], detail)
   patchEmailCache(queryClient, id, detail)
   if (patch.handled !== undefined || patch.read !== undefined) {
-    settleLists(queryClient, detail)
+    settleLists(queryClient, detail, opts)
     void queryClient.invalidateQueries({ queryKey: ['glance'] }) // sidebar badge and lock glance counts
   }
   return detail
@@ -174,7 +176,139 @@ export const useNotifications = () =>
   useQuery({ queryKey: ['notifications'], queryFn: () => api<Page<AppNotification>>('/notifications') })
 
 export const useProjects = () =>
-  useQuery({ queryKey: ['projects'], queryFn: () => api<Page<Project>>('/projects') })
+  useQuery({ queryKey: ['projects'], queryFn: () => api<Page<Project>>('/projects?limit=50') })
+
+// ── Projects (FR-UI-016–017; PROPOSED shapes, proposals §18) ──────────────────────────────────────────────────
+
+/** GET /projects/:id. Seeded from the projects list, so the view opens at once. */
+export const useProject = (id: string) =>
+  useQuery({
+    queryKey: ['project', id],
+    queryFn: () => api<Project>(`/projects/${id}`),
+    initialData: () => queryClient.getQueryData<Page<Project>>(['projects'])?.items.find((p) => p.id === id),
+    initialDataUpdatedAt: () => queryClient.getQueryState(['projects'])?.dataUpdatedAt,
+  })
+
+function storeProject(project: Project) {
+  queryClient.setQueryData(['project', project.id], project)
+  queryClient.setQueryData<Page<Project>>(['projects'], (list) => {
+    if (!list) return list
+    const has = list.items.some((p) => p.id === project.id)
+    return { ...list, items: has ? list.items.map((p) => (p.id === project.id ? project : p)) : [...list.items, project] }
+  })
+  return project
+}
+
+/** POST /projects. */
+export const createProject = (input: ProjectInput) => api<Project>('/projects', json(input)).then(storeProject)
+
+/** PATCH /projects/:id: edit, or archive with `{archived: true}` (archiving replaces deletion, FR-UI-016). */
+export const patchProject = (id: string, patch: ProjectPatch) =>
+  api<Project>(`/projects/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) }).then(storeProject)
+
+/** An email's project list after adding or removing one, in the wire order: primary first (FR-UI-017). */
+export function withProject(refs: readonly EmailProjectRef[], project: Pick<Project, 'id' | 'name' | 'colour'>, add: boolean): EmailProjectRef[] {
+  if (!add) {
+    const rest = refs.filter((r) => r.id !== project.id)
+    // The primary left: the next oldest becomes primary, as the server does.
+    return rest.length && !rest.some((r) => r.is_primary) ? rest.map((r, i) => ({ ...r, is_primary: i === 0 })) : rest
+  }
+  if (refs.some((r) => r.id === project.id)) return [...refs]
+  return [...refs, { id: project.id, name: project.name, colour: project.colour, is_primary: refs.length === 0 }]
+}
+
+/** The projects an email belongs to, wherever the client holds it. */
+export function emailProjects(id: string): EmailProjectRef[] {
+  const detail = queryClient.getQueryData<EmailDetail>(['email', id])
+  if (detail) return detail.projects
+  for (const [, data] of queryClient.getQueriesData<{ pages: Page<EmailListItem>[] } | Page<EmailListItem>>({ queryKey: ['emails'] })) {
+    if (!data) continue
+    const pages = 'pages' in data ? data.pages : [data]
+    const hit = pages.flatMap((p) => p.items).find((e) => e.id === id)
+    if (hit) return hit.projects
+  }
+  return []
+}
+
+/**
+ * Adds emails to a project, or removes them (POST /projects/:id/items, DELETE /projects/:id/items/:itemId). Every
+ * cached copy of each email is patched in place (never reordered), then the project's counts and lists refresh.
+ */
+export async function setEmailsInProject(project: Pick<Project, 'id' | 'name' | 'colour'>, ids: readonly string[], add: boolean) {
+  await Promise.all(
+    ids.map((id) =>
+      add
+        ? api<ProjectItem>(`/projects/${project.id}/items`, json({ email_id: id }))
+        : api<void>(`/projects/${project.id}/items/${id}`, { method: 'DELETE' }),
+    ),
+  )
+  for (const id of ids) patchEmailCache(queryClient, id, { projects: withProject(emailProjects(id), project, add) })
+  void queryClient.invalidateQueries({ queryKey: ['projects'] })
+  void queryClient.invalidateQueries({ queryKey: ['project', project.id] })
+  // A project's own email list (project=id) gains or loses them: reload it the next time it's shown.
+  void queryClient.invalidateQueries({ queryKey: ['emails', 'list'], predicate: (q) => String(q.queryKey[2] ?? '').includes(`project=${project.id}`) })
+}
+
+// ── Board (FR-ORC-007) ─────────────────────────────────────────────────────────────────────────────────────────
+
+/** Every page of a list (lists are capped at 50 items a page, §6.4.1). */
+async function fetchAll<T>(path: string, signal?: AbortSignal): Promise<T[]> {
+  const items: T[] = []
+  let cursor: string | null = null
+  do {
+    const sep = path.includes('?') ? '&' : '?'
+    const page: Page<T> = await api<Page<T>>(`${path}${sep}limit=50${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`, { signal })
+    items.push(...page.items)
+    cursor = page.next_cursor
+  } while (cursor && items.length < 1_000)
+  return items
+}
+
+/**
+ * The board's cards: done actions placed in a column (GET /actions?status=done), optionally only a project's
+ * (`project`, PROPOSED proposals §18.3). Live changes arrive as action.updated and patch the list.
+ */
+export const boardOptions = (project?: string) =>
+  queryOptions({
+    queryKey: ['actions', 'board', project ?? null],
+    queryFn: ({ signal }) => fetchAll<Action>(`/actions?status=done${project ? `&project=${project}` : ''}`, signal).then((items) => ({ items, next_cursor: null }) as Page<Action>),
+    staleTime: 30_000,
+  })
+
+/** PATCH /actions/:id {board_column, board_position} (FR-ORC-007): a move on the board, applied to the cache first. */
+export async function moveCard(action: Action, column: BoardColumn, position: number) {
+  const before = queryClient.getQueriesData<Page<Action>>({ queryKey: ['actions', 'board'] })
+  for (const [key, data] of before) if (data) queryClient.setQueryData(key, { ...data, items: placeCard(data.items, action.id, column, position) })
+  try {
+    const updated = await api<Action>(`/actions/${action.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ board_column: column, board_position: position }),
+    })
+    patchActionCache(queryClient, updated)
+    void queryClient.invalidateQueries({ queryKey: ['projects'] })
+    void queryClient.invalidateQueries({ queryKey: ['glance'] })
+    return updated
+  } catch (err) {
+    for (const [key, data] of before) queryClient.setQueryData(key, data)
+    throw err
+  }
+}
+
+/** A board after moving one card: it goes to `position` in `column`, and both columns are renumbered. Pure. */
+export function placeCard(items: readonly Action[], id: string, column: BoardColumn, position: number): Action[] {
+  const card = items.find((a) => a.id === id)
+  if (!card) return [...items]
+  const byPos = (a: Action, b: Action) => (a.board_position ?? 0) - (b.board_position ?? 0)
+  const target = items.filter((a) => a.board_column === column && a.id !== id).sort(byPos)
+  target.splice(Math.max(0, Math.min(position, target.length)), 0, { ...card, board_column: column })
+  const placed = new Map(target.map((a, i) => [a.id, { ...a, board_position: i }]))
+  const from = card.board_column
+  if (from && from !== column) {
+    items.filter((a) => a.board_column === from && a.id !== id).sort(byPos).forEach((a, i) => placed.set(a.id, { ...a, board_position: i }))
+  }
+  return items.map((a) => placed.get(a.id) ?? a)
+}
 
 /** PATCH /me/preferences, optimistic: the UI follows the click at once and rolls back if the server refuses. */
 export function useUpdatePreferences() {

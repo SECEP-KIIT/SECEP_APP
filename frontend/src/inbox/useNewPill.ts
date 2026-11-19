@@ -14,7 +14,7 @@ const FRESH_MS = 2_000
  * screen until it arrives, and the arrivals keep an accent tint for a moment. Shared by the column widget and the
  * phone sections.
  */
-export function useNewPill(query: string | null, items: EmailListItem[], filters: ColumnFilters, focused: boolean, onShow?: () => void) {
+export function useNewPill(query: string | null, items: EmailListItem[], filters: ColumnFilters, focused: boolean, onShow?: () => void, scope?: string) {
   const qc = useQueryClient()
   const [fresh, setFresh] = useState<ReadonlySet<string>>(new Set())
   const arrived = useSyncExternalStore(arrivals.subscribe, arrivals.get)
@@ -22,8 +22,12 @@ export function useNewPill(query: string | null, items: EmailListItem[], filters
     if (query === null) return []
     const since = listRequestedAt.get(query) ?? Infinity
     const loaded = new Set(items.map((e) => e.id))
-    return arrived.filter((a) => a.at > since && !loaded.has(a.email.id) && matchesColumn(a.email, filters, focused)).map((a) => a.email.id)
-  }, [arrived, items, query, filters, focused])
+    const projects = scope ? new URLSearchParams(scope).get('project')?.split(',') : undefined
+    return arrived
+      .filter((a) => a.at > since && !loaded.has(a.email.id) && matchesColumn(a.email, filters, focused))
+      .filter((a) => !projects || a.email.projects.some((p) => projects.includes(p.id)))
+      .map((a) => a.email.id)
+  }, [arrived, items, query, filters, focused, scope])
 
   const timer = useRef(0)
   useEffect(() => () => clearTimeout(timer.current), [])

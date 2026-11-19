@@ -115,8 +115,12 @@ export interface EmailListItem {
    * opens the email and by the manual Mark read / unread toggle.
    */
   read: boolean
-  // Should features; element shapes are not in the SRS yet, so nothing can be put in them until it is.
-  projects: never[]
+  /**
+   * PROPOSED (proposals §4, §18): the projects this email belongs to (FR-UI-017), the primary first, then in the order
+   * they were added. Empty when it belongs to none.
+   */
+  projects: EmailProjectRef[]
+  // Should feature; the element shape is not in the SRS yet, so nothing can be put in it until it is.
   tags: never[]
 }
 
@@ -127,8 +131,16 @@ export interface EmailDetail extends EmailListItem {
   actions: Action[]
   links: LinkView[]
   attachments: { index: number; filename: string; mime: string; size: number }[]
-  /** In the same order as the [MASKED:<type>] tokens in body_text. secret_type is free text in §6.6. */
+  /**
+   * In the same order as the [MASKED:<type>] tokens in body_text. secret_type is free text in §6.6. SECEP never holds
+   * or reveals the value (proposals §18.4): the user opens the message in their mail app (open_url) to see it.
+   */
   masked_secrets: { id: string; secret_type: string }[]
+  /**
+   * PROPOSED (proposals §18.4): this message in the user's own mail app (Gmail on the web), built by M6 from
+   * emails.provider_message_id and the mailbox address. null when it can't be linked.
+   */
+  open_url: string | null
   auth_results: { spf: string; dkim: string; dmarc: string } | null
   /** null when thread_id is null (§6.6 emails.thread_id is nullable). */
   thread: {
@@ -293,6 +305,48 @@ export interface Project {
   archived_at: string | null
   created_at: string
   progress: { done: number; total: number }
+}
+
+/** PROPOSED (proposals §4, §18): one of an email's projects, as cards show it (split dot and "Name +n" chip). */
+export interface EmailProjectRef {
+  id: string
+  name: string
+  colour: string
+  is_primary: boolean
+}
+
+/**
+ * POST /projects request, and PATCH /projects/:id (every field optional there, plus `archived`). PROPOSED (proposals
+ * §18.1): the §6.6 columns a user sets. colour is `#rrggbb`.
+ */
+export interface ProjectInput {
+  name: string
+  colour: string
+  icon?: string | null
+  description?: string | null
+  deadline?: string | null
+  jira_project_key?: string | null
+  jira_epic?: string | null
+}
+export type ProjectPatch = Partial<ProjectInput> & { archived?: boolean }
+
+/**
+ * POST /projects/:id/items request (§6.5 v1.1 "add or remove emails and cards; set primary"). PROPOSED (proposals
+ * §18.2): exactly one of email_id and action_id. `primary` makes this project the item's primary one; the first
+ * project an item gets is primary anyway (FR-UI-017). Response: the item. Adding an item that is already in the
+ * project only applies `primary`. DELETE /projects/:id/items/:itemId takes the email or action id.
+ */
+export interface ProjectItemInput {
+  email_id?: string
+  action_id?: string
+  primary?: boolean
+}
+export interface ProjectItem {
+  project_id: string
+  email_id: string | null
+  action_id: string | null
+  is_primary: boolean
+  added_at: string
 }
 
 /**

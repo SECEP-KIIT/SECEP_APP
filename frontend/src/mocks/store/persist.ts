@@ -32,6 +32,8 @@ export interface Snapshot {
     corrections: Db['corrections']
     labelRules: Db['labelRules']
     projects: Db['projects']
+    /** Added in QA pass 5; older snapshots have none. */
+    projectItems?: Db['projectItems']
     models: Db['models']
     audit: Db['audit']
     settings: PersistedSettings
@@ -55,6 +57,7 @@ export function snapshot(db: Db, seed: number): Snapshot {
       corrections: db.corrections,
       labelRules: db.labelRules,
       projects: db.projects,
+      projectItems: db.projectItems,
       models: db.models,
       audit: db.audit,
       settings: { ...rest, jira: { ...jiraRest, token_set: token !== null }, llm: { ...llmRest, api_key_set: api_key !== null } },
@@ -160,7 +163,9 @@ export function apply(db: Db, snap: Snapshot) {
   }
   db.layouts = new Map(Object.entries(d.layouts))
   db.labelRules = d.labelRules
-  db.projects = d.projects
+  // Older snapshots kept a static progress on each project; it's derived now.
+  db.projects = d.projects.map(({ progress: _p, ...p }: Db['projects'][number] & { progress?: unknown }) => p)
+  if (d.projectItems) db.projectItems = d.projectItems.filter((i) => (i.email_id ? db.emails.has(i.email_id) : !!i.action_id && db.actions.has(i.action_id)))
   db.models = d.models
   db.audit = d.audit
   // Secrets keep their seeded values; only the "is it set" state is restored.

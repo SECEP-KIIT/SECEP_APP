@@ -103,6 +103,22 @@ export function movePage(pages: LayoutPage[], id: string, by: -1 | 1): LayoutPag
 export const updatePage = (pages: LayoutPage[], id: string, fn: (p: LayoutPage) => LayoutPage | null) =>
   pages.map((p) => (p.id === id ? (fn(p) ?? p) : p))
 
+/** The page "See" on a Mark-handled toast opens (QA pass 5): the first with a Handled column, best one alone. */
+export function handledPage(pages: LayoutPage[]): LayoutPage | null {
+  const isHandled = (w: Widget) => w.type === 'inbox_column' && new URLSearchParams(w.filter ?? '').get('view')?.split(',').includes('handled')
+  const sorted = sortedPages(pages)
+  return sorted.find((p) => p.widgets.length === 1 && isHandled(p.widgets[0])) ?? sorted.find((p) => p.widgets.some(isHandled)) ?? null
+}
+
+/** A Handled page at the end, for layouts saved before it was a starter page. null at the page cap. */
+export function addHandledPage(pages: LayoutPage[]): LayoutPage[] | null {
+  const next = addPage(pages, 'Handled')
+  if (!next) return null
+  const preset = COLUMN_PRESETS.find((p) => p.key === 'handled')!
+  const last = sortedPages(next).at(-1)!
+  return updatePage(next, last.id, (p) => addWidget(p, preset, 'large'))
+}
+
 /** Adds a widget at the end of the page; null when the page holds MAX_WIDGETS already. */
 export function addWidget(page: LayoutPage, preset: WidgetPreset, size: WidgetSize = 'small'): LayoutPage | null {
   if (page.widgets.length >= MAX_WIDGETS) return null

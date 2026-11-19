@@ -8,6 +8,18 @@ export function Toaster({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id
       {toasts.map((t) => (
         <div key={t.id} className="toast" data-tone={t.tone} role={t.tone === 'error' ? 'alert' : 'status'}>
           <span>{t.message}</span>
+          {t.extra && (
+            <button
+              type="button"
+              className="text-button toast-action"
+              onClick={() => {
+                onDismiss(t.id)
+                t.extra?.run()
+              }}
+            >
+              {t.extra.label}
+            </button>
+          )}
           {t.action && (
             <button
               type="button"

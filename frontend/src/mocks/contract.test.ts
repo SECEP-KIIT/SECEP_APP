@@ -61,7 +61,7 @@ const inboxEmails = () => demoEmails().filter((e) => !db.handled.get(db.users[0]
 
 // Key sets copied from SRS §6.4.1.
 const LIST_KEYS = ['id', 'thread_id', 'from', 'to', 'cc', 'recipient_position', 'subject', 'received_at', 'status', 'security_flag', 'duplicate_count', 'attachment_count', 'reply_count', 'has_masked_secret', 'triage', 'summary_one_line', 'proposed_action_count', 'jira_key', 'pinned', 'snoozed_until', 'due_date', 'handled', 'read', 'projects', 'tags']
-const DETAIL_KEYS = [...LIST_KEYS, 'body_text', 'summary_short', 'actions', 'links', 'attachments', 'masked_secrets', 'auth_results', 'thread']
+const DETAIL_KEYS = [...LIST_KEYS, 'body_text', 'summary_short', 'actions', 'links', 'attachments', 'masked_secrets', 'open_url', 'auth_results', 'thread']
 const TRIAGE_KEYS = ['email_type', 'urgency', 'sentiment', 'needs_review', 'model_version', 'processed_at']
 const LINK_KEYS = ['check_id', 'anchor_text', 'host', 'verdict', 'go_url']
 const ACTION_KEYS = ['id', 'email_id', 'type', 'origin', 'status', 'payload', 'board_column', 'board_position', 'external_ref', 'external_status', 'error', 'created_at', 'updated_at']
@@ -91,7 +91,9 @@ describe('§6.4.1 shapes', () => {
       // Masked tokens map in order onto masked_secrets.
       const tokens = [...d.body_text.matchAll(/\[MASKED:([a-z0-9_]+)\]/gi)].map((m: RegExpMatchArray) => m[1])
       expect(tokens).toEqual(d.masked_secrets.map((s: Json) => s.secret_type))
-      const raw = JSON.stringify(d)
+      // open_url is the one URL: the message in the user's own Gmail (proposals §18.4), never a link from the body.
+      expect(d.open_url).toMatch(/^https:\/\/mail\.google\.com\//)
+      const raw = JSON.stringify({ ...d, open_url: null })
       for (const banned of ['ml_text', 'provider_message_id', 'message_id_hdr', 'value_enc', 'user_id', 'owner_user_id', '"url"', 'href', '"value"']) {
         expect(raw).not.toContain(banned)
       }
@@ -113,10 +115,12 @@ describe('access control (deny by default, FR-ADM-005)', () => {
   const MUST: [string, string, string][] = [
     ['post', '/auth/refresh', 'cookie'], ['post', '/auth/logout', 'user'], ['get', '/me', 'user'],
     ['get', '/emails', 'user'], ['get', '/emails/:id', 'user'], ['patch', '/emails/:id/labels', 'user'],
-    ['post', '/secrets/:id/reveal', 'user'], ['get', '/links/:checkId/go', 'user'], ['get', '/emails/:id/ics', 'user'],
+    ['get', '/links/:checkId/go', 'user'], ['get', '/emails/:id/ics', 'user'],
     ['get', '/actions', 'user'], ['post', '/emails/:id/actions', 'user'], ['post', '/actions', 'user'],
     ['post', '/actions/:id/accept', 'user'], ['post', '/actions/:id/reject', 'user'], ['patch', '/actions/:id', 'user'],
     ['delete', '/mailboxes/me', 'user'],
+    ['get', '/projects', 'user'], ['post', '/projects', 'user'], ['get', '/projects/:id', 'user'], ['patch', '/projects/:id', 'user'],
+    ['post', '/projects/:id/items', 'user'], ['delete', '/projects/:id/items/:itemId', 'user'],
     ['get', '/admin/settings', 'admin'], ['put', '/admin/settings', 'admin'], ['post', '/admin/settings/test', 'admin'],
     ['get', '/admin/users', 'admin'], ['post', '/admin/users', 'admin'], ['patch', '/admin/users/:id', 'admin'],
     ['get', '/admin/models', 'admin'], ['post', '/admin/models/retrain', 'admin'], ['post', '/admin/models/:id/promote', 'admin'],
@@ -433,22 +437,52 @@ describe('actions (FR-ORC-001–007)', () => {
   })
 })
 
+describe('projects (FR-UI-016–017, proposals §18)', () => {
+  it('creates, edits and archives a project; validates fields; another user gets 404', async () => {
+    const token = await login()
+    const bad = await call('POST', '/projects', { token, body: { name: '', colour: 'blue', extra: 1 } })
+    expect(bad.status).toBe(422)
+    expect(Object.keys(bad.json.error.details.fields).sort()).toEqual(['colour', 'extra', 'name'])
+    const made = await call('POST', '/projects', { token, body: { name: 'Atlas', colour: '#3B5BDB', icon: '🧭', jira_project_key: 'ATL' } })
+    expect(made.status).toBe(201)
+    expect(made.json).toMatchObject({ name: 'Atlas', colour: '#3b5bdb', archived_at: null, progress: { done: 0, total: 0 } })
+    const edited = await call('PATCH', `/projects/${made.json.id}`, { token, body: { description: 'Q4', archived: true } })
+    expect(edited.json).toMatchObject({ description: 'Q4', archived_at: expect.any(String) })
+    const list = (await call('GET', '/projects?limit=50', { token })).json.items
+    expect(list.at(-1).id).toBe(made.json.id) // archived ones last
+    const other = await login('sam')
+    expect((await call('GET', `/projects/${made.json.id}`, { token: other })).status).toBe(404)
+  })
+
+  it('files emails: first project is primary, list items carry projects, ?project= filters, removal promotes the next', async () => {
+    const token = await login()
+    const a = (await call('POST', '/projects', { token, body: { name: 'A', colour: '#111111' } })).json
+    const b = (await call('POST', '/projects', { token, body: { name: 'B', colour: '#222222' } })).json
+    const email = (await call('GET', '/emails?limit=1', { token })).json.items[0]
+    const before = email.projects.length
+    const first = await call('POST', `/projects/${a.id}/items`, { token, body: { email_id: email.id } })
+    expect(first.json).toMatchObject({ project_id: a.id, email_id: email.id, action_id: null, is_primary: before === 0 })
+    await call('POST', `/projects/${b.id}/items`, { token, body: { email_id: email.id } })
+    let refs = (await call('GET', `/emails/${email.id}`, { token })).json.projects
+    expect(refs.map((r: { id: string }) => r.id)).toEqual(expect.arrayContaining([a.id, b.id]))
+    expect(refs[0].is_primary).toBe(true)
+    const filtered = (await call('GET', `/emails?project=${b.id}&limit=50`, { token })).json.items
+    expect(filtered.map((e: { id: string }) => e.id)).toEqual([email.id])
+    expect((await call('POST', `/projects/${a.id}/items`, { token, body: { email_id: email.id, action_id: 'x' } })).status).toBe(422)
+    if (before === 0) {
+      expect((await call('DELETE', `/projects/${a.id}/items/${email.id}`, { token })).status).toBe(204)
+      refs = (await call('GET', `/emails/${email.id}`, { token })).json.projects
+      expect(refs).toEqual([{ id: b.id, name: 'B', colour: '#222222', is_primary: true }])
+    }
+    expect((await call('DELETE', `/projects/${a.id}/items/${email.id}`, { token })).status).toBe(before === 0 ? 404 : 204)
+  })
+})
+
 describe('security (FR-SEC-003/004/008)', () => {
-  it('Reveal needs a sign-in within 5 minutes, returns the value for 60 s, and audits without the value', async () => {
-    vi.useFakeTimers({ toFake: ['Date'] })
+  it('there is no Reveal route (QA pass 5): SECEP never holds a credential value', async () => {
     const token = await login()
     const secret = db.secrets.find((s) => s.owner_user_id === db.users[0].id)!
-    vi.setSystemTime(Date.now() + 6 * 60_000)
-    const stale = await call('POST', `/secrets/${secret.id}/reveal`, { token })
-    expect(stale.status).toBe(401)
-    expect(stale.json.error).toMatchObject({ code: 'reauth_required', details: { reauth_url: expect.any(String) } })
-
-    signIn(db.users[0].id) // the Google round trip
-    const ok = await call('POST', `/secrets/${secret.id}/reveal`, { token })
-    expect(ok.json).toEqual({ value: secret.value, expires_in: 60 })
-    const entry = db.audit.at(-1)!
-    expect(entry.event).toBe('secret.reveal')
-    expect(JSON.stringify(entry)).not.toContain(secret.value)
+    expect((await call('POST', `/secrets/${secret.id}/reveal`, { token })).status).toBe(404)
   })
 
   it('/links/:id/go: open when clean, interstitial with the chain when suspicious, blocked when malicious', async () => {
@@ -598,14 +632,13 @@ describe('store', () => {
       save(storage, db, 20261104)
 
       const blob = mem.get(STORAGE_KEY)!
-      for (const s of db.secrets) expect(blob).not.toContain(s.value)
       expect(blob).not.toContain(db.settings.jira.token!)
       expect(JSON.parse(blob).schema).toBe(SCHEMA_VERSION)
 
       initStore({ persistEnabled: true })
       expect(db.emails.has(arrivedId)).toBe(true)
       expect(db.actions.get(action.id)?.status).toBe('rejected')
-      expect(db.secrets.find((s) => s.email_id === arrivedId)?.value ?? null).toBe(TEMPLATES[0].secrets?.[0]?.value ?? null)
+      expect(db.secrets.find((s) => s.email_id === arrivedId)?.secret_type ?? null).toBe(TEMPLATES[0].secrets?.[0]?.type ?? null)
 
       mem.set(STORAGE_KEY, JSON.stringify({ ...JSON.parse(blob), schema: SCHEMA_VERSION + 1 }))
       expect(load(storage, 20261104)).toBeNull()

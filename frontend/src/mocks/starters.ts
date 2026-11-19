@@ -38,6 +38,11 @@ export const STARTERS: { name: string; widgets: StarterWidget[] }[] = [
       column('Needs my reply', '↩️', 'teal', 'view=needs_reply', 'newest'),
     ],
   },
+  {
+    // QA pass 5: where "See" on a Mark-handled toast goes. Only the Handled view, full width.
+    name: 'Handled',
+    widgets: [column('Handled', '✅', 'green', 'view=handled', 'newest', 'large')],
+  },
 ]
 
 const NS_LAYOUT = 11

@@ -1,24 +1,10 @@
-// Reveal (FR-SEC-007/008) and click-time link checks (FR-SEC-004).
+// Click-time link checks (FR-SEC-004). There is no Reveal: SECEP never shows a credential's value; the drawer links
+// to the message in Gmail instead (QA pass 5, proposals §18.4).
 import { Router } from 'express';
-import { Fail, idParam, own, route } from '../http.js';
-import { audit } from '../services/audit.js';
-import { decrypt } from '../services/crypto.js';
-import { query, tx } from '../services/db.js';
+import { idParam, own, route } from '../http.js';
+import { query } from '../services/db.js';
 
 export const secrets = Router();
-const REAUTH_WINDOW_S = 5 * 60;
-
-route(secrets, 'post', '/secrets/:id/reveal', 'user', async (req, user) => {
-  const id = idParam(req, 'Secret');
-  const s = own((await query('SELECT * FROM masked_secrets WHERE id = $1 AND owner_user_id = $2', [id, user.id])).rows[0], 'Secret');
-  // FR-SEC-008: a Google sign-in within the last 5 minutes (auth_time in the token).
-  if (!user.auth_time || Date.now() / 1000 - user.auth_time > REAUTH_WINDOW_S) {
-    throw new Fail(401, 'reauth_required', 'Sign in again to reveal this value', { reauth_url: '/api/v1/auth/google?reauth=1' });
-  }
-  // Who revealed what kind of secret, never the value.
-  await tx((c) => audit(c, { tenantId: user.tenant_id, actorId: user.id, event: 'secret.reveal', target: id, details: { secret_type: s.secret_type, email_id: s.email_id } }));
-  return { value: decrypt(s.value_enc), expires_in: 60 };
-});
 
 /**
  * GET /links/:checkId/go (v1.2 JSON): the M5 resolver re-scores at click time. Until M5 runs, the stored verdict and

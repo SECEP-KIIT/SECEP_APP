@@ -7,6 +7,7 @@ import { MaskedText } from '../components/MaskedText'
 import { senderRole } from '../inbox/cardModel'
 import { CorrectionMenu } from '../inbox/CorrectionMenu'
 import { errorText, useInbox, type OpenOptions } from '../inbox/inboxContext'
+import { setHandled } from '../inbox/quickActions'
 import { TypeIcon, UrgencyMark } from '../inbox/marks'
 import { PortalContainer } from '../inbox/portal'
 import { ActionList } from './ActionList'
@@ -112,8 +113,9 @@ function DrawerBody({ email, compose, onClose }: { email: EmailDetail; compose?:
     marked.current = true // a manual choice wins over the automatic mark
     setBusy(true)
     try {
-      await updateEmail(email.id, patch)
-      if ('handled' in patch) toast(patch.handled ? 'Marked as handled. Find it under Handled.' : 'Back in the inbox')
+      // Handled goes through the shared helper, so the drawer's toast has Undo and See too (QA pass 5).
+      if ('handled' in patch) await setHandled([email.id], patch.handled, toast)
+      else await updateEmail(email.id, patch)
     } catch (err) {
       toast(errorText(err), 'error')
     } finally {
@@ -262,7 +264,7 @@ function DrawerBody({ email, compose, onClose }: { email: EmailDetail; compose?:
           </p>
         )}
         <LinkList links={email.links} />
-        {email.masked_secrets.length > 0 && <SecretList secrets={email.masked_secrets} />}
+        {email.masked_secrets.length > 0 && <SecretList secrets={email.masked_secrets} openUrl={email.open_url} />}
       </Section>
 
       <Section title="Notes & attachments">

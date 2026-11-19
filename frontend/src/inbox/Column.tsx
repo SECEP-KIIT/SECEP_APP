@@ -29,8 +29,7 @@ import { EmailCard } from './EmailCard'
 import { useNewPill } from './useNewPill'
 import { FilterPopover } from './FilterPopover'
 import { useInbox } from './inboxContext'
-import { useSelection } from './selection'
-import { isTypingTarget } from '../shell/focusKeys'
+import { SELECT_ALL, useSelection } from './selection'
 import './inbox.css'
 
 /** Start loading the next page this many rows before the end. */
@@ -55,6 +54,10 @@ interface Props {
    * (Phones show widgets as sections instead: dashboard/PhoneSection.)
    */
   variant?: 'full' | 'tile'
+  /** Always added to the query: the column only ever shows these (a project's emails: `project=<id>`). */
+  scope?: string
+  /** Dashboard edit mode: the column is inert (no hover, clicks or keys) while tiles are rearranged. */
+  locked?: boolean
 }
 
 /**
@@ -65,7 +68,7 @@ interface Props {
  * (TanStack Virtual) and live updates patch cards in place. New mail is never inserted: it shows as "↑ n new"
  * (FR-UI-024), and only a click on the pill brings it in, at the top, after scrolling there.
  */
-export function Column({ title, state, onStateChange, initial, heading, tools, variant = 'full' }: Props) {
+export function Column({ title, state, onStateChange, initial, heading, tools, variant = 'full', scope, locked }: Props) {
   const focused = useFocused()
   const now = useMinuteClock()
   const { showLegend } = useInbox()
@@ -94,14 +97,15 @@ export function Column({ title, state, onStateChange, initial, heading, tools, v
   )
   const setSort = (s: SortKey) => change({ sort: s })
   const setDensity = (d: Density) => change({ density: d })
-  const query = columnQuery(filters, sort, focused)
+  const base = columnQuery(filters, sort, focused)
+  const query = base === null || !scope ? base : [scope, base].filter(Boolean).join('&')
   const list = useInfiniteQuery({ ...emailListOptions(query ?? ''), enabled: query !== null })
   const items = useMemo(() => (query === null ? [] : (list.data?.pages.flatMap((p) => p.items) ?? [])), [query, list.data])
   const more = query !== null && list.hasNextPage
 
   // "↑ n new" (FR-UI-024): scroll to the top first, then reload page 1 only.
   const scrollRef = useRef<HTMLDivElement>(null)
-  const { pending, fresh, showNew } = useNewPill(query, items, filters, focused, () => scrollRef.current?.scrollTo({ top: 0 }))
+  const { pending, fresh, showNew } = useNewPill(query, items, filters, focused, () => scrollRef.current?.scrollTo({ top: 0 }), scope)
   const pitch = ROW_PITCH[density]
   const showSkeleton = query !== null && list.isPending
   const rowCount = showSkeleton ? SKELETON_ROWS : items.length + (more ? 1 : 0)
@@ -125,23 +129,37 @@ export function Column({ title, state, onStateChange, initial, heading, tools, v
 
   const onFilter = useCallback((patch: FilterPatch) => setFilters((f) => addFilter(f, patch)), [setFilters])
 
+  // Ctrl/⌘+A (FR-UI-027): InboxHost picks the column (focus, else pointer) and asks it to select its loaded cards.
+  const sectionRef = useRef<HTMLElement>(null)
+  const selectAll = useRef(() => {})
+  selectAll.current = () => items.length && selection.set(items.map((i) => i.id))
+  useEffect(() => {
+    const el = sectionRef.current
+    if (!el) return
+    const on = () => selectAll.current()
+    el.addEventListener(SELECT_ALL, on)
+    return () => el.removeEventListener(SELECT_ALL, on)
+  }, [])
+  // Edit mode (QA pass 5): while tiles are rearranged, nothing in the column reacts to the pointer or keyboard.
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const toolsRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (bodyRef.current) bodyRef.current.inert = !!locked
+    if (toolsRef.current) toolsRef.current.inert = !!locked
+  }, [locked])
+
   const chips = filterChips(filters)
   const split = urgencySplit(items)
   const loadedCount = `${items.length}${more ? '+' : ''}`
 
   return (
     <section
+      ref={sectionRef}
       className="column"
       aria-labelledby={titleId}
       data-density={density}
       data-variant={variant}
-      onKeyDown={(e) => {
-        // Ctrl/⌘+A selects every loaded card in this column (FR-UI-027).
-        if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'a' && !isTypingTarget(e.target) && items.length) {
-          e.preventDefault()
-          selection.set(items.map((i) => i.id))
-        }
-      }}
+      data-selectable=""
     >
       <header className="col-head">
         <div className="col-title-row">
@@ -159,7 +177,7 @@ export function Column({ title, state, onStateChange, initial, heading, tools, v
           {tools && <span className="col-title-end">{tools}</span>}
         </div>
         {/* F15: the filter, sort and density controls get their own line, so neither line is squeezed. */}
-        <div className="col-tools">
+        <div className="col-tools" ref={toolsRef}>
           <FilterPopover filters={filters} onChange={setFilters} summary={tile ? filterSummary(filters) : undefined} />
           <label className="col-select" title="Sort" data-set={sort !== 'newest' || undefined}>
             <ArrowDownUp size={16} aria-hidden="true" />
@@ -222,7 +240,7 @@ export function Column({ title, state, onStateChange, initial, heading, tools, v
         )}
       </header>
 
-      <div className="col-body">
+      <div className="col-body" ref={bodyRef}>
         {pending.length > 0 && (
           <button type="button" className="new-pill" onClick={showNew}>
             <ArrowUp size={14} aria-hidden="true" />

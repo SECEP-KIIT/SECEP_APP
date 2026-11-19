@@ -1,4 +1,4 @@
-// /me, preferences, glance, notifications, projects, disconnect (§6.5; preferences and glance PROPOSED for v1.3).
+// /me, preferences, glance, notifications, disconnect (projects: api/projects.js) (§6.5; preferences and glance PROPOSED for v1.3).
 import { Router } from 'express';
 import { Fail, isInt, object, pageParams, route, searchParams, toPage } from '../http.js';
 import { query } from '../services/db.js';
@@ -84,29 +84,6 @@ route(me, 'get', '/notifications', 'user', async (req, user) => {
   return toPage(rows.map((n) => ({
     id: n.id, kind: n.kind, title: n.payload.title, body: n.payload.body ?? null, target: n.payload.target ?? null,
     read_at: n.read_at?.toISOString() ?? null, created_at: n.created_at.toISOString(),
-  })), p);
-});
-
-// Projects with derived progress: done/total of the board cards that come from the project's emails or are its cards.
-route(me, 'get', '/projects', 'user', async (req, user) => {
-  const p = pageParams(searchParams(req));
-  const { rows } = await query(
-    `SELECT pr.*, coalesce(pg.done, 0)::int AS done, coalesce(pg.total, 0)::int AS total
-       FROM projects pr
-       LEFT JOIN LATERAL (
-         SELECT count(*) FILTER (WHERE a.board_column = 'done') AS done, count(*) AS total FROM actions a
-          WHERE a.user_id = $1 AND a.board_column IS NOT NULL
-            AND (a.email_id IN (SELECT email_id FROM email_projects WHERE project_id = pr.id)
-                 OR a.id IN (SELECT action_id FROM card_projects WHERE project_id = pr.id))) pg ON true
-      WHERE pr.owner_user_id = $1
-      ORDER BY pr.archived_at NULLS FIRST, pr.created_at LIMIT $2 OFFSET $3`,
-    [user.id, p.limit + 1, p.offset],
-  );
-  return toPage(rows.map((r) => ({
-    id: r.id, name: r.name, colour: r.colour, icon: r.icon, description: r.description,
-    deadline: r.deadline?.toISOString() ?? null, jira_project_key: r.jira_project_key, jira_epic: r.jira_epic,
-    archived_at: r.archived_at?.toISOString() ?? null, created_at: r.created_at.toISOString(),
-    progress: { done: r.done, total: r.total },
   })), p);
 });
 

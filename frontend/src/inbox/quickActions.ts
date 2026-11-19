@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { acceptAction, emailDetailOptions, queryClient, undoAction, updateEmail } from '../api/queries'
 import type { Action, EmailListItem } from '../api/types'
+import { goTo, HANDLED_PAGE_HREF } from '../lib/navigate'
 import { errorText, useInbox, type InboxApi, type OpenOptions } from './inboxContext'
 import { useLift } from './liftContext'
 
@@ -30,14 +31,26 @@ export const undoSends = (done: Action[], toast: InboxApi['toast']) => ({
     ),
 })
 
-/** Done / Restore for several emails, with Undo (FR-UI-029). */
+/** "See": the dashboard's Handled page (QA pass 5). */
+export const seeHandled = { label: 'See', run: () => goTo(HANDLED_PAGE_HREF) }
+
+/**
+ * Done / Restore for several emails, with Undo (FR-UI-029) and, after Done, See (the Handled page). Undo puts the
+ * cards back in place in the lists they left, not behind the "↑ n new" pill (QA pass 5).
+ */
 export async function setHandled(ids: readonly string[], handled: boolean, toast: InboxApi['toast']) {
   await Promise.all(ids.map((id) => updateEmail(id, { handled })))
   const n = ids.length === 1 ? '' : `${ids.length} emails `
-  toast(handled ? `${n}Marked as handled. Find ${ids.length === 1 ? 'it' : 'them'} under Handled.` : `${n}Back in the inbox`, 'info', {
+  const undo = {
     label: 'Undo',
-    run: () => void Promise.all(ids.map((id) => updateEmail(id, { handled: !handled }))).catch((err: unknown) => toast(errorText(err), 'error')),
-  })
+    run: () =>
+      void Promise.all(ids.map((id) => updateEmail(id, { handled: !handled }, { restore: true }))).then(
+        () => toast(handled ? `${n}Back in the inbox` : `${n}Back under Handled`),
+        (err: unknown) => toast(errorText(err), 'error'),
+      ),
+  }
+  if (handled) toast(`${n}Marked as handled. Find ${ids.length === 1 ? 'it' : 'them'} under Handled.`, 'info', undo, seeHandled)
+  else toast(`${n}Back in the inbox`, 'info', undo)
 }
 
 /**

@@ -149,7 +149,7 @@ export function addEmail(db: Db, { template: t, user, receivedAt, r, history = f
   if (!arriving) row.security_flag = securityFlagOf(db, id)
 
   for (const s of t.secrets ?? []) {
-    db.secrets.push({ id: nextId('secret'), email_id: id, owner_user_id: user.id, secret_type: s.type, value: s.value })
+    db.secrets.push({ id: nextId('secret'), email_id: id, owner_user_id: user.id, secret_type: s.type })
   }
 
   if (t.action && status === 'enriched') db.actions.set(...actionFor(db, row, t, user, r, history))
@@ -279,6 +279,7 @@ export function createDb(now: number, seed = SEED): Db {
     audit: [],
     notifications: [],
     projects: [],
+    projectItems: [],
     layouts: new Map(),
     reads: new Map(USERS.map((u) => [u.id, new Set<string>()])),
     arrivals: [],
@@ -303,10 +304,20 @@ export function createDb(now: number, seed = SEED): Db {
   // Every click-time link outcome in one recent, unread email (LINK_SAMPLES).
   addEmail(db, { template: LINK_SAMPLES, user: demo, receivedAt: now - 3 * HOUR, r })
   db.projects = [
-    { id: uid(NS.project, 1), user_id: demo.id, name: 'Q3 board meeting', colour: '#3b5bdb', icon: '📊', description: 'Deck and numbers for the Q3 board meeting.', deadline: iso(now + 3 * DAY), jira_project_key: 'ATL', jira_epic: 'ATL-100', archived_at: null, created_at: iso(now - 12 * DAY), progress: { done: 2, total: 5 } },
-    { id: uid(NS.project, 2), user_id: demo.id, name: 'Pune client visit', colour: '#e8590c', icon: '✈️', description: null, deadline: iso(now + 9 * DAY), jira_project_key: null, jira_epic: null, archived_at: null, created_at: iso(now - 5 * DAY), progress: { done: 1, total: 3 } },
-    { id: uid(NS.project, 3), user_id: demo.id, name: 'Onboarding redesign', colour: '#2b8a3e', icon: '🧭', description: 'New sign-up and first-run screens.', deadline: null, jira_project_key: 'ONB', jira_epic: null, archived_at: null, created_at: iso(now - 30 * DAY), progress: { done: 4, total: 4 } },
+    { id: uid(NS.project, 1), user_id: demo.id, name: 'Q3 board meeting', colour: '#3b5bdb', icon: '📊', description: 'Deck and numbers for the Q3 board meeting.', deadline: iso(now + 3 * DAY), jira_project_key: 'ATL', jira_epic: 'ATL-100', archived_at: null, created_at: iso(now - 12 * DAY) },
+    { id: uid(NS.project, 2), user_id: demo.id, name: 'Pune client visit', colour: '#e8590c', icon: '✈️', description: null, deadline: iso(now + 9 * DAY), jira_project_key: null, jira_epic: null, archived_at: null, created_at: iso(now - 5 * DAY) },
+    { id: uid(NS.project, 3), user_id: demo.id, name: 'Onboarding redesign', colour: '#2b8a3e', icon: '🧭', description: 'New sign-up and first-run screens.', deadline: null, jira_project_key: 'ONB', jira_epic: null, archived_at: null, created_at: iso(now - 30 * DAY) },
   ]
+  // Some of the demo mailbox already filed (FR-UI-016): the board deck and the Pune trip by subject.
+  const file = (projectNo: number, match: RegExp) => {
+    for (const e of db.emails.values()) {
+      if (e.user_id !== demo.id || !match.test(e.subject ?? '')) continue
+      const primary = !db.projectItems.some((i) => i.email_id === e.id)
+      db.projectItems.push({ project_id: uid(NS.project, projectNo), email_id: e.id, action_id: null, is_primary: primary, added_at: e.received_at })
+    }
+  }
+  file(1, /Q3 board|board deck/i)
+  file(2, /Pune/i)
 
   // A few recent notifications per user, built with the privacy-safe builder (titles carry no content).
   let n = 0

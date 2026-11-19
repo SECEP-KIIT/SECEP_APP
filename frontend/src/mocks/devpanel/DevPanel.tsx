@@ -87,7 +87,6 @@ export function DevPanel() {
         </select>
       </div>
       <div style={row}>
-        <button style={btn} onClick={set(() => session && signIn(session.user_id))}>Re-sign in (Reveal window)</button>
         <button style={btn} onClick={set(signOut)}>Sign out</button>
       </div>
       <div style={row}>

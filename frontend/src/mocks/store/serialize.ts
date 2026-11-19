@@ -1,6 +1,6 @@
 // The ONLY place wire shapes are built (SRS §6.4.1). Rows → responses. Fields not listed in §6.4.1 never leave
 // here: raw URLs, secret values, user_id, ml_text and other internals. The contract tests pin the key sets.
-import type { Action, EmailDetail, EmailListItem, LinkView, Me, Project, RoleCategory, SenderPerson } from '../../api/types'
+import type { Action, EmailDetail, EmailListItem, EmailProjectRef, LinkView, Me, Project, RoleCategory, SenderPerson } from '../../api/types'
 import { dueDateOfActions } from '../../lib/due'
 import { SENDERS } from './templates'
 import type { ActionRow, Db, EmailRow, ModelRow, ProjectRow, SettingsRow, UrlCheckRow, UserRow } from './types'
@@ -59,9 +59,19 @@ export function toListItem(db: Db, e: EmailRow): EmailListItem {
     due_date: dueDateOf(actions),
     handled: db.handled.get(e.user_id)?.has(e.id) ?? false,
     read: db.reads.get(e.user_id)?.has(e.id) ?? false, // PROPOSED (proposals §12.3)
-    projects: [],
+    projects: emailProjectRefs(db, e.id),
     tags: [],
   }
+}
+
+/**
+ * PROPOSED open_url (proposals §18.4): the message in Gmail on the web, for the mailbox's own account. M6 builds it
+ * from provider_message_id; the mock has none, so it makes a stable fake one from the email id.
+ */
+function gmailUrl(db: Db, e: EmailRow): string {
+  const user = db.users.find((u) => u.id === e.user_id)
+  const account = encodeURIComponent(user?.mailbox?.address ?? user?.email ?? '')
+  return `https://mail.google.com/mail/?authuser=${account}#all/${e.id.replace(/-/g, '').slice(-16)}`
 }
 
 export function toDetail(db: Db, e: EmailRow): EmailDetail {
@@ -75,6 +85,7 @@ export function toDetail(db: Db, e: EmailRow): EmailDetail {
     attachments: e.attachments.map((a) => ({ ...a })),
     // Same order as the [MASKED:<type>] tokens in body_text.
     masked_secrets: db.secrets.filter((s) => s.email_id === e.id).map((s) => ({ id: s.id, secret_type: s.secret_type })),
+    open_url: gmailUrl(db, e),
     auth_results: e.auth_results && { ...e.auth_results },
     thread: thread
       ? { id: thread.id, message_count: thread.messages.length, messages: thread.messages.map((m) => ({ ...m, from: { ...m.from } })) }
@@ -123,7 +134,27 @@ export function toModel(m: ModelRow) {
   return { id: m.id, version: m.version, status: m.status, metrics: structuredClone(m.metrics), created_at: m.created_at, promoted_at: m.promoted_at }
 }
 
-export function toProject(p: ProjectRow): Project {
+/** An email's projects for its card (proposals §4, §18): primary first, then in the order added. */
+export function emailProjectRefs(db: Db, emailId: string): EmailProjectRef[] {
+  return db.projectItems
+    .filter((i) => i.email_id === emailId)
+    .sort((a, b) => Number(b.is_primary) - Number(a.is_primary) || a.added_at.localeCompare(b.added_at))
+    .flatMap((i) => {
+      const p = db.projects.find((x) => x.id === i.project_id)
+      return p ? [{ id: p.id, name: p.name, colour: p.colour, is_primary: i.is_primary }] : []
+    })
+}
+
+/** Board cards that belong to a project: from its emails, or cards filed in it (§6.5 /me projects progress). */
+export function projectCards(db: Db, projectId: string): ActionRow[] {
+  const items = db.projectItems.filter((i) => i.project_id === projectId)
+  const emails = new Set(items.map((i) => i.email_id).filter(Boolean))
+  const cards = new Set(items.map((i) => i.action_id).filter(Boolean))
+  return [...db.actions.values()].filter((a) => a.board_column !== null && a.status === 'done' && ((a.email_id && emails.has(a.email_id)) || cards.has(a.id)))
+}
+
+export function toProject(db: Db, p: ProjectRow): Project {
   const { user_id: _owner, ...project } = p
-  return { ...project, progress: { ...project.progress } }
+  const cards = projectCards(db, p.id)
+  return { ...project, progress: { done: cards.filter((a) => a.board_column === 'done').length, total: cards.length } }
 }

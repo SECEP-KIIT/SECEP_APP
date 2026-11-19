@@ -1,7 +1,7 @@
 // Actions (§6.5, FR-ORC-001–007, FR-UI-029): proposals execute only after the owner accepts, only allow-listed
 // types with valid payloads, one Jira issue per action (FR-ORC-005).
 import { Router } from 'express';
-import { Fail, Fields, csv, idParam, isDate, isDateTime, isEmail, isInt, isOptStr, object, own, pageParams, route, searchParams, toPage } from '../http.js';
+import { Fail, Fields, UUID, csv, idParam, isDate, isDateTime, isEmail, isInt, isOptStr, object, own, pageParams, route, searchParams, toPage } from '../http.js';
 import { audit } from '../services/audit.js';
 import { query, tx } from '../services/db.js';
 import { listItem, toAction } from '../services/emails.js';
@@ -78,10 +78,18 @@ route(actions, 'get', '/actions', 'user', async (req, user) => {
   const p = pageParams(params);
   const column = csv(params, 'column', COLUMNS);
   const status = params.get('status');
+  // PROPOSED (proposals §18.3): a project's cards, from its emails or filed in it.
+  const project = params.get('project') || null;
+  if (project) {
+    if (!UUID.test(project)) throw new Fail(404, 'not_found', 'Project not found');
+    own((await query('SELECT id FROM projects WHERE id = $1 AND owner_user_id = $2', [project, user.id])).rows[0], 'Project');
+  }
   const { rows } = await query(
-    `SELECT * FROM actions WHERE user_id = $1 AND ($2::text[] IS NULL OR board_column = ANY($2)) AND ($3::text IS NULL OR status = $3)
+    `SELECT * FROM actions a WHERE user_id = $1 AND ($2::text[] IS NULL OR board_column = ANY($2)) AND ($3::text IS NULL OR status = $3)
+       AND ($6::uuid IS NULL OR a.email_id IN (SELECT email_id FROM email_projects WHERE project_id = $6)
+            OR a.id IN (SELECT action_id FROM card_projects WHERE project_id = $6))
       ORDER BY board_position NULLS LAST, created_at DESC LIMIT $4 OFFSET $5`,
-    [user.id, column, status || null, p.limit + 1, p.offset],
+    [user.id, column, status || null, p.limit + 1, p.offset, project],
   );
   return toPage(rows.map(toAction), p);
 });
