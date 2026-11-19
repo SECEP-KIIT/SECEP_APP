@@ -58,13 +58,13 @@ export function SidebarProjects() {
 function ProjectLink({ project: p, now }: { project: Project; now: Date }) {
   const [over, setOver] = useState(false)
   const tone = ringTone(p, now)
-  // The full name, floated over the content when the label is cut off (hover after a short intent, or focus).
+  // The full name, floated past the sidebar edge on hover (after a short intent) or focus, cut off or not.
   const [float, setFloat] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
   const intent = useRef<number | undefined>(undefined)
   const showFloat = (e: { currentTarget: HTMLElement; type: string }) => {
     const link = e.currentTarget
     const label = link.querySelector<HTMLElement>('.nav-label')
-    if (!label || label.scrollWidth <= label.clientWidth) return
+    if (!label) return
     window.clearTimeout(intent.current)
     intent.current = window.setTimeout(
       () => {
@@ -145,7 +145,7 @@ function ProjectLink({ project: p, now }: { project: Project; now: Date }) {
       </NavLink>
       {float &&
         createPortal(
-          // A truncated name pops out past the sidebar's edge, like a half-visible card does over its column.
+          // The name pops out past the sidebar's edge, like a half-visible card does over its column.
           <div className="nav-float" aria-hidden="true" style={{ left: float.left, top: float.top, height: float.height, minWidth: float.width }}>
             {p.icon && <span className="nav-float-icon">{p.icon}</span>}
             {p.name}

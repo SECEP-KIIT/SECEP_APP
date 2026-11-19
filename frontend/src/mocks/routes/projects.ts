@@ -5,6 +5,7 @@ import { page } from '../http/cursor'
 import { Fail, own, route } from '../http/route'
 import { isDateTime, isOptStr, isStr, object, type Fields } from '../http/validate'
 import { changed, db } from '../store/db'
+import { ensureEmailCard } from '../store/emailCards'
 import { publish } from '../store/events'
 import { toAction, toListItem, toProject } from '../store/serialize'
 import type { ProjectItemRow, ProjectRow, UserRow } from '../store/types'
@@ -115,6 +116,8 @@ export const projectRoutes = [
       db.projectItems.push(item)
     }
     if (primary === true) for (const s of [...siblings, item]) s.is_primary = s === item
+    // An email in a project is a task on its board (proposals §23).
+    if (key.email_id) ensureEmailCard(user.id, db.emails.get(key.email_id)!)
     changed()
     emitItem(user, item)
     return toItem(item)

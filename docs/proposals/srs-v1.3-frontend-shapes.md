@@ -471,3 +471,11 @@ The §6.6 tables (`actions` with `origin = user`, `notes`, `files`, `masked_secr
 1. **`/settings`** edits the existing `ui_prefs` keys through `PATCH /me/preferences`, saved on change: theme (Light / Dark / Auto), motion (System / Full / Reduced / Off, FR-UI-032), sidebar collapsed, skip lock screen, idle return (Never / 5 / 15 / 30 / 60 min, FR-WP-004), lock-screen subjects (`glance_subjects`).
 2. **`ui_prefs.motion` accepts `null`** to clear it, meaning "follow the system". Mock and M6 validators updated.
 3. **Not built (v2):** wallpaper places with photos, EXIF suggestions, renditions, suncalc per place and the weather chip (FR-WP-006–009, `/me/places`); pop-up rules and quiet hours (FR-REM-007); digest time and reminder defaults. The wallpaper stays the built-in sun-phase gradient.
+
+## 23. An email in a project is a task (19 Nov 2026) (PROPOSED for v1.3)
+
+1. **Adding an email to a project** (`POST /projects/:id/items {email_id}`) gives it a board card if it has none: `type: add_board_card`, `origin: "rule"`, `status: done`, `payload.title` = subject, column **To do** (or **Done** if the email is already handled). One card per email, shared by every project it is in; it counts in project progress.
+2. **Handled ⇄ Done:** `PATCH /emails/:id {handled: true}` moves the email's card to Done; `false` moves it from Done back to To do. Moving the card into Done (`PATCH /actions/:id`) marks the email handled; moving it out marks it not handled. Both send the usual `action.updated` / `email.triaged` events.
+3. **Project board accepts emails:** dropping emails from a list onto a To do / In progress / Done column files them in the project (rule 1) and moves their cards there.
+4. Seed data and saved mock snapshots are backfilled on load. **M6:** not built yet (same rules in `projects.js`, `emails.js`, `actions.js`, plus a one-off backfill).
+5. **Lock screen subjects** (when opted in) show at most three distinct subjects, then "and n more".

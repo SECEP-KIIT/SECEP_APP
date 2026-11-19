@@ -28,6 +28,7 @@ import { useMinuteClock } from '../shell/useMinuteClock'
 // Tags, buttons and column states share the inbox's styles (also when /board is opened directly).
 import '../inbox/inbox.css'
 import './board.css'
+import { carriesEmails, droppedEmails } from '../lib/dragEmails'
 
 type Layout = Record<BoardColumn, string[]>
 
@@ -45,7 +46,18 @@ const columnOf = (layout: Layout, id: string): BoardColumn | null =>
  * pointer, or with the keyboard: Space picks a card up, arrows move it, Space drops, Esc cancels (dnd-kit).
  * `project` shows only that project's cards (GET /actions?project=). A card with an email opens it in the drawer.
  */
-export function Board({ project, variant = 'full', label = 'Board' }: { project?: string; variant?: 'full' | 'tile'; label?: string }) {
+export function Board({
+  project,
+  variant = 'full',
+  label = 'Board',
+  onEmailDrop,
+}: {
+  project?: string
+  variant?: 'full' | 'tile'
+  label?: string
+  /** A project's board: emails dragged from a list onto a column (proposals §23). */
+  onEmailDrop?: (ids: string[], column: BoardColumn) => void
+}) {
   const { toast } = useInbox()
   const board = useQuery(boardOptions(project))
   const cols = useMemo(() => byColumn(board.data?.items ?? []), [board.data])
@@ -119,7 +131,7 @@ export function Board({ project, variant = 'full', label = 'Board' }: { project?
         >
           <div className="board-cols">
             {BOARD_COLUMNS.map((c) => (
-              <BoardLane key={c.key} column={c.key} title={c.title} count={layout[c.key].length} empty={total === 0 && c.key === 'todo'}>
+              <BoardLane key={c.key} column={c.key} title={c.title} count={layout[c.key].length} empty={total === 0 && c.key === 'todo'} onEmailDrop={onEmailDrop}>
                 <SortableContext id={c.key} items={layout[c.key]} strategy={verticalListSortingStrategy}>
                   {layout[c.key].map((id) => {
                     const a = byId.get(id)
@@ -136,11 +148,31 @@ export function Board({ project, variant = 'full', label = 'Board' }: { project?
   )
 }
 
-function BoardLane({ column, title, count, empty, children }: { column: BoardColumn; title: string; count: number; empty: boolean; children: ReactNode }) {
+function BoardLane({ column, title, count, empty, onEmailDrop, children }: { column: BoardColumn; title: string; count: number; empty: boolean; onEmailDrop?: (ids: string[], column: BoardColumn) => void; children: ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id: column })
+  const [emailOver, setEmailOver] = useState(false)
   const headId = `lane-${column}`
+  // Emails come by native drag and drop (from any list), cards by dnd-kit; the two never mix.
+  const emailDrop = onEmailDrop
+    ? {
+        onDragOver: (e: DragEvent) => {
+          if (!carriesEmails(e)) return
+          e.preventDefault()
+          e.dataTransfer.dropEffect = 'copy'
+          setEmailOver(true)
+        },
+        onDragLeave: (e: DragEvent) => !e.currentTarget.contains(e.relatedTarget as Node | null) && setEmailOver(false),
+        onDrop: (e: DragEvent) => {
+          if (!carriesEmails(e)) return
+          e.preventDefault()
+          setEmailOver(false)
+          const ids = droppedEmails(e)
+          if (ids.length) onEmailDrop(ids, column)
+        },
+      }
+    : {}
   return (
-    <section className="board-lane" data-column={column} data-over={isOver || undefined} aria-labelledby={headId}>
+    <section className="board-lane" data-column={column} data-over={isOver || emailOver || undefined} aria-labelledby={headId} {...emailDrop}>
       <h3 className="board-lane-head" id={headId}>
         {title} <span className="col-count">{count}</span>
       </h3>

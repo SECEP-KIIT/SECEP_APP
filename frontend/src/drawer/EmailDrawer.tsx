@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { CircleCheck, Mail, MailOpen, Paperclip, Pin, PinOff, ShieldAlert, ShieldX, Undo2, X, BellRing } from 'lucide-react'
+import { CircleCheck, Mail, MailOpen, Paperclip, Pin, PinOff, ShieldAlert, ShieldX, Undo2, X, BellRing, FolderPlus } from 'lucide-react'
 import { useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { emailDetailOptions, updateEmail } from '../api/queries'
 import type { EmailDetail, LabelSource, Person } from '../api/types'
@@ -17,6 +17,8 @@ import { ActionList } from './ActionList'
 import { LinkList } from './LinkList'
 import { SecretList } from './SecretList'
 import './drawer.css'
+import { ProjectPicker } from '../inbox/ProjectPicker'
+import { openProjectDialog } from '../projects/dialogBus'
 
 const SOURCE: Record<LabelSource, string> = {
   encoder: 'Labelled by the classifier',
@@ -101,6 +103,7 @@ function DrawerBody({ email, compose, onClose }: { email: EmailDetail; compose?:
   const { toast } = useInbox()
   const portal = useContext(PortalContainer)
   const [remindAt, setRemindAt] = useState<{ ids: string[]; x: number; y: number } | null>(null)
+  const [projectAt, setProjectAt] = useState<{ ids: string[]; x: number; y: number } | null>(null)
   const [busy, setBusy] = useState(false)
   const triage = email.triage
   const role = senderRole(email)
@@ -131,6 +134,7 @@ function DrawerBody({ email, compose, onClose }: { email: EmailDetail; compose?:
   return (
     <>
       {remindAt && <RemindPicker at={remindAt} container={portal} onClose={() => setRemindAt(null)} />}
+      {projectAt && <ProjectPicker at={projectAt} container={portal} onClose={() => setProjectAt(null)} onCreate={(ids) => openProjectDialog({ addEmails: ids })} />}
       <header className="drawer-head">
         <div className="drawer-head-row">
           <p className="drawer-from">
@@ -169,6 +173,18 @@ function DrawerBody({ email, compose, onClose }: { email: EmailDetail; compose?:
           >
             <BellRing size={14} aria-hidden="true" />
             Remind me
+          </button>
+          <button
+            type="button"
+            className="ghost-button"
+            disabled={busy}
+            onClick={(e) => {
+              const r = e.currentTarget.getBoundingClientRect()
+              setProjectAt({ ids: [email.id], x: r.left, y: r.bottom })
+            }}
+          >
+            <FolderPlus size={14} aria-hidden="true" />
+            Add to project
           </button>
         </div>
       </header>

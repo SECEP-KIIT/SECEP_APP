@@ -9,6 +9,7 @@
 // stale, incompatible store is never loaded.
 import type { LayoutPage, Widget, WidgetSize } from '../../api/types'
 import type { Db, SettingsRow } from './types'
+import { backfillEmailCards } from './emailCardsCore'
 
 export const STORAGE_KEY = 'secep.mock'
 // 2: handled state; correction ids are UUIDs. 3: link samples, wall-clock action times. 4: layouts.
@@ -174,6 +175,7 @@ export function apply(db: Db, snap: Snapshot) {
   if (d.projectItems) db.projectItems = d.projectItems.filter((i) => (i.email_id ? db.emails.has(i.email_id) : !!i.action_id && db.actions.has(i.action_id)))
   if (d.notes) db.notes = d.notes.filter((n) => n.target_type !== 'email' || db.emails.has(n.target_id!))
   db.reminders = d.reminders ?? []
+  backfillEmailCards(db)
   db.models = d.models
   db.audit = d.audit
   // Secrets keep their seeded values; only the "is it set" state is restored.

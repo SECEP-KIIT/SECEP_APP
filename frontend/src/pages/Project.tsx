@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Pencil } from 'lucide-react'
 import { useParams } from 'react-router'
 import { ApiError } from '../api/client'
-import { boardOptions, useProject } from '../api/queries'
+import { boardOptions, dropEmailsOnBoard, useProject } from '../api/queries'
 import { Board } from '../board/Board'
 import { NotesAttach } from '../notes/NotesAttach'
 import { Column } from '../inbox/Column'
@@ -14,6 +14,7 @@ import { deadlineText, isOverdue, ringTone, toneColour, toneLabel } from '../pro
 import '../projects/projects.css'
 import { ProgressRing } from '../shell/ProgressRing'
 import { useMinuteClock } from '../shell/useMinuteClock'
+import { shellToast } from '../lib/toastBus'
 
 /**
  * A project's view (FR-UI-020): header with the deadline countdown and the progress ring (amber when tasks are
@@ -96,7 +97,17 @@ function ProjectView({ id }: { id: string }) {
         <div className="project-side">
           <section className="project-section" aria-labelledby="project-tasks">
             <h3 id="project-tasks">Tasks</h3>
-            <Board project={p.id} variant="tile" label={`${p.name} tasks`} />
+            <Board
+              project={p.id}
+              variant="tile"
+              label={`${p.name} tasks`}
+              onEmailDrop={(ids, column) =>
+                void dropEmailsOnBoard(p, ids, column).then(
+                  (n) => n > 0 && shellToast(`Moved ${n === 1 ? 'the email' : `${n} emails`} to ${column === 'todo' ? 'To do' : column === 'done' ? 'Done' : 'In progress'}`),
+                  () => shellToast("Couldn't move that here", 'error'),
+                )
+              }
+            />
           </section>
           <section className="project-section project-notes" aria-labelledby="project-notes">
             <h3 id="project-notes">Notes & attachments</h3>

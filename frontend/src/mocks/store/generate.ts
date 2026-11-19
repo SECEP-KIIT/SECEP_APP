@@ -6,6 +6,7 @@ import { chance, int, pick, rng, round, uid, type Rng } from './random'
 import { localDate } from './serialize'
 import { LINK_SAMPLES, SENDERS, TEMPLATES, type ActionSpec, type Sender, type Template } from './templates'
 import type { ActionRow, Db, EmailRow, UserRow } from './types'
+import { backfillEmailCards } from './emailCardsCore'
 
 export const SEED = 20261104
 const DAY = 86_400_000
@@ -330,5 +331,6 @@ export function createDb(now: number, seed = SEED): Db {
       db.notifications.push({ ...buildNotification(++n, { kind: 'new_email', email: { from: e.from, subject: e.subject, triage: e.triage } }, { type: 'email', id: e.id }, iso(Date.parse(e.received_at) + 1000)), user_id: user.id })
     }
   }
+  backfillEmailCards(db)
   return db
 }

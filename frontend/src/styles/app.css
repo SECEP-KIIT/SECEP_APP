@@ -852,7 +852,8 @@ html[data-motion='off'] .bell-badge {
 }
 .alert-ring {
   flex: none;
-  transform: rotate(-90deg);
+  /* Starts at 12 o'clock and empties anticlockwise (mirrored). */
+  transform: scaleX(-1) rotate(-90deg);
 }
 .alert-ring circle {
   fill: none;
