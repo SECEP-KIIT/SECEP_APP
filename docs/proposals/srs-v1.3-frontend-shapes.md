@@ -463,5 +463,5 @@ The §6.6 tables (`actions` with `origin = user`, `notes`, `files`, `masked_secr
 
 - **Snooze removed from the UI** (Sky's call): no Snooze menu item, `h` key, drawer button, "Snoozed · n" divider or ⏰ tag. "Remind me" (`r`, right-click, drawer, and "Remind me about all" for a selection) is the only way to come back to an email later. `PATCH /emails/:id {snoozed_until}` stays in the contract but the client no longer sends it; FR-REM-002's "card drops to the bottom" part is not built.
 - **Notes save on Save** (or Ctrl+Enter), not while typing. Cancel discards changes and deletes files attached during that edit. Closing the drawer with unsaved text still saves it, so nothing is lost. Escape closes only an unchanged note.
-- **Top alerts:** 6 s, a ring beside × that runs once over the 6 s, paused while hovered or focused.
+- **Top alerts:** 5 s, a blue ring beside × that runs once over the 5 s, paused while hovered or focused.
 - **Bell badge:** the real count, no "9+" cap.

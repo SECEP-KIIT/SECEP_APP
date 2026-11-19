@@ -856,11 +856,10 @@ html[data-motion='off'] .bell-badge {
 }
 .alert-ring circle {
   fill: none;
-  stroke: currentColor;
+  stroke: var(--accent);
   stroke-width: 2.5;
   stroke-linecap: round;
   stroke-dasharray: 100;
-  opacity: 0.55;
   /* Runs once over the alert's lifetime; paused with the timer on hover or focus. */
   animation: alert-ring linear forwards;
 }
@@ -966,4 +965,34 @@ html[data-motion='off'] .alert-ring circle {
   flex: none;
   font-size: 0.75rem;
   opacity: 0.7;
+}
+
+/* A cut-off project name floats out past the sidebar's right edge (fixed, so the panel's clipping doesn't apply). */
+.nav-float {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--card-bg);
+  color: var(--ink);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.28);
+  font-size: inherit;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: nav-float-in 120ms ease-out;
+}
+@keyframes nav-float-in {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nav-float {
+    animation: none;
+  }
+}
+.nav-float-icon {
+  margin-right: 0.35em;
 }

@@ -5,12 +5,12 @@ import { markNotificationsRead } from '../api/queries'
 import { onAlert, type TopAlert } from '../lib/alertBus'
 import { openNotificationTarget } from '../lib/openTarget'
 
-const SHOW_MS = 6_000
+const SHOW_MS = 5_000
 const MAX = 3
 
 /**
- * Reminders and meetings that fire drop in from the top of the screen (FR-REM-004) and stay 6 s, or until dismissed;
- * the bell keeps them either way. A ring beside the close button runs once over those 6 s; hovering or focusing the
+ * Reminders and meetings that fire drop in from the top of the screen (FR-REM-004) and stay 5 s, or until dismissed;
+ * the bell keeps them either way. A ring beside the close button runs once over those 5 s; hovering or focusing the
  * alert pauses both. Shape icon + text, never colour alone. Motion is transform, opacity and the ring's stroke.
  */
 export function TopAlerts() {

@@ -1,5 +1,6 @@
 import { Plus } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { NavLink } from 'react-router'
 import { emailProjects, setEmailsInProject, useProjects } from '../api/queries'
 import type { Project } from '../api/types'
@@ -57,6 +58,27 @@ export function SidebarProjects() {
 function ProjectLink({ project: p, now }: { project: Project; now: Date }) {
   const [over, setOver] = useState(false)
   const tone = ringTone(p, now)
+  // The full name, floated over the content when the label is cut off (hover after a short intent, or focus).
+  const [float, setFloat] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
+  const intent = useRef<number | undefined>(undefined)
+  const showFloat = (e: { currentTarget: HTMLElement; type: string }) => {
+    const link = e.currentTarget
+    const label = link.querySelector<HTMLElement>('.nav-label')
+    if (!label || label.scrollWidth <= label.clientWidth) return
+    window.clearTimeout(intent.current)
+    intent.current = window.setTimeout(
+      () => {
+        const r = label.getBoundingClientRect()
+        setFloat({ left: r.left - 6, top: r.top - 4, width: r.width + 12, height: r.height + 8 })
+      },
+      e.type === 'focus' ? 0 : 250,
+    )
+  }
+  const hideFloat = () => {
+    window.clearTimeout(intent.current)
+    setFloat(null)
+  }
+  useEffect(() => () => window.clearTimeout(intent.current), [])
   const canDrop = !p.archived_at
 
   const drop = async (ids: string[]) => {
@@ -86,8 +108,11 @@ function ProjectLink({ project: p, now }: { project: Project; now: Date }) {
       <NavLink
         to={`/projects/${p.id}`}
         className="nav-link"
-        title={p.name}
         data-drop={over || undefined}
+        onMouseEnter={showFloat}
+        onMouseLeave={hideFloat}
+        onFocus={showFloat}
+        onBlur={hideFloat}
         data-archived={p.archived_at ? '' : undefined}
         onDragOver={(e) => {
           if (!canDrop || !(carriesEmails(e) || hasFiles(e))) return
@@ -118,6 +143,15 @@ function ProjectLink({ project: p, now }: { project: Project; now: Date }) {
           {p.name}
         </span>
       </NavLink>
+      {float &&
+        createPortal(
+          // A truncated name pops out past the sidebar's edge, like a half-visible card does over its column.
+          <div className="nav-float" aria-hidden="true" style={{ left: float.left, top: float.top, height: float.height, minWidth: float.width }}>
+            {p.icon && <span className="nav-float-icon">{p.icon}</span>}
+            {p.name}
+          </div>,
+          document.body,
+        )}
     </li>
   )
 }
