@@ -188,7 +188,7 @@ function PopupTable({ rules, onChange }: { rules: PopupRules; onChange: (r: Popu
                 <span className="settings-hint">{m.hint}</span>
               </th>
               <td>
-                <select aria-label={`${m.label}: urgency that pops up`} value={rules[m.key].urgency} onChange={(e) => set(m.key, { urgency: e.target.value as PopupRule['urgency'] })}>
+                <select onClick={() => markDone('popup_rules')} aria-label={`${m.label}: urgency that pops up`} value={rules[m.key].urgency} onChange={(e) => set(m.key, { urgency: e.target.value as PopupRule['urgency'] })}>
                   {LEVELS.map((l) => (
                     <option key={l.key} value={l.key}>
                       {l.label}
@@ -197,7 +197,7 @@ function PopupTable({ rules, onChange }: { rules: PopupRules; onChange: (r: Popu
                 </select>
               </td>
               <td>
-                <select aria-label={`${m.label}: also pop up when the mood is`} value={rules[m.key].sentiment} onChange={(e) => set(m.key, { sentiment: e.target.value as PopupRule['sentiment'] })}>
+                <select onClick={() => markDone('popup_rules')} aria-label={`${m.label}: also pop up when the mood is`} value={rules[m.key].sentiment} onChange={(e) => set(m.key, { sentiment: e.target.value as PopupRule['sentiment'] })}>
                   {SENTIMENTS.map((s) => (
                     <option key={s.key} value={s.key}>
                       {s.label}

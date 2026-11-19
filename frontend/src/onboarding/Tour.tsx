@@ -217,6 +217,7 @@ function NotifySetting() {
       <label>
         Pop up
         <select
+          onClick={() => markDone('popup_rules')}
           value={normal.urgency}
           onChange={(e) => (markDone('popup_rules'), update.mutate({ popup_rules: { ...prefs.popup_rules, normal: { ...normal, urgency: e.target.value as typeof normal.urgency } } }))}
         >
