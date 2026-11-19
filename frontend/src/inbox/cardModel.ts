@@ -37,7 +37,7 @@ export function cardTime(iso: string, now: Date, locale?: string): string {
 
 // ── Tags (item 4, FR-UI-013/014) ───────────────────────────────────────────────────────────────────────────────
 
-export type TagKind = 'security' | 'due' | 'project' | 'action' | 'sentiment' | 'attachments' | 'notes' | 'replies' | 'duplicates' | 'masked' | 'snoozed'
+export type TagKind = 'security' | 'due' | 'project' | 'action' | 'sentiment' | 'attachments' | 'notes' | 'replies' | 'duplicates' | 'masked'
 
 export interface CardTag {
   kind: TagKind
@@ -108,12 +108,6 @@ export function cardTags(email: EmailListItem, now: Date): CardTag[] {
   }
   if (email.has_masked_secret) {
     tags.push({ kind: 'masked', text: '', label: 'Contains a masked secret', tone: 'muted', filter: null })
-  }
-  if (!email.handled && email.snoozed_until && Date.parse(email.snoozed_until) > now.getTime()) {
-    tags.push({ kind: 'snoozed', text: '', label: `Snoozed until ${new Date(email.snoozed_until).toLocaleString()}`, tone: 'muted', filter: null })
-  } else if (!email.handled && email.snoozed_until && !email.read) {
-    // FR-REM-002: back in its normal place with ⏰ until it is opened.
-    tags.push({ kind: 'snoozed', text: '', label: 'Back from snooze', tone: 'muted', filter: null })
   }
   return tags
 }

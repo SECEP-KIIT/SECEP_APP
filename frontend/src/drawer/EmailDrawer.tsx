@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { CircleCheck, Mail, MailOpen, Paperclip, Pin, PinOff, ShieldAlert, ShieldX, Undo2, X, AlarmClock, BellRing } from 'lucide-react'
+import { CircleCheck, Mail, MailOpen, Paperclip, Pin, PinOff, ShieldAlert, ShieldX, Undo2, X, BellRing } from 'lucide-react'
 import { useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { emailDetailOptions, updateEmail } from '../api/queries'
 import type { EmailDetail, LabelSource, Person } from '../api/types'
@@ -10,7 +10,7 @@ import { errorText, useInbox, type OpenOptions } from '../inbox/inboxContext'
 import { setHandled } from '../inbox/quickActions'
 import { TypeIcon, UrgencyMark } from '../inbox/marks'
 import { PortalContainer } from '../inbox/portal'
-import { SnoozePicker } from '../inbox/SnoozePicker'
+import { RemindPicker } from '../inbox/RemindPicker'
 import { AttachmentTools } from '../files/AttachmentTools'
 import { EmailNotes } from '../notes/EmailNotes'
 import { ActionList } from './ActionList'
@@ -100,10 +100,8 @@ export default function EmailDrawer({ id, compose, onClose }: { id: string; comp
 function DrawerBody({ email, compose, onClose }: { email: EmailDetail; compose?: OpenOptions['compose']; onClose: () => void }) {
   const { toast } = useInbox()
   const portal = useContext(PortalContainer)
-  const [snoozeAt, setSnoozeAt] = useState<{ ids: string[]; x: number; y: number; remind?: boolean } | null>(null)
-  const [mountedAt] = useState(() => Date.now())
+  const [remindAt, setRemindAt] = useState<{ ids: string[]; x: number; y: number } | null>(null)
   const [busy, setBusy] = useState(false)
-  const snoozedNow = !!email.snoozed_until && Date.parse(email.snoozed_until) > mountedAt
   const triage = email.triage
   const role = senderRole(email)
 
@@ -132,7 +130,7 @@ function DrawerBody({ email, compose, onClose }: { email: EmailDetail; compose?:
 
   return (
     <>
-      {snoozeAt && <SnoozePicker at={snoozeAt} container={portal} onClose={() => setSnoozeAt(null)} />}
+      {remindAt && <RemindPicker at={remindAt} container={portal} onClose={() => setRemindAt(null)} />}
       <header className="drawer-head">
         <div className="drawer-head-row">
           <p className="drawer-from">
@@ -166,19 +164,7 @@ function DrawerBody({ email, compose, onClose }: { email: EmailDetail; compose?:
             disabled={busy}
             onClick={(e) => {
               const r = e.currentTarget.getBoundingClientRect()
-              setSnoozeAt({ ids: [email.id], x: r.left, y: r.bottom })
-            }}
-          >
-            <AlarmClock size={14} aria-hidden="true" />
-            {snoozedNow ? 'Snoozed' : 'Snooze'}
-          </button>
-          <button
-            type="button"
-            className="ghost-button"
-            disabled={busy}
-            onClick={(e) => {
-              const r = e.currentTarget.getBoundingClientRect()
-              setSnoozeAt({ ids: [email.id], x: r.left, y: r.bottom, remind: true })
+              setRemindAt({ ids: [email.id], x: r.left, y: r.bottom })
             }}
           >
             <BellRing size={14} aria-hidden="true" />

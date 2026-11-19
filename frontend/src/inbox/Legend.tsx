@@ -20,7 +20,6 @@ const TAGS: CardTag[] = [
   sample('replies', 'Replies in the thread'),
   sample('duplicates', 'Duplicates merged'),
   sample('masked', 'Contains a masked secret'),
-  sample('snoozed', 'Snoozed'),
 ]
 
 /** The `?` legend (FR-UI-014): every symbol a card can show. A native modal dialog: focus trap and Esc for free. */

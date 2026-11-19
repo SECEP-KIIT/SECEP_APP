@@ -8,7 +8,7 @@ import { SelectionBar } from './SelectionBar'
 import { lastPointer, SELECT_ALL, selectRange, SelectionContext, type SelectionApi } from './selection'
 import { Legend } from './Legend'
 import { ProjectPicker, type PickerAt } from './ProjectPicker'
-import { SnoozePicker } from './SnoozePicker'
+import { RemindPicker } from './RemindPicker'
 import { Toaster } from './Toaster'
 import { onOpenEmail } from '../lib/openEmail'
 import { onShellToast } from '../lib/toastBus'
@@ -27,7 +27,7 @@ export function InboxHost({ children }: { children: ReactNode }) {
   const { toasts, push, dismiss, undo } = useToasts()
   const [menuAt, setMenuAt] = useState<{ email: EmailListItem; x: number; y: number } | null>(null)
   const [pickerAt, setPickerAt] = useState<PickerAt | null>(null)
-  const [snoozeAt, setSnoozeAt] = useState<PickerAt | null>(null)
+  const [remindAt, setRemindAt] = useState<PickerAt | null>(null)
   // Toasts from the sidebar and the project dialog land here (lib/toastBus).
   useEffect(() => onShellToast((t) => push(t.message, t.tone, t.action)), [push])
   // Selection (FR-UI-027): ids only; bulk actions fetch what they need.
@@ -70,9 +70,9 @@ export function InboxHost({ children }: { children: ReactNode }) {
         setMenuAt(null)
         setPickerAt({ ids: [...ids], x, y })
       },
-      pickSnooze: (ids, x, y, remind) => {
+      pickRemind: (ids, x, y) => {
         setMenuAt(null)
-        setSnoozeAt({ ids: [...ids], x, y, remind })
+        setRemindAt({ ids: [...ids], x, y })
       },
     }),
     [push],
@@ -132,7 +132,7 @@ export function InboxHost({ children }: { children: ReactNode }) {
       </p>
       <CardLiftProvider>{children}</CardLiftProvider>
       <SelectionBar />
-      {snoozeAt && <SnoozePicker at={snoozeAt} onClose={() => setSnoozeAt(null)} />}
+      {remindAt && <RemindPicker at={remindAt} onClose={() => setRemindAt(null)} />}
       {pickerAt && <ProjectPicker at={pickerAt} onClose={() => setPickerAt(null)} onCreate={(ids) => openProjectDialog({ addEmails: ids })} />}
       {menuAt && <CardMenu key={`${menuAt.email.id}-${menuAt.x}-${menuAt.y}`} at={menuAt} onClose={() => setMenuAt(null)} />}
       <Legend open={legend} onClose={() => setLegend(false)} />

@@ -1,5 +1,5 @@
 import * as Popover from '@radix-ui/react-popover'
-import { AlarmClock, BellRing, CalendarPlus, ChevronRight, CircleCheck, Copy, ExternalLink, FolderPlus, Mail, MailOpen, Pin, PinOff, SquareCheck, Undo2, X, Zap } from 'lucide-react'
+import { BellRing, CalendarPlus, ChevronRight, CircleCheck, Copy, ExternalLink, FolderPlus, Mail, MailOpen, Pin, PinOff, SquareCheck, Undo2, X, Zap } from 'lucide-react'
 import { useRef, type KeyboardEvent, type ReactNode } from 'react'
 import type { EmailListItem } from '../api/types'
 import { copySummary } from './cardKeys'
@@ -59,7 +59,7 @@ export function CardMenu({ at, onClose }: { at: { email: EmailListItem; x: numbe
 
 function SingleItems({ at, onClose }: { at: { email: EmailListItem; x: number; y: number }; onClose: () => void }) {
   const email = at.email
-  const { toast, pickProject, pickSnooze } = useInbox()
+  const { toast, pickProject, pickRemind } = useInbox()
   const { selected, toggle } = useSelection()
   const { send, toggleHandled, togglePin, toggleRead, open } = useQuickActions(email, () => {})
   const run = (fn: () => unknown) => () => {
@@ -77,8 +77,7 @@ function SingleItems({ at, onClose }: { at: { email: EmailListItem; x: number; y
       )}
       <Item icon={<CalendarPlus size={14} />} label="Add to Calendar" keys="⇧C" onSelect={run(() => send('add_calendar_event'))} />
       <Item icon={<FolderPlus size={14} />} label="Add to project" keys="P" more onSelect={() => pickProject([email.id], at.x, at.y)} />
-      <Item icon={<AlarmClock size={14} />} label="Snooze" keys="H" more onSelect={() => pickSnooze([email.id], at.x, at.y)} />
-      <Item icon={<BellRing size={14} />} label="Remind me" keys="R" more onSelect={() => pickSnooze([email.id], at.x, at.y, true)} />
+      <Item icon={<BellRing size={14} />} label="Remind me" keys="R" more onSelect={() => pickRemind([email.id], at.x, at.y)} />
       <Item
         icon={email.handled ? <Undo2 size={14} /> : <CircleCheck size={14} />}
         label={email.handled ? 'Restore to inbox' : 'Mark as handled'}
@@ -96,7 +95,7 @@ function SingleItems({ at, onClose }: { at: { email: EmailListItem; x: number; y
 
 function BulkItems({ at, onClose }: { at: { x: number; y: number }; onClose: () => void }) {
   const { selected, clear } = useSelection()
-  const { pickProject, pickSnooze } = useInbox()
+  const { pickProject, pickRemind } = useInbox()
   const bulk = useBulk()
   const run = (fn: () => unknown) => () => {
     onClose()
@@ -108,7 +107,7 @@ function BulkItems({ at, onClose }: { at: { x: number; y: number }; onClose: () 
       <Item icon={<Zap size={14} />} label="Send each to Jira" onSelect={run(() => bulk.send('create_jira_issue'))} />
       <Item icon={<CalendarPlus size={14} />} label="Add each to Calendar" onSelect={run(() => bulk.send('add_calendar_event'))} />
       <Item icon={<FolderPlus size={14} />} label="Add all to project" more onSelect={() => pickProject([...selected], at.x, at.y)} />
-      <Item icon={<AlarmClock size={14} />} label="Snooze all" more onSelect={() => pickSnooze([...selected], at.x, at.y)} />
+      <Item icon={<BellRing size={14} />} label="Remind me about all" more onSelect={() => pickRemind([...selected], at.x, at.y)} />
       <Item icon={<CircleCheck size={14} />} label="Mark all as handled" onSelect={run(() => bulk.done())} />
       <hr className="menu-sep" />
       <Item icon={<X size={14} />} label="Clear selection" keys="Esc" onSelect={run(clear)} />

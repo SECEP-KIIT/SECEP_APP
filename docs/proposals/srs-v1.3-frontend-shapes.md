@@ -458,3 +458,10 @@ The §6.6 tables (`actions` with `origin = user`, `notes`, `files`, `masked_secr
 2. **Files inside a note.** No schema change. A file attached from a note is uploaded to that note's own email, card or project (`POST /files`) and the note body holds `[file:<uuid>]`. The client shows the token as a chip; a deleted file shows "File removed".
 3. **Handled mail is not snoozed.** The client ignores `snoozed_until` once an email is handled: no ⏰, no "Snoozed" divider, no dimming on the Handled page. No API change.
 4. **UI only:** reminders and meetings drop in from the top of the screen (12 s, dismiss or click to open the target), the bell badge is red and pops when the count grows, `r` and "Remind me" in the card menu and the email drawer.
+
+### 21.5 Fix round (task 15, 19 Nov 2026)
+
+- **Snooze removed from the UI** (Sky's call): no Snooze menu item, `h` key, drawer button, "Snoozed · n" divider or ⏰ tag. "Remind me" (`r`, right-click, drawer, and "Remind me about all" for a selection) is the only way to come back to an email later. `PATCH /emails/:id {snoozed_until}` stays in the contract but the client no longer sends it; FR-REM-002's "card drops to the bottom" part is not built.
+- **Notes save on Save** (or Ctrl+Enter), not while typing. Cancel discards changes and deletes files attached during that edit. Closing the drawer with unsaved text still saves it, so nothing is lost. Escape closes only an unchanged note.
+- **Top alerts:** 5 s, a blue ring beside × that runs once over the 5 s, paused while hovered or focused.
+- **Bell badge:** the real count, no "9+" cap.
