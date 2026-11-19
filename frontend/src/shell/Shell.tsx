@@ -11,7 +11,9 @@ import { anyLayerOpen, isTypingTarget } from './focusKeys'
 import { FocusContext, useFocusMode } from './focusMode'
 import { LockSlots } from './LockSlots'
 import { TopAlerts } from './TopAlerts'
-import { useApplyPrefs, usePrefs } from './prefs'
+import { hasModifier, matches } from '../lib/keybinds'
+import { setPopupFocus } from '../lib/popupGate'
+import { useApplyPrefs, usePopupIntro, usePrefs } from './prefs'
 import { Sidebar } from './Sidebar'
 import { TabBar } from './TabBar'
 import { Topbar } from './Topbar'
@@ -42,6 +44,8 @@ function SignedInShell() {
   useBootSteps()
   useApplyPrefs()
   const focused = useFocusMode()
+  useEffect(() => setPopupFocus(focused), [focused])
+  usePopupIntro()
   const announcement = useFocusAnnouncement(focused)
   const { sidebar_collapsed } = usePrefs()
   const navigate = useNavigate()
@@ -90,9 +94,9 @@ function CardsSlot() {
   const project = useMatch('/projects/:id')?.params.id
   useEffect(() => onAnyCardRequest(() => setWanted(true)), [])
   useEffect(() => {
-    // n: quick-add (decisions item 11), never while typing or with a dialog open.
+    // n (or the Settings key): quick-add (decisions item 11), never while typing or with a dialog open.
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'n' || e.ctrlKey || e.metaKey || e.altKey || isTypingTarget(e.target) || anyLayerOpen()) return
+      if (e.defaultPrevented || !matches(e, 'quick_add') || (!hasModifier('quick_add') && (isTypingTarget(e.target) || anyLayerOpen()))) return
       e.preventDefault()
       openQuickAdd({ projectId: project })
     }

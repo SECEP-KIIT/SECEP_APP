@@ -15,6 +15,7 @@ import { anyLayerOpen, focusKeyAction, isTypingTarget } from './focusKeys'
 import { glanceLine, lockNotificationText } from './lockText'
 import { moreNav, NAV, phoneTabs, visibleNav } from './nav'
 import { resolvePrefs } from './prefs'
+import { DEFAULT_POPUP_RULES } from '../lib/popupRules'
 
 const key = (k: string, extra: Partial<{ ctrlKey: boolean; metaKey: boolean; altKey: boolean; target: unknown }> = {}) => ({
   key: k,
@@ -76,7 +77,8 @@ describe('nav gating (sidebar and tab bar share it)', () => {
 
 describe('resolvePrefs', () => {
   it('defaults, and drops wrongly typed values', () => {
-    expect(resolvePrefs({})).toEqual({ motion: undefined, skip_lock: false, idle_minutes: 15, glance_subjects: false, sidebar_collapsed: false, theme: 'auto' })
+    expect(resolvePrefs({})).toEqual({ motion: undefined, skip_lock: false, idle_minutes: 15, glance_subjects: false, sidebar_collapsed: false, theme: 'auto', popup_rules: DEFAULT_POPUP_RULES, quiet_hours: { start: '22:00', end: '08:00' }, keybinds: {} })
+    expect(resolvePrefs({ quiet_hours: null, keybinds: { lock: 'Alt+Q' }, popup_rules: { bad: 1 } })).toMatchObject({ quiet_hours: null, keybinds: { lock: 'Alt+Q' }, popup_rules: DEFAULT_POPUP_RULES })
     expect(resolvePrefs({ theme: 'dark' }).theme).toBe('dark')
     expect(resolvePrefs({ theme: 'sepia' }).theme).toBe('auto')
     expect(resolvePrefs({ motion: 'wild', skip_lock: 'yes', idle_minutes: null })).toMatchObject({ motion: undefined, skip_lock: false, idle_minutes: null })

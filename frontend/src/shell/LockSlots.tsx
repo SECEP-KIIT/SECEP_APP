@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useGlance } from '../api/queries'
 import { glanceParts } from './lockText'
@@ -12,6 +13,7 @@ export function LockSlots() {
   // Only used to tell "today" from another day in the glance line; glance itself refetches.
   const [now] = useState(() => new Date())
   const glanceEl = document.getElementById('lock-glance')
+  useLockRefresh()
 
   return (
     <>
@@ -51,3 +53,31 @@ export function LockSlots() {
   )
 }
 
+
+/**
+ * The lock's refresh button (index.html, top right): refetches the glance and every query on screen behind the lock,
+ * without opening it. The icon spins while it runs (still under reduced motion); the status line says when it's done.
+ */
+function useLockRefresh() {
+  const qc = useQueryClient()
+  useEffect(() => {
+    const btn = document.getElementById('lock-refresh')
+    const status = document.getElementById('lock-status')
+    if (!btn) return
+    const run = async () => {
+      if (btn.hasAttribute('data-busy')) return
+      btn.toggleAttribute('data-busy', true)
+      btn.setAttribute('aria-busy', 'true')
+      try {
+        await qc.refetchQueries({ type: 'active' })
+        if (status) status.textContent = 'Refreshed'
+      } finally {
+        btn.toggleAttribute('data-busy', false)
+        btn.removeAttribute('aria-busy')
+      }
+    }
+    const onClick = () => void run()
+    btn.addEventListener('click', onClick)
+    return () => btn.removeEventListener('click', onClick)
+  }, [qc])
+}

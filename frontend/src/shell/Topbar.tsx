@@ -8,12 +8,12 @@ import { onOpenSearch } from '../search/searchBus'
 import { useMatch, useMatches } from 'react-router'
 import { openQuickAdd } from '../cards/cardBus'
 import { useMinuteClock } from './useMinuteClock'
+import { display, hasModifier, matches, useBindings, type KeyActionId } from '../lib/keybinds'
 
 // Search loads on first use (NFR-PERF-010: the palette is not in the initial bundle).
 const SearchPalette = lazy(() => import('../search/SearchPalette').then((m) => ({ default: m.SearchPalette })))
 
 const timeFmt = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' })
-const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent)
 
 const latestUpdate = (cache: QueryCache) => Math.max(0, ...cache.getAll().map((q) => q.state.dataUpdatedAt))
 
@@ -60,18 +60,18 @@ export function Topbar() {
   // null: closed; a string: open, starting with these words (the Inbox's search pill reopens it).
   const [search, setSearch] = useState<string | null>(null)
   useEffect(() => onOpenSearch((q) => setSearch(q)), [])
-  // Alt+L locks from anywhere (the topbar button's shortcut). Ctrl/⌘+K opens search; so does / when not typing.
+  // Keys from Settings (proposals §28.3); by default Alt+L locks, Ctrl/⌘+K and / open search. A key without Ctrl/⌘
+  // or Alt never fires while typing or with a dialog open.
   useEffect(() => {
+    const free = (e: KeyboardEvent, id: KeyActionId) => matches(e, id) && (hasModifier(id) || (!isTypingTarget(e.target) && !anyLayerOpen()))
     const onKey = (e: KeyboardEvent) => {
-      if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === 'KeyL') {
+      if (e.defaultPrevented) return
+      if (free(e, 'lock')) {
         e.preventDefault()
         lock.now()
       } else if (!lock.isOpen()) {
         return
-      } else if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k') {
-        e.preventDefault()
-        setSearch('')
-      } else if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey && !isTypingTarget(e.target) && !anyLayerOpen()) {
+      } else if (free(e, 'search') || free(e, 'search_alt')) {
         e.preventDefault()
         setSearch('')
       }
@@ -80,6 +80,8 @@ export function Topbar() {
     return () => removeEventListener('keydown', onKey)
   }, [])
   const now = useMinuteClock()
+  const bindings = useBindings()
+  const keys = { search: display(bindings.search), lock: display(bindings.lock), quick_add: display(bindings.quick_add) }
   const project = useMatch('/projects/:id')?.params.id
   const title = useMatches()
     .map((m) => (m.handle as { title?: string } | undefined)?.title)
@@ -99,7 +101,7 @@ export function Topbar() {
         <button type="button" className="search-pill" onClick={() => setSearch('')} aria-haspopup="dialog">
           <Search aria-hidden="true" size={16} />
           <span className="search-pill-label">Search</span>
-          <kbd>{isMac ? '⌘K' : 'Ctrl K'}</kbd>
+          <kbd>{keys.search}</kbd>
         </button>
       </div>
       {search !== null && (
@@ -111,10 +113,10 @@ export function Topbar() {
         <SyncIndicator />
         <Bell />
         {/* Lock now before stepping away, instead of waiting for the idle timer (desktop only; phones have no lock). */}
-        <button type="button" className="icon-button lock-now" aria-label="Lock screen" title="Lock screen (Alt+L)" onClick={() => lock.now()}>
+        <button type="button" className="icon-button lock-now" aria-label="Lock screen" title={`Lock screen (${keys.lock})`} onClick={() => lock.now()}>
           <Lock aria-hidden="true" size={17} />
         </button>
-        <button type="button" className="icon-button" aria-label="Quick add a card" title="Quick add (N)" onClick={() => openQuickAdd({ projectId: project })}>
+        <button type="button" className="icon-button" aria-label="Quick add a card" title={`Quick add (${keys.quick_add})`} onClick={() => openQuickAdd({ projectId: project })}>
           <Plus aria-hidden="true" size={18} />
         </button>
       </div>

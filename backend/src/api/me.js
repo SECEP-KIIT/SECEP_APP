@@ -16,6 +16,15 @@ export const toMe = (u) => ({
   ui_prefs: u.ui_prefs,
 });
 
+// PROPOSED (proposals §28): pop-up rules, quiet hours, key binds. Same rules as frontend/src/lib/popupRules.ts and keybinds.ts.
+const isObj = (v) => typeof v === 'object' && v !== null && !Array.isArray(v);
+const LEVELS = ['all', 'medium', 'high', 'critical', 'none'];
+const MOODS = ['off', 'frustrated', 'negative'];
+const isRule = (v) => isObj(v) && Object.keys(v).length === 2 && LEVELS.includes(v.urgency) && MOODS.includes(v.sentiment);
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+const KEY_IDS = ['search', 'search_alt', 'quick_add', 'focus', 'lock', 'next', 'prev', 'select', 'done', 'project', 'remind', 'jira'];
+const COMBO = /^(Mod\+)?(Alt\+)?(Shift\+)?([^+]|[A-Z][A-Z0-9]{1,11})$/;
+
 const PREF_CHECKS = {
   motion: (v) => v === null || ['full', 'reduced', 'off'].includes(v),
   skip_lock: (v) => typeof v === 'boolean',
@@ -23,6 +32,9 @@ const PREF_CHECKS = {
   glance_subjects: (v) => typeof v === 'boolean',
   sidebar_collapsed: (v) => typeof v === 'boolean',
   theme: (v) => ['light', 'dark', 'auto'].includes(v),
+  popup_rules: (v) => isObj(v) && Object.keys(v).length === 3 && isRule(v.normal) && isRule(v.focus) && isRule(v.quiet),
+  quiet_hours: (v) => v === null || (isObj(v) && Object.keys(v).length === 2 && HHMM.test(v.start) && HHMM.test(v.end)),
+  keybinds: (v) => isObj(v) && Object.entries(v).every(([k, c]) => KEY_IDS.includes(k) && typeof c === 'string' && c.length <= 24 && COMBO.test(c)),
 };
 
 route(me, 'get', '/me', 'user', (req, user) => toMe(user));

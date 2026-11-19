@@ -10,6 +10,7 @@ import type { InfiniteData, QueryClient } from '@tanstack/react-query'
 import type { Socket } from 'socket.io-client'
 import { dueDateOfActions } from '../lib/due'
 import { raiseAlert } from '../lib/alertBus'
+import { maybePopUp } from '../lib/popupGate'
 import { currentAccessToken, refreshForSocket } from './client'
 import type { Action, AppNotification, EmailDetail, EmailListItem, LinkView, Page, SecurityFlag } from './types'
 
@@ -198,7 +199,11 @@ function handle<E extends keyof Events>(qc: QueryClient, event: E, payload: Even
       const { email_id, email } = payload as Events['email.triaged']
       const before = cachedEmail(qc, email_id)
       // Known email (e.g. relabelled): in place. Unknown: signal only.
-      if (!patchEmailCache(qc, email_id, email) && !arrivalItems.has(email_id)) addArrival(email)
+      if (!patchEmailCache(qc, email_id, email) && !arrivalItems.has(email_id)) {
+        addArrival(email)
+        // FR-REM-007: a new email interrupts only if the pop-up rules for now (Normal, Focus, Quiet) let it through.
+        maybePopUp(email)
+      }
       // Handled or read changed in another tab or session (§10.3, §12.3): the same list settling as a local PATCH.
       if (before && (before.handled !== email.handled || before.read !== email.read)) settleLists(qc, email)
       break

@@ -133,18 +133,22 @@ function tickClock() {
   setTimeout(tickClock, 60_000 - (Date.now() % 60_000))
 }
 
+/** The lock's refresh button (top right) refreshes without opening the lock. */
+const onRefresh = (t: EventTarget | null) => !!(t as Element | null)?.closest?.('#lock-refresh')
+
 function onKey(e: KeyboardEvent) {
   lastActive = Date.now()
   if (state.view === 'open') return
+  if (onRefresh(e.target) && (e.key === 'Enter' || e.key === ' ')) return
   // The key only opens the lock; it must not also reach the app (e.g. F would toggle focus mode).
   e.stopPropagation()
   if (!e.ctrlKey && !e.metaKey && !e.altKey) e.preventDefault()
   dispatch({ type: 'request' })
 }
 
-function onPointerDown() {
+function onPointerDown(e: PointerEvent) {
   lastActive = Date.now()
-  if (state.view !== 'open') dispatch({ type: 'request' })
+  if (state.view !== 'open' && !onRefresh(e.target)) dispatch({ type: 'request' })
 }
 
 const markActive = () => {

@@ -7,6 +7,8 @@ import { object, isInt } from '../http/validate'
 import { issueToken, signOut } from '../session'
 import { changed, db } from '../store/db'
 import { toMe } from '../store/serialize'
+import { isKeybinds } from '../../lib/keybinds'
+import { isPopupRules, isQuietHours } from '../../lib/popupRules'
 
 const PREF_CHECKS: Record<keyof UiPrefs, (v: unknown) => boolean> = {
   motion: (v) => v === null || v === 'full' || v === 'reduced' || v === 'off',
@@ -15,6 +17,10 @@ const PREF_CHECKS: Record<keyof UiPrefs, (v: unknown) => boolean> = {
   glance_subjects: (v) => typeof v === 'boolean',
   sidebar_collapsed: (v) => typeof v === 'boolean',
   theme: (v) => v === 'light' || v === 'dark' || v === 'auto',
+  // PROPOSED (proposals §28)
+  popup_rules: isPopupRules,
+  quiet_hours: (v) => v === null || isQuietHours(v),
+  keybinds: isKeybinds,
 }
 
 export const meRoutes = [

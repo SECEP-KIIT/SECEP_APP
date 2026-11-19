@@ -14,6 +14,7 @@ import {
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useQuery } from '@tanstack/react-query'
+import { matches } from '../lib/keybinds'
 import { AlarmClock, CalendarPlus, ListChecks, SquareCheck, Zap } from 'lucide-react'
 import { memo, useMemo, useState, type DragEvent, type ReactNode } from 'react'
 import { boardOptions, boardPosition, isCard, moveCard } from '../api/queries'
@@ -241,7 +242,7 @@ function SortableCard({ action, column, dragging }: { action: Action; column: Bo
         listeners?.onKeyDown?.(e)
         if (e.defaultPrevented) return
         if (e.key === 'Enter') openAction(action)
-        else if (e.key === 'r' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        else if (matches(e, 'remind')) {
           const r = e.currentTarget.getBoundingClientRect()
           remindAt(r.left, r.bottom)
         }

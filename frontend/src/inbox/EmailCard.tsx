@@ -67,7 +67,7 @@ export const EmailCard = memo(function EmailCard({ email, now, density, fresh, o
 
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.target !== e.currentTarget) return
-    // FR-UI-028 keyboard: j/k, x, e, ⇧J, ⇧C, Ctrl/⌘+C, Shift+F10.
+    // FR-UI-028 keyboard: card keys from Settings (j/k, x, e, p, r, ⇧J by default), Ctrl/⌘+C, Shift+F10.
     const key = cardKeyAction(e)
     if (key) {
       e.preventDefault()

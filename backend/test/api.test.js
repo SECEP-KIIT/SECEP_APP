@@ -298,6 +298,20 @@ describe('M6 API', { skip: !reachable && 'no test database' }, () => {
     assert.deepEqual(await unread(), []);
   });
 
+  test('preferences: pop-up rules, quiet hours and key binds are stored; bad shapes are 422 (proposals §28)', async () => {
+    const patch = (body) => api('/me/preferences', { method: 'PATCH', body: JSON.stringify(body) });
+    const rules = { normal: { urgency: 'high', sentiment: 'frustrated' }, focus: { urgency: 'critical', sentiment: 'off' }, quiet: { urgency: 'none', sentiment: 'off' } };
+    const ok = await patch({ popup_rules: rules, quiet_hours: { start: '22:00', end: '08:00' }, keybinds: { lock: 'Alt+Q' } });
+    assert.equal(ok.status, 200);
+    assert.deepEqual(ok.body.ui_prefs.popup_rules, rules);
+    assert.deepEqual(ok.body.ui_prefs.keybinds, { lock: 'Alt+Q' });
+    assert.equal((await patch({ quiet_hours: null })).body.ui_prefs.quiet_hours, null);
+    for (const body of [{ popup_rules: { normal: rules.normal } }, { quiet_hours: { start: '9am', end: '08:00' } }, { keybinds: { teleport: 'T' } }]) {
+      assert.equal((await patch(body)).status, 422);
+    }
+    await patch({ keybinds: {} });
+  });
+
   test('files: an email is a target too; someone else\'s email is a 404', async () => {
     const email = (await api('/emails?limit=1')).body.items[0];
     const send = (target) => {

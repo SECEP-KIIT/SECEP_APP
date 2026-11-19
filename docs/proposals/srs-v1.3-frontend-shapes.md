@@ -514,3 +514,23 @@ The §6.6 tables (`actions` with `origin = user`, `notes`, `files`, `masked_secr
    - Implemented in the mock; **M6 still needs it**.
 3. **Remind me on board cards:** right-click, `r`, or the ⏰ button that appears on hover. An email's card reminds about the email (`target.type = "email"`), one of your cards about the card (`"card"`). Uses the existing `POST /reminders`.
 4. **Search result in the Inbox:** picking an email in search opens `/inbox?found=<id>&sq=<words>`. The Inbox shows only that email (from `GET /emails/:id`) with a "search: …" pill beside the title. The pill reopens search with the same words; its ✕ shows the whole inbox. No wire change.
+
+## 28. Pop-up rules, quiet hours, lock refresh, key binds (19 Nov 2026) (PROPOSED for v1.3)
+
+### 28.1 `ui_prefs.popup_rules` and `ui_prefs.quiet_hours` (FR-REM-007)
+- `popup_rules`: `{ normal, focus, quiet }`, each `{ urgency: "all" | "medium" | "high" | "critical" | "none", sentiment: "off" | "frustrated" | "negative" }`. `sentiment` pops an email up whatever its urgency: `frustrated` = Frustrated only, `negative` = Negative or Frustrated. All three modes are required; extra keys → 422.
+- `quiet_hours`: `{ start: "HH:MM", end: "HH:MM" }` in the user's local time (start > end wraps past midnight), or `null` = off. Unset = `22:00–08:00`.
+- Defaults (FR-REM-007): Normal = High+ and Frustrated, Focus = Critical only, Quiet = none.
+- **Mode:** quiet hours win over Focus mode, then Focus, else Normal.
+- Applied in the client to new emails arriving over the socket (`email.triaged` for an email no list holds): a top alert with a mail icon, `Urgency · Mood · Sender` and the subject, once per email, never behind the lock. Everything else arrives silently (inbox, "↑ n new", bell counts). Reminders (FR-REM-004) are unchanged.
+- "Asked on first sign-in", lean: when `popup_rules` is unset, the client saves the defaults and shows a toast naming them, with Change → Settings › Notifications.
+- M6 validates both keys in `PATCH /me/preferences` (done). Web Push filtering by the same rules is v2 with Web Push.
+
+### 28.2 Lock-screen refresh
+A round button top right of the lock screen, shown once the app has loaded. It refetches every active query (glance chips, subjects, the dashboard behind the lock) without opening the lock; the icon spins while it runs. No API change.
+
+### 28.3 `ui_prefs.keybinds`
+- Editable actions and defaults: `search` Mod+K, `search_alt` /, `quick_add` N, `focus` F, `lock` Alt+L, `next` J, `prev` K, `select` X, `done` E, `project` P, `remind` R, `jira` Shift+J. `Mod` = Ctrl, or ⌘ on a Mac.
+- Wire: `{ [action]: combo }`, **overrides only**; a combo is `(Mod+)?(Alt+)?(Shift+)?KEY`, KEY one character or a named key in capitals (e.g. `F2`). Unknown actions or bad combos → 422. `{}` resets all.
+- Fixed and not bindable: Esc, Tab, Enter, Space, arrows, Backspace/Delete, Ctrl/⌘+C/V/X/A/Z, Shift+F10 and the menu key. Settings refuses a combo another action already uses.
+- A combo without Mod or Alt never fires while typing or with a dialog open.

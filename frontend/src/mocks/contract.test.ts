@@ -712,6 +712,18 @@ describe('ui_prefs.theme (PROPOSED, proposals §16.6)', () => {
     expect((await call('PATCH', '/me/preferences', { token, body: { motion: null } })).json.ui_prefs.motion).toBeNull()
     expect((await call('PATCH', '/me/preferences', { token, body: { motion: 'wobbly' } })).status).toBe(422)
   })
+
+  it('PATCH /me/preferences: pop-up rules, quiet hours and key binds (proposals §28)', async () => {
+    const token = await login()
+    const rules = { normal: { urgency: 'medium', sentiment: 'negative' }, focus: { urgency: 'critical', sentiment: 'off' }, quiet: { urgency: 'none', sentiment: 'off' } }
+    const ok = await call('PATCH', '/me/preferences', { token, body: { popup_rules: rules, quiet_hours: { start: '23:30', end: '07:00' }, keybinds: { lock: 'Alt+Q' } } })
+    expect(ok.status).toBe(200)
+    expect(ok.json.ui_prefs).toMatchObject({ popup_rules: rules, quiet_hours: { start: '23:30', end: '07:00' }, keybinds: { lock: 'Alt+Q' } })
+    expect((await call('PATCH', '/me/preferences', { token, body: { quiet_hours: null } })).json.ui_prefs.quiet_hours).toBeNull()
+    for (const body of [{ popup_rules: { normal: rules.normal } }, { quiet_hours: { start: '25:00', end: '07:00' } }, { keybinds: { teleport: 'T' } }, { keybinds: { lock: 'Ctrl+Alt+Q' } }]) {
+      expect((await call('PATCH', '/me/preferences', { token, body })).status).toBe(422)
+    }
+  })
 })
 
 describe('user cards (FR-CNT-002, proposals §19.1)', () => {

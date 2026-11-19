@@ -1,7 +1,10 @@
-// Focus mode keys (FR-UI-004): F toggles, Esc leaves. Pure, so it's unit-tested.
+// Focus mode keys (FR-UI-004): F (or the key set in Settings) toggles, Esc leaves. Pure, so it's unit-tested.
+import { hasModifier, matches } from '../lib/keybinds'
 
 interface KeyLike {
   key: string
+  code?: string
+  shiftKey?: boolean
   ctrlKey: boolean
   metaKey: boolean
   altKey: boolean
@@ -22,8 +25,9 @@ export function isTypingTarget(target: EventTarget | null) {
  * nothing open, leaves Focus mode. The native modal <dialog> and Radix popovers close on Esc themselves.
  */
 export function focusKeyAction(e: KeyLike, focused: boolean, layerOpen = false): 'toggle' | 'exit' | null {
-  if (layerOpen || e.ctrlKey || e.metaKey || e.altKey || isTypingTarget(e.target) || inLayer(e.target)) return null
-  if (e.key === 'f' || e.key === 'F') return 'toggle'
+  if (layerOpen || inLayer(e.target)) return null
+  if (matches(e, 'focus') && (hasModifier('focus') || !isTypingTarget(e.target))) return 'toggle'
+  if (e.ctrlKey || e.metaKey || e.altKey || isTypingTarget(e.target)) return null
   if (e.key === 'Escape' && focused) return 'exit'
   return null
 }

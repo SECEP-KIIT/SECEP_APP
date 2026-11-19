@@ -1,3 +1,4 @@
+import { useKeyLabel } from '../lib/keybinds'
 import { CircleCheck, Ellipsis, FolderPlus, Undo2, Zap } from 'lucide-react'
 import type { EmailListItem } from '../api/types'
 import { useInbox } from './inboxContext'
@@ -12,6 +13,7 @@ import { useQuickActions } from './quickActions'
 export function CardActions({ email, onLeave }: { email: EmailListItem; onLeave: (leaving: boolean) => void }) {
   const { busy, send, toggleHandled, open } = useQuickActions(email, onLeave)
   const { pickProject } = useInbox()
+  const projectKey = useKeyLabel('project')
 
   return (
     <div className="card-actions" role="group" aria-label="Quick actions">
@@ -37,7 +39,7 @@ export function CardActions({ email, onLeave }: { email: EmailListItem; onLeave:
         type="button"
         className="card-action"
         disabled={busy !== null}
-        title="Add to project (P)"
+        title={`Add to project (${projectKey})`}
         aria-haspopup="menu"
         onClick={(e) => {
           e.stopPropagation()
