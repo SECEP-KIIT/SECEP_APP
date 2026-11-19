@@ -103,6 +103,23 @@ describe('drawer and quick actions (task 7)', () => {
     expect(jiraTarget(row, me)).toEqual({ project_key: 'ATL', epic: project.jira_epic })
   })
 
+  it('sends a card to Jira and Calendar (§27.2): off the board, listed under the card, validated', async () => {
+    const { createCard, sendCard } = await import('../api/queries')
+    const card = await createCard({ title: 'Call vendor', urgency: 'High' })
+    const jira = await sendCard(card.id, 'create_jira_issue', { title: 'Call vendor' })
+    expect(jira).toMatchObject({ status: 'done', card_id: card.id, email_id: null, board_column: null, external_ref: expect.stringMatching(/^[A-Z]+-\d+$/) })
+    expect((db.actions.get(jira.id)!.payload as DecoderActionPayload).priority).toBe('High')
+    const start = new Date(Date.now() + 86_400_000).toISOString()
+    const ev = await sendCard(card.id, 'add_calendar_event', { title: 'Call vendor', start, end: new Date(Date.parse(start) + 3_600_000).toISOString(), attendees: [db.users[0].email] })
+    expect(ev.status).toBe('done')
+    const { api } = await import('../api/client')
+    const listed = await api<Page<{ id: string }>>(`/actions?card=${card.id}`)
+    expect(listed.items.map((a) => a.id).sort()).toEqual([jira.id, ev.id].sort())
+    // Not a card you made → 409; an email's action can't be sent from a card.
+    const emailAction = [...db.actions.values()].find((a) => a.email_id)!
+    await expect(sendCard(emailAction.id, 'create_jira_issue', { title: 'x' })).rejects.toMatchObject({ status: 409 })
+  })
+
   it('reject marks the proposal declined', async () => {
     const row = [...db.actions.values()].find((a) => a.user_id === db.users[0].id && a.status === 'proposed')!
     const { toAction } = await import('../mocks/store/serialize')

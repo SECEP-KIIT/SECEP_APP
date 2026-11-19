@@ -86,6 +86,11 @@ describe('M6 API', { skip: !reachable && 'no test database' }, () => {
     assert.ok(bySubject.body.items.some((e) => e.id === titled.id));
     assert.ok(bySubject.body.items.every((e) => (e.subject ?? '').toLowerCase().includes(word.toLowerCase())));
     assert.equal((await api('/emails?q=x&q_in=body')).status, 422);
+    // Proposals §27: include_handled=true returns open and handled mail together.
+    const handledCount = (await api('/emails?view=handled&limit=50')).body.items.length;
+    const both = await api('/emails?include_handled=true&limit=50');
+    assert.ok(both.body.items.some((e) => e.handled) === handledCount > 0);
+    assert.equal((await api('/emails?include_handled=yes')).status, 422);
     const page1 = await api('/emails?limit=5');
     const page2 = await api(`/emails?limit=5&cursor=${encodeURIComponent(page1.body.next_cursor)}`);
     assert.equal(new Set([...page1.body.items, ...page2.body.items].map((e) => e.id)).size, 10);

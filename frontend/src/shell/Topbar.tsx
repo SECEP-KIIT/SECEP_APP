@@ -4,6 +4,7 @@ import { lock } from '../boot/lock'
 import { Bell } from './Bell'
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { anyLayerOpen, isTypingTarget } from './focusKeys'
+import { onOpenSearch } from '../search/searchBus'
 import { useMatch, useMatches } from 'react-router'
 import { openQuickAdd } from '../cards/cardBus'
 import { useMinuteClock } from './useMinuteClock'
@@ -56,7 +57,9 @@ function SyncIndicator() {
 // (task 16). The pill and bell are laid out now so nothing shifts later; the bell arrives with task 13.
 // Quick-add (task 12) opens the quick-add dialog, filed into the open project.
 export function Topbar() {
-  const [search, setSearch] = useState(false)
+  // null: closed; a string: open, starting with these words (the Inbox's search pill reopens it).
+  const [search, setSearch] = useState<string | null>(null)
+  useEffect(() => onOpenSearch((q) => setSearch(q)), [])
   // Alt+L locks from anywhere (the topbar button's shortcut). Ctrl/⌘+K opens search; so does / when not typing.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -67,10 +70,10 @@ export function Topbar() {
         return
       } else if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k') {
         e.preventDefault()
-        setSearch(true)
+        setSearch('')
       } else if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey && !isTypingTarget(e.target) && !anyLayerOpen()) {
         e.preventDefault()
-        setSearch(true)
+        setSearch('')
       }
     }
     addEventListener('keydown', onKey)
@@ -93,15 +96,15 @@ export function Topbar() {
       <div className="topbar-centre">
         {/* Contextual mode (item 1): the inbox page renders its selection bar here, over the search pill. */}
         <div id="topbar-context" className="topbar-context" />
-        <button type="button" className="search-pill" onClick={() => setSearch(true)} aria-haspopup="dialog">
+        <button type="button" className="search-pill" onClick={() => setSearch('')} aria-haspopup="dialog">
           <Search aria-hidden="true" size={16} />
           <span className="search-pill-label">Search</span>
           <kbd>{isMac ? '⌘K' : 'Ctrl K'}</kbd>
         </button>
       </div>
-      {search && (
+      {search !== null && (
         <Suspense fallback={null}>
-          <SearchPalette onClose={() => setSearch(false)} />
+          <SearchPalette initialQuery={search} onClose={() => setSearch(null)} />
         </Suspense>
       )}
       <div className="topbar-right">

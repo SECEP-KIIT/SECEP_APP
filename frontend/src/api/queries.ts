@@ -463,6 +463,20 @@ const refreshProjects = () => {
   void queryClient.invalidateQueries({ queryKey: ['actions', 'board'] })
 }
 
+/** Proposals §27.2: the Jira issues and calendar events sent from one card. */
+export const cardSendsOptions = (cardId: string) =>
+  queryOptions({
+    queryKey: ['actions', 'card', cardId],
+    queryFn: ({ signal }) => api<Page<Action>>(`/actions?card=${cardId}&limit=50`, { signal }),
+  })
+
+/** Send a card to Jira or Calendar (proposals §27.2): POST /actions {type, payload, card_id}, then accept it. */
+export async function sendCard(cardId: string, type: 'create_jira_issue' | 'add_calendar_event', payload: Partial<DecoderActionPayload>, jira?: JiraTarget) {
+  const created = await api<Action>('/actions', json({ type, payload, card_id: cardId }))
+  void queryClient.invalidateQueries({ queryKey: ['actions', 'card', cardId], exact: true })
+  return acceptAction(created, undefined, jira)
+}
+
 /** POST /actions, then files the card into its projects (POST /projects/:id/items {action_id}). */
 export async function createCard(payload: Partial<UserCardPayload> & { title: string }, projectIds: readonly string[] = []) {
   const card = await api<Action>('/actions', json({ type: 'add_board_card', payload }))

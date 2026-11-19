@@ -1,8 +1,8 @@
-import { useInfiniteQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { ArrowDownUp, ArrowUp, CircleHelp, Rows3, X } from 'lucide-react'
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
-import { emailListOptions } from '../api/queries'
+import { emailDetailOptions, emailListOptions } from '../api/queries'
 import type { EmailListItem } from '../api/types'
 import { useFocused } from '../shell/focusMode'
 import { useMinuteClock } from '../shell/useMinuteClock'
@@ -45,6 +45,12 @@ interface Props {
   onStateChange?: (state: ColumnState) => void
   /** Starting state when uncontrolled (the /inbox full view opened from a tile's ⤢). */
   initial?: ColumnState
+  /**
+   * Show this one email only (opened from search, 19 Nov 2026), from GET /emails/:id, which live events keep fresh.
+   * The filter and sort controls are hidden; `badge` (the search pill) sits beside the title.
+   */
+  only?: string
+  badge?: ReactNode
   /** Replaces the plain title (a widget's title bar: icon, rename). Gets the id the section is labelled by. */
   heading?: (titleId: string) => ReactNode
   /** Extra controls at the end of the title row (a widget's ⋯ menu, ⤢). */
@@ -69,7 +75,7 @@ interface Props {
  * (TanStack Virtual) and live updates patch cards in place. New mail is never inserted: it shows as "↑ n new"
  * (FR-UI-024), and only a click on the pill brings it in, at the top, after scrolling there.
  */
-export function Column({ title, state, onStateChange, initial, heading, tools, variant = 'full', scope, locked }: Props) {
+export function Column({ title, state, onStateChange, initial, heading, tools, variant = 'full', scope, locked, only, badge }: Props) {
   const focused = useFocused()
   const now = useMinuteClock()
   const { showLegend } = useInbox()
@@ -99,9 +105,14 @@ export function Column({ title, state, onStateChange, initial, heading, tools, v
   const setSort = (s: SortKey) => change({ sort: s })
   const setDensity = (d: Density) => change({ density: d })
   const base = columnQuery(filters, sort, focused)
-  const query = base === null || !scope ? base : [scope, base].filter(Boolean).join('&')
+  const query = only ? null : base === null || !scope ? base : [scope, base].filter(Boolean).join('&')
   const list = useInfiniteQuery({ ...emailListOptions(query ?? ''), enabled: query !== null })
-  const loaded = useMemo(() => (query === null ? [] : (list.data?.pages.flatMap((p) => p.items) ?? [])), [query, list.data])
+  const single = useQuery({ ...emailDetailOptions(only ?? ''), enabled: !!only })
+  const singleItem: EmailListItem | undefined = single.data
+  const loaded = useMemo(
+    () => (only ? (singleItem ? [singleItem] : []) : query === null ? [] : (list.data?.pages.flatMap((p) => p.items) ?? [])),
+    [only, singleItem, query, list.data],
+  )
   const items = loaded
   const view = items
   const more = query !== null && list.hasNextPage
@@ -110,7 +121,7 @@ export function Column({ title, state, onStateChange, initial, heading, tools, v
   const scrollRef = useRef<HTMLDivElement>(null)
   const { pending, fresh, showNew } = useNewPill(query, loaded, filters, focused, () => scrollRef.current?.scrollTo({ top: 0 }), scope)
   const pitch = ROW_PITCH[density]
-  const showSkeleton = query !== null && list.isPending
+  const showSkeleton = only ? single.isPending : query !== null && list.isPending
   const rowCount = showSkeleton ? SKELETON_ROWS : view.length + (more ? 1 : 0)
   // The virtualizer's functions are used only in this component's render, never passed to memoised children.
   // oxlint-disable-next-line react/incompatible-library
@@ -177,10 +188,11 @@ export function Column({ title, state, onStateChange, initial, heading, tools, v
             {loadedCount}
             <span className="sr-only">{more ? ' emails loaded, more below' : ' emails'}</span>
           </span>
+          {badge}
           {tools && <span className="col-title-end">{tools}</span>}
         </div>
         {/* F15: the filter, sort and density controls get their own line, so neither line is squeezed. */}
-        <div className="col-tools" ref={toolsRef}>
+        <div className="col-tools" ref={toolsRef} hidden={!!only}>
           <FilterPopover filters={filters} onChange={setFilters} summary={tile ? filterSummary(filters) : undefined} />
           <label className="col-select" title="Sort" data-set={sort !== 'newest' || undefined}>
             <ArrowDownUp size={16} aria-hidden="true" />
@@ -213,7 +225,7 @@ export function Column({ title, state, onStateChange, initial, heading, tools, v
         </div>
         <UrgencyBar split={split} total={items.length} />
         {focused && <p className="col-note">Focus mode: Critical and High only</p>}
-        {!tile && (
+        {!tile && !only && (
         <div className="quick-chips" role="group" aria-label="Quick filters">
           {QUICK_VIEWS.map((v) => (
             <button
@@ -255,7 +267,11 @@ export function Column({ title, state, onStateChange, initial, heading, tools, v
         </p>
 
         <div className="col-scroll" ref={scrollRef}>
-          {list.isError && query !== null ? (
+          {only && single.isError ? (
+            <div className="col-state" role="alert">
+              <p>Couldn't open this email. It may have been deleted.</p>
+            </div>
+          ) : list.isError && query !== null ? (
             <div className="col-state" role="alert">
               <p>Couldn't load this column.</p>
               <button type="button" className="text-button" onClick={() => void list.refetch()}>

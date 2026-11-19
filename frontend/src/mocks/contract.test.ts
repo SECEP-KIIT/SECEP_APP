@@ -65,7 +65,7 @@ const LIST_KEYS = ['id', 'thread_id', 'from', 'to', 'cc', 'recipient_position', 
 const DETAIL_KEYS = [...LIST_KEYS, 'body_text', 'summary_short', 'actions', 'links', 'attachments', 'masked_secrets', 'open_url', 'auth_results', 'thread']
 const TRIAGE_KEYS = ['email_type', 'urgency', 'sentiment', 'needs_review', 'model_version', 'processed_at']
 const LINK_KEYS = ['check_id', 'anchor_text', 'host', 'verdict', 'go_url']
-const ACTION_KEYS = ['id', 'email_id', 'type', 'origin', 'status', 'payload', 'board_column', 'board_position', 'external_ref', 'external_status', 'error', 'created_at', 'updated_at', 'projects']
+const ACTION_KEYS = ['id', 'email_id', 'card_id', 'type', 'origin', 'status', 'payload', 'board_column', 'board_position', 'external_ref', 'external_status', 'error', 'created_at', 'updated_at', 'projects']
 const ME_KEYS = ['id', 'email', 'display_name', 'role_category', 'is_admin', 'permissions', 'mailbox', 'ui_prefs']
 const ERROR_KEYS = ['code', 'message', 'details', 'request_id']
 
@@ -601,6 +601,12 @@ describe('admin', () => {
     expect((await get('all')).some((x: { id: string }) => x.id === e.id)).toBe(true)
     for (const it of await get('subject')) expect((it.subject ?? '').toLowerCase()).toContain(bodyWord.toLowerCase())
     expect((await call('GET', '/emails?q=x&q_in=body', { token })).status).toBe(422)
+    // §27: include_handled keeps handled mail in one list.
+    const handled = [...(db.handled.get(db.users[0].id) ?? [])]
+    const both = (await call('GET', '/emails?include_handled=true&limit=50', { token })).json.items
+    expect(handled.length).toBeGreaterThan(0)
+    expect(both.some((x: { handled: boolean }) => x.handled)).toBe(true)
+    expect((await call('GET', '/emails?include_handled=1', { token })).status).toBe(422)
   })
 
   it('metrics and .ics', async () => {

@@ -8,6 +8,7 @@ import { shellToast } from '../lib/toastBus'
 import { FilesPanel } from '../files/FilesPanel'
 import { NotesPanel } from '../notes/NotesPanel'
 import { onOpenCard, settled } from './cardBus'
+import { CardSend } from './CardSend'
 import { SOURCES } from './sourceIcon'
 
 type Card = Action & { payload: UserCardPayload }
@@ -214,6 +215,11 @@ function CardForm({ card, titleId, onClose, extra }: { card: Card; titleId: stri
             })}
           {projects.data?.items.length === 0 && <span className="pd-hint">No projects yet.</span>}
         </div>
+      </section>
+
+      <section className="cs-section" aria-labelledby={`${id}-send`}>
+        <h3 id={`${id}-send`}>Send to</h3>
+        <CardSend card={card} />
       </section>
 
       <section className="cs-section" aria-labelledby={`${id}-notes`}>

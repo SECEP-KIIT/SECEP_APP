@@ -1,23 +1,21 @@
 import { describe, expect, it } from 'vitest'
-import { filterCount, highlight, NO_FILTERS, searchQueries } from './searchQuery'
+import { filterCount, highlight, NO_FILTERS, searchPath } from './searchQuery'
 
 describe('search palette', () => {
-  it('searches subjects first, the text on Go deeper, and includes handled mail', () => {
-    const [open, handled] = searchQueries('budget q3', NO_FILTERS, false)
-    expect(new URL(open, 'http://x').searchParams.get('q_in')).toBe('subject')
-    expect(new URL(open, 'http://x').searchParams.get('q')).toBe('budget q3')
-    expect(new URL(handled, 'http://x').searchParams.get('view')).toBe('handled')
-    expect(new URL(searchQueries('budget', NO_FILTERS, true)[0], 'http://x').searchParams.get('q_in')).toBe('all')
+  it('searches subjects first, the text on Go deeper, handled mail in the same list, and pages', () => {
+    const p = (path: string) => new URL(path, 'http://x').searchParams
+    const first = p(searchPath('budget q3', NO_FILTERS, false))
+    expect([first.get('q'), first.get('q_in'), first.get('include_handled'), first.get('limit')]).toEqual(['budget q3', 'subject', 'true', '25'])
+    expect(p(searchPath('budget', NO_FILTERS, true)).get('q_in')).toBe('all')
+    expect(p(searchPath('budget', NO_FILTERS, false, 'abc')).get('cursor')).toBe('abc')
   })
 
-  it('maps filters to GET /emails parameters; status filters drop the handled query', () => {
+  it('maps filters to GET /emails parameters; status filters leave handled mail out', () => {
     const f = { type: ['Task' as const], urgency: ['Critical' as const, 'High' as const], view: ['unread' as const], includeHandled: true }
-    const paths = searchQueries('', f, false)
-    expect(paths).toHaveLength(1)
-    const p = new URL(paths[0], 'http://x').searchParams
-    expect([p.get('type'), p.get('urgency'), p.get('view'), p.get('q')]).toEqual(['Task', 'Critical,High', 'unread', null])
+    const p = new URL(searchPath('', f, false), 'http://x').searchParams
+    expect([p.get('type'), p.get('urgency'), p.get('view'), p.get('q'), p.get('include_handled')]).toEqual(['Task', 'Critical,High', 'unread', null, null])
     expect(filterCount(f)).toBe(4)
-    expect(searchQueries('x', { ...NO_FILTERS, includeHandled: false }, false)).toHaveLength(1)
+    expect(new URL(searchPath('x', { ...NO_FILTERS, includeHandled: false }, false), 'http://x').searchParams.get('include_handled')).toBeNull()
   })
 
   it('highlights every query word, case-insensitive, as plain-text pieces', () => {

@@ -173,6 +173,10 @@ export function patchActionCache(qc: QueryClient, action: Action) {
       qc.setQueryData<Page<Action>>(key, { ...data, items: data.items.map((a) => (a.id === action.id ? action : a)) })
     }
   }
+  // Proposals §27.2: a Jira issue or event sent from a card shows in that card's list.
+  if (action.card_id && !qc.getQueryData<Page<Action>>(['actions', 'card', action.card_id])?.items.some((a) => a.id === action.id)) {
+    void qc.invalidateQueries({ queryKey: ['actions', 'card', action.card_id], exact: true })
+  }
   if (!action.email_id) return
   const detail = qc.getQueryData<EmailDetail>(['email', action.email_id])
   if (detail?.actions.some((a) => a.id === action.id)) {

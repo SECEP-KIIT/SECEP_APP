@@ -1216,3 +1216,43 @@ html[data-motion='off'] .toast-bar {
   animation: none;
   opacity: 0.5;
 }
+
+/* "search: …" pill beside the Inbox title when one searched email is shown (19 Nov 2026). */
+.search-badge {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+  max-width: 420px;
+  margin-left: var(--space-2);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.search-badge button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+.search-badge-text {
+  flex: 1;
+  min-width: 0;
+}
+.search-badge-text span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.search-badge-clear {
+  border-left: 1px solid color-mix(in srgb, var(--accent) 40%, transparent) !important;
+}
+.col-tools[hidden] {
+  display: none;
+}

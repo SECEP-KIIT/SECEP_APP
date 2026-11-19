@@ -154,3 +154,35 @@ html[data-motion='off'] .board-item {
   --lane: #3b5bdb;
 }
 
+
+/* Remind me on a board card (19 Nov 2026): shown on hover or focus, over the card's corner, so nothing moves. */
+.board-item {
+  position: relative;
+}
+.board-remind {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--card-bg);
+  color: var(--ink-muted);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 120ms ease;
+}
+.board-item:hover .board-remind,
+.board-item:focus-within .board-remind,
+.board-remind:focus-visible {
+  opacity: 1;
+}
+.board-remind:hover {
+  color: var(--ink);
+}
+@media (hover: none) {
+  .board-remind {
+    opacity: 1;
+  }
+}

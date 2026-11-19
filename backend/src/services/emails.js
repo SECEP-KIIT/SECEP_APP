@@ -237,6 +237,9 @@ export async function list(userId, params, { limit, offset }) {
   // PROPOSED (proposals §26): q_in=subject searches subjects only; all (default) also the masked body (FR-UI-026).
   const qIn = params.get('q_in') ?? 'all';
   if (qIn !== 'subject' && qIn !== 'all') throw new Fail(422, 'invalid_parameter', 'q_in must be subject or all', { parameter: 'q_in' });
+  // PROPOSED (proposals §27): include_handled=true keeps handled mail in the list (search), same order and paging.
+  const ih = params.get('include_handled');
+  if (ih !== null && ih !== 'true' && ih !== 'false') throw new Fail(422, 'invalid_parameter', 'include_handled must be true or false', { parameter: 'include_handled' });
 
   const args = [userId];
   const arg = (v) => (args.push(v), `$${args.length}`);
@@ -267,7 +270,7 @@ export async function list(userId, params, { limit, offset }) {
   }
   // Keyword search over masked text only (FR-UI-026): every term in the subject or the stored body.
   if (q) for (const term of q.split(/\s+/).slice(0, 8)) where.push(`${qIn === 'subject' ? "coalesce(e.subject,'')" : "(coalesce(e.subject,'') || ' ' || e.body_text)"} ILIKE ${arg(`%${term.replace(/[\\%_]/g, '\\$&')}%`)}`);
-  if (!f.view.includes('handled')) where.push('s.handled_at IS NULL');
+  if (!f.view.includes('handled') && ih !== 'true') where.push('s.handled_at IS NULL');
   for (const v of f.view) {
     if (v === 'unread') where.push('s.read_at IS NULL');
     if (v === 'handled') where.push('s.handled_at IS NOT NULL');

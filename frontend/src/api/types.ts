@@ -69,6 +69,11 @@ export interface UserCardPayload {
 export interface Action {
   id: string
   email_id: string | null
+  /**
+   * PROPOSED (proposals §27.2): a Jira issue or calendar event sent from one of your cards (FR-CNT-002 "same
+   * actions"); null otherwise. Such actions are not board cards themselves; the card lists them.
+   */
+  card_id: string | null
   type: ActionType
   origin: ActionOrigin
   status: ActionStatus

@@ -1,12 +1,12 @@
-import { useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery } from '@tanstack/react-query'
 import { Archive, FolderOpen, Mail, Search, SlidersHorizontal } from 'lucide-react'
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { api } from '../api/client'
 import { useProjects } from '../api/queries'
 import type { EmailListItem, Page, Project } from '../api/types'
 import { goTo } from '../lib/navigate'
-import { openEmail } from '../lib/openEmail'
-import { filterCount, highlight, MAX, NO_FILTERS, searchQueries, TYPES, URGENCIES, VIEWS, type Filters } from './searchQuery'
+import { showSearchResult } from './searchBus'
+import { filterCount, highlight, NO_FILTERS, searchPath, TYPES, URGENCIES, VIEWS, type Filters } from './searchQuery'
 import './search.css'
 
 const DEBOUNCE_MS = 150
@@ -27,10 +27,10 @@ type Row = { kind: 'project'; project: Project } | { kind: 'email'; email: Email
  * mail included) and project names; when no subject matches, "Go deeper" searches the email text. Filters (type,
  * urgency, unread, due today, overdue) narrow the emails. ↑↓ moves, Enter opens, Esc closes. Ctrl/⌘+K or / opens it.
  */
-export function SearchPalette({ onClose }: { onClose: () => void }) {
+export function SearchPalette({ initialQuery = '', onClose }: { initialQuery?: string; onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null)
   const id = useId()
-  const [q, setQ] = useState('')
+  const [q, setQ] = useState(initialQuery)
   const [filters, setFilters] = useState<Filters>(NO_FILTERS)
   const [showFilters, setShowFilters] = useState(false)
   const [deepFor, setDeepFor] = useState<string | null>(null)
@@ -44,28 +44,26 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
     if (d && !d.open) d.showModal()
   }, [])
 
-  const paths = searchQueries(query, filters, deep)
-  // Stale requests are cancelled by TanStack Query's signal when the key changes.
-  const emails = useQuery({
-    queryKey: ['search', paths],
+  // One list, paged; stale requests are cancelled by TanStack Query's signal when the key changes.
+  const emails = useInfiniteQuery({
+    queryKey: ['search', query, filters, deep],
     enabled: searching,
     staleTime: 30_000,
-    queryFn: async ({ signal }) => {
-      const pages = await Promise.all(paths.map((p) => api<Page<EmailListItem>>(p, { signal })))
-      return pages
-        .flatMap((p) => p.items)
-        .sort((a, b) => b.received_at.localeCompare(a.received_at))
-        .slice(0, MAX)
-    },
+    initialPageParam: null as string | null,
+    getNextPageParam: (last: Page<EmailListItem>) => last.next_cursor,
+    queryFn: ({ signal, pageParam }) => api<Page<EmailListItem>>(searchPath(query, filters, deep, pageParam), { signal }),
   })
+  const more = () => {
+    if (emails.hasNextPage && !emails.isFetchingNextPage) void emails.fetchNextPage()
+  }
   const { data: projectPage } = useProjects()
   const projects = useMemo(() => {
     const t = query.toLowerCase()
     if (!t) return []
-    return (projectPage?.items ?? []).filter((p) => p.name.toLowerCase().includes(t)).slice(0, MAX)
+    return (projectPage?.items ?? []).filter((p) => p.name.toLowerCase().includes(t))
   }, [projectPage, query])
 
-  const found = emails.data ?? []
+  const found = useMemo(() => emails.data?.pages.flatMap((p) => p.items) ?? [], [emails.data])
   const canGoDeeper = query.length > 0 && !deep && emails.isSuccess && found.length === 0
   const rows: Row[] = [
     ...projects.map((project) => ({ kind: 'project' as const, project })),
@@ -86,17 +84,16 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
     }
     close()
     if (row.kind === 'project') goTo(`/projects/${row.project.id}`)
-    else {
-      // The drawer shows the email and its earlier messages in the thread (People & thread).
-      const onInbox = location.pathname === '/inbox'
-      openEmail(row.email.id, onInbox)
-      if (!onInbox) goTo('/inbox')
-    }
+    else showSearchResult(row.email, query)
   }
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault()
-      if (rows.length) setActive((current + (e.key === 'ArrowDown' ? 1 : rows.length - 1)) % rows.length)
+      if (rows.length) {
+        const next = (current + (e.key === 'ArrowDown' ? 1 : rows.length - 1)) % rows.length
+        setActive(next)
+        if (next >= rows.length - 3) more()
+      }
     } else if (e.key === 'Enter' && rows[current]) {
       e.preventDefault()
       choose(rows[current])
@@ -172,7 +169,17 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
           </div>
         )}
 
-        <div className="sp-results" id={`${id}-list`} role="listbox" aria-label="Results">
+        <div
+          className="sp-results"
+          id={`${id}-list`}
+          role="listbox"
+          aria-label="Results"
+          aria-busy={emails.isFetchingNextPage || undefined}
+          onScroll={(e) => {
+            const el = e.currentTarget
+            if (el.scrollHeight - el.scrollTop - el.clientHeight < 160) more()
+          }}
+        >
           {!searching && <p className="sp-hint">Type to search email subjects and project names. Enter opens, Esc closes.</p>}
           {projects.length > 0 && <p className="sp-group">Projects</p>}
           {projects.map((p) => {
@@ -212,6 +219,7 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
             )
           })}
           {searching && emails.isFetching && found.length === 0 && <p className="sp-hint">Searching…</p>}
+          {emails.isFetchingNextPage && <p className="sp-hint">Loading more…</p>}
           {emails.isError && <p className="sp-hint">Search failed. Check your connection and try again.</p>}
           {canGoDeeper &&
             (() => {

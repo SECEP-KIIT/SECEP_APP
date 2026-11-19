@@ -7,7 +7,7 @@ export const VIEWS: { key: EmailView; label: string }[] = [
   { key: 'due_today', label: 'Due today' },
   { key: 'overdue', label: 'Overdue' },
 ]
-export const MAX = 8
+export const PAGE = 25
 
 export interface Filters {
   type: EmailType[]
@@ -20,27 +20,22 @@ export const filterCount = (f: Filters) => f.type.length + f.urgency.length + f.
 
 /**
  * GET /emails query for the palette. Subjects first (q_in=subject, proposals §26); "Go deeper" searches the masked
- * body too (q_in=all). Handled mail is left out of the default inbox list, so it's asked for separately with
- * view=handled and merged, newest first.
+ * body too (q_in=all). Handled mail is included in the same list (include_handled, proposals §27), newest first,
+ * PAGE results at a time; the palette loads more as it scrolls.
  */
-export function searchQueries(q: string, f: Filters, deep: boolean): string[] {
-  const base = new URLSearchParams({ limit: String(MAX), sort: 'newest' })
+export function searchPath(q: string, f: Filters, deep: boolean, cursor?: string | null): string {
+  const p = new URLSearchParams({ limit: String(PAGE), sort: 'newest' })
   if (q) {
-    base.set('q', q)
-    base.set('q_in', deep ? 'all' : 'subject')
+    p.set('q', q)
+    p.set('q_in', deep ? 'all' : 'subject')
   }
-  if (f.type.length) base.set('type', f.type.join(','))
-  if (f.urgency.length) base.set('urgency', f.urgency.join(','))
-  const open = new URLSearchParams(base)
-  if (f.view.length) open.set('view', f.view.join(','))
-  const out = [`/emails?${open}`]
-  // Handled mail can't be unread, due today or overdue in the inbox sense, so only plain searches include it.
-  if (f.includeHandled && f.view.length === 0) {
-    const handled = new URLSearchParams(base)
-    handled.set('view', 'handled')
-    out.push(`/emails?${handled}`)
-  }
-  return out
+  if (f.type.length) p.set('type', f.type.join(','))
+  if (f.urgency.length) p.set('urgency', f.urgency.join(','))
+  if (f.view.length) p.set('view', f.view.join(','))
+  // Handled mail can't be unread, due today or overdue in the inbox sense, so status filters leave it out.
+  if (f.includeHandled && f.view.length === 0) p.set('include_handled', 'true')
+  if (cursor) p.set('cursor', cursor)
+  return `/emails?${p}`
 }
 
 /** Subject text split around the query's words, so matches render as <mark> (plain text only, never HTML). */
