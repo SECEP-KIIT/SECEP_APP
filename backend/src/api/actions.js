@@ -182,13 +182,13 @@ route(actions, 'delete', '/actions/:id', 'user', async (req, user) => {
  * Runs an accepted action (FR-ORC-003/010). Jira 400/401: the action fails with Jira's message and the caller
  * gets it back (FR-ORC-006). Retries exhausted on 429/5xx: 502 upstream_error.
  */
-async function execute(a, user) {
+async function execute(a, user, target = {}) {
   const { rows: [t] } = await query('SELECT settings FROM tenants WHERE id = $1', [user.tenant_id]);
   let ref = null;
   let extStatus = null;
   try {
     if (a.type === 'create_jira_issue') {
-      ref = await createIssue(t.settings, a.payload, { assigneeEmail: user.email });
+      ref = await createIssue(t.settings, a.payload, { assigneeEmail: user.email, projectKey: target.project_key ?? null, epic: target.epic ?? null });
       extStatus = 'To Do';
     } else if (a.type === 'add_calendar_event') {
       // Google Calendar events.insert comes with the Calendar feature (FR-CAL, S); simulated until then.
@@ -223,12 +223,20 @@ async function execute(a, user) {
 
 route(actions, 'post', '/actions/:id/accept', 'user', async (req, user) => {
   const id = idParam(req, 'Action');
-  const f = object(req.body ?? {}).only(['payload', 'mode']);
+  const f = object(req.body ?? {}).only(['payload', 'mode', 'jira']);
   const edits = f.body.payload ?? {};
   if (typeof edits !== 'object' || Array.isArray(edits)) f.add('payload', 'Must be an object');
   else checkPayloadFields(f, edits);
   // mode "comment" (FR-ORC-013, S) is accepted and treated as "issue" until commenting is built.
   if (f.body.mode !== undefined && !['issue', 'comment'].includes(f.body.mode)) f.add('mode', 'Must be issue or comment');
+  // PROPOSED (proposals 25.2): where the issue goes. null means the default project and no epic.
+  const jira = f.body.jira ?? {};
+  if (typeof jira !== 'object' || jira === null || Array.isArray(jira)) f.add('jira', 'Must be an object');
+  else {
+    for (const k of Object.keys(jira)) if (!['project_key', 'epic'].includes(k)) f.add(`jira.${k}`, 'Unknown field');
+    if ('project_key' in jira && !isOptStr(jira.project_key, 40)) f.add('jira.project_key', 'At most 40 characters');
+    if ('epic' in jira && !isOptStr(jira.epic, 80)) f.add('jira.epic', 'At most 80 characters');
+  }
   f.done();
 
   // Claim it in one statement, so a double click can never create two issues (FR-ORC-005).
@@ -254,7 +262,7 @@ route(actions, 'post', '/actions/:id/accept', 'user', async (req, user) => {
   });
   if (claimed.done) return toAction(claimed.done);
   try {
-    return toAction(await execute(claimed.run, user));
+    return toAction(await execute(claimed.run, user, jira));
   } catch (err) {
     // Never leave it stuck in executing: an unexpected error marks it failed, so Retry works.
     if (!(err instanceof Fail)) await query(`UPDATE actions SET status = 'failed', error = 'Unexpected error', updated_at = now() WHERE id = $1 AND status = 'executing'`, [id]);

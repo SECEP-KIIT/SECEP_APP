@@ -4,6 +4,7 @@
 //        npm run seed -- --fresh (drops everything in the database first, then migrates and seeds)
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { encrypt } from '../src/services/crypto.js';
 import { pool, tx } from '../src/services/db.js';
 
@@ -13,7 +14,7 @@ const DAY = 86_400_000;
 
 if (process.argv.includes('--fresh')) {
   await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public');
-  execFileSync(process.execPath, [new URL('./migrate.js', import.meta.url).pathname], { stdio: 'inherit', env: process.env });
+  execFileSync(process.execPath, [fileURLToPath(new URL('./migrate.js', import.meta.url))], { stdio: 'inherit', env: process.env });
 }
 if ((await pool.query('SELECT 1 FROM tenants WHERE name = $1', [TENANT])).rows[0]) {
   console.log('The demo tenant already exists. Use --fresh to start over.');

@@ -8,24 +8,28 @@ import { PortalContainer } from './portal'
 
 /**
  * Honest AI labels (FR-UI-012): an uncertain type shows as a dotted "Task?" chip; clicking it opens the correction
- * menu. The correction goes to PATCH /emails/:id/labels with scope "email" (the default, FR-ML-013). The scope
- * choice (This email only · Always from this sender) is offered by the toast built with the security flows (task 15).
+ * menu. The correction goes to PATCH /emails/:id/labels. The scope is chosen in the menu itself: "This email only"
+ * (the default, FR-ML-013) or "Always from this sender", which the server stores as a sender rule.
  */
 export function CorrectionMenu({ email }: { email: EmailListItem & { triage: NonNullable<EmailListItem['triage']> } }) {
   const [open, setOpen] = useState(false)
+  const [always, setAlways] = useState(false)
   const correct = useCorrectLabel(email.id)
   const current = email.triage.email_type.label
   const container = useContext(PortalContainer)
 
   const choose = (value: EmailType) =>
-    correct.mutate({ field: 'email_type', value, scope: 'email' }, { onSuccess: () => setOpen(false) })
+    correct.mutate({ field: 'email_type', value, scope: always ? 'sender' : 'email' }, { onSuccess: () => setOpen(false) })
 
   return (
     <Popover.Root
       open={open}
       onOpenChange={(next) => {
         setOpen(next)
-        if (!next) correct.reset()
+        if (!next) {
+          correct.reset()
+          setAlways(false)
+        }
       }}
     >
       <Popover.Trigger asChild>
@@ -45,6 +49,14 @@ export function CorrectionMenu({ email }: { email: EmailListItem & { triage: Non
           <p className="menu-title" id={`correct-${email.id}`}>
             What type is this email?
           </p>
+          <div role="group" aria-label="Apply to" className="menu-list">
+            <button type="button" className="menu-item" aria-pressed={!always} onClick={() => setAlways(false)}>
+              This email only
+            </button>
+            <button type="button" className="menu-item" aria-pressed={always} onClick={() => setAlways(true)}>
+              Always from this sender
+            </button>
+          </div>
           <div role="group" aria-labelledby={`correct-${email.id}`} className="menu-list">
             {TYPES.map((t) => (
               <button

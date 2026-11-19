@@ -42,7 +42,8 @@ async function call(j, method, path, body) {
 /** Atlassian Document Format for a plain-text description (the masked text only). */
 const adf = (text) => ({ type: 'doc', version: 1, content: [{ type: 'paragraph', content: text ? [{ type: 'text', text }] : [] }] });
 
-let simulated = 140;
+// Simulated keys (no Jira configured): start somewhere time-based so a server restart doesn't hand out the same key again.
+let simulated = 100 + (Math.floor(Date.now() / 1000) % 9000);
 
 /** Creates the issue (FR-ORC-003/004). Returns the issue key. */
 export async function createIssue(tenantSettings, payload, { projectKey, assigneeEmail } = {}) {

@@ -1,9 +1,10 @@
-import { LayoutList, Pencil, Plus, Zap } from 'lucide-react'
-import { useState } from 'react'
+import { LayoutList, Pencil, Plus, Undo2, Zap } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { ApiError } from '../api/client'
-import { acceptAction, createAction, rejectAction, useProjects } from '../api/queries'
+import { acceptAction, createAction, rejectAction, undoAction, useProjects } from '../api/queries'
 import type { Action, ActionType, DecoderActionPayload, EmailDetail, JiraPriority, JiraTarget, Urgency } from '../api/types'
-import { errorText, useInbox, type OpenOptions } from '../inbox/inboxContext'
+import { UNDO_MS, errorText, type OpenOptions } from '../inbox/inboxContext'
+import { shellToast } from '../lib/toastBus'
 import { Composer } from './Composer'
 
 const TYPE_LABEL: Record<ActionType, string> = { create_jira_issue: 'Jira issue', add_calendar_event: 'Calendar event', add_board_card: 'Board card' }
@@ -46,6 +47,49 @@ const fieldErrors = (err: unknown): Record<string, string> =>
   err instanceof ApiError && (err.code === 'validation_failed' || err.code === 'action_invalid')
     ? (((err.details as { fields?: Record<string, string> } | null)?.fields) ?? {})
     : {}
+
+/**
+ * FR-UI-029: when each sent action's undo window closes. Module-level on purpose: a new action's row mounts (via the
+ * websocket event) before its accept call returns, so the window cannot live in the row's own state.
+ */
+const undoWindows = new Map<string, number>()
+
+/** After a send: open the undo window and say so in a toast (Ctrl/⌘+Z runs its Undo), or report the failure. */
+function reportSent(done: Action) {
+  if (done.status === 'done') {
+    undoWindows.set(done.id, Date.now() + UNDO_MS)
+    shellToast(done.type === 'create_jira_issue' ? `Created ${done.external_ref ?? 'the Jira issue'}` : 'Sent', 'info', {
+      label: 'Undo',
+      run: () => void undoAction(done),
+    })
+  } else if (done.status === 'failed') {
+    shellToast(`Couldn't send it: ${done.error ?? 'the action failed'}`, 'error')
+  }
+}
+
+/** The in-row "Undo · 9 s" button; disappears when the window closes. */
+function UndoButton({ id, busy, onUndo }: { id: string; busy: boolean; onUndo: () => void }) {
+  const [left, setLeft] = useState<number | null>(null)
+  useEffect(() => {
+    const tick = () => {
+      const s = Math.ceil(((undoWindows.get(id) ?? 0) - Date.now()) / 1000)
+      if (s > 0) setLeft(s)
+      else {
+        undoWindows.delete(id)
+        setLeft(null)
+      }
+    }
+    tick()
+    const t = window.setInterval(tick, 250)
+    return () => window.clearInterval(t)
+  }, [id])
+  if (left === null) return null
+  return (
+    <button type="button" className="ghost-button" disabled={busy} onClick={onUndo}>
+      <Undo2 size={14} aria-hidden="true" /> Undo · {left} s
+    </button>
+  )
+}
 
 /**
  * The drawer's Proposed actions section (item 10). Each action shows its state, live: proposed → executing → done
@@ -108,6 +152,13 @@ function ActionRow({ action, target, startEditing }: { action: Action; target: T
     }
   }
 
+  const send = (fn: () => Promise<Action>) => run(async () => reportSent(await fn()))
+  const undo = () =>
+    run(async () => {
+      await undoAction(action)
+      undoWindows.delete(action.id)
+    })
+
   return (
     <li className="action" data-status={action.status}>
       <div className="action-head">
@@ -146,20 +197,25 @@ function ActionRow({ action, target, startEditing }: { action: Action; target: T
           errors={fieldErrors(error)}
           jira={target}
           onCancel={() => setEditing(false)}
-          onSubmit={(next, jira) => run(() => acceptAction(action, diff({ ...EMPTY, ...p }, next), jira))}
+          onSubmit={(next, jira) => send(() => acceptAction(action, diff({ ...EMPTY, ...p }, next), jira))}
         />
+      ) : open ? (
+        <div className="action-buttons">
+          <button type="button" className="primary-button" disabled={busy} aria-busy={busy || undefined} onClick={() => send(() => acceptAction(action))}>
+            {action.status === 'failed' ? 'Retry' : SEND_LABEL[action.type]}
+          </button>
+          <button type="button" className="ghost-button" disabled={busy} onClick={() => setEditing(true)}>
+            <Pencil size={14} aria-hidden="true" /> Edit
+          </button>
+          <button type="button" className="text-button" disabled={busy} onClick={() => run(() => rejectAction(action))}>
+            Decline
+          </button>
+        </div>
       ) : (
-        open && (
+        action.status === 'done' &&
+        undoWindows.has(action.id) && (
           <div className="action-buttons">
-            <button type="button" className="primary-button" disabled={busy} aria-busy={busy || undefined} onClick={() => run(() => acceptAction(action))}>
-              {action.status === 'failed' ? 'Retry' : SEND_LABEL[action.type]}
-            </button>
-            <button type="button" className="ghost-button" disabled={busy} onClick={() => setEditing(true)}>
-              <Pencil size={14} aria-hidden="true" /> Edit
-            </button>
-            <button type="button" className="text-button" disabled={busy} onClick={() => run(() => rejectAction(action))}>
-              Decline
-            </button>
+            <UndoButton id={action.id} busy={busy} onUndo={undo} />
           </div>
         )
       )}
@@ -208,7 +264,6 @@ function NewAction({ email, type, onDone }: { email: EmailDetail; type: NonNulla
   const target = useJiraTarget(email)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<unknown>(null)
-  const { toast } = useInbox()
   const initial: DecoderActionPayload = {
     ...EMPTY,
     title: (email.subject ?? '').slice(0, 120) || null,
@@ -224,7 +279,7 @@ function NewAction({ email, type, onDone }: { email: EmailDetail; type: NonNulla
     try {
       const created = await createAction(email.id, type, payload)
       const result = await acceptAction(created, undefined, jira)
-      if (result.status === 'failed') toast(`Couldn't send it: ${result.error ?? 'the action failed'}`, 'error')
+      reportSent(result)
       onDone()
     } catch (err) {
       setError(err)
