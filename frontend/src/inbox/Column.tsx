@@ -135,7 +135,7 @@ export function Column({ title, state, onStateChange, initial, heading, tools, v
   // Every row's size changes together with the density; re-measure once rather than per row.
   useEffect(() => virtualizer.measure(), [virtualizer, pitch])
   // FR-UI-027: drag a box over empty space to select cards (not for a single search result or while tiles are edited).
-  const marquee = useMarquee(scrollRef, view.map((e) => e.id), pitch, !showSkeleton && !locked && !only)
+  const marquee = useMarquee(view.map((e) => e.id), pitch, !showSkeleton && !locked && !only)
 
   const rows = virtualizer.getVirtualItems()
   const lastIndex = rows.at(-1)?.index ?? -1

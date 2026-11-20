@@ -182,7 +182,7 @@ function ActionRow({ action, target, startEditing }: { action: Action; target: T
           {action.error}
         </p>
       )}
-      {error !== null && !editing && (
+      {error !== null && (!editing || Object.keys(fieldErrors(error)).length === 0) && (
         <p className="action-error" role="alert">
           {errorText(error)}
         </p>

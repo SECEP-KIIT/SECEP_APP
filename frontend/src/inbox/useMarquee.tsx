@@ -33,7 +33,7 @@ const rowsTop = (el: HTMLElement) => el.querySelector('.col-rows')?.getBoundingC
  * the same pitch), so it also works for rows the virtualised list hasn't drawn. Shift or Ctrl/⌘ adds to the current
  * selection; Esc during a drag puts the selection back.
  */
-export function useMarquee(scrollRef: { current: HTMLDivElement | null }, ids: readonly string[], pitch: number, enabled: boolean) {
+export function useMarquee(ids: readonly string[], pitch: number, enabled: boolean) {
   const selection = useSelection()
   const drag = useRef<Drag | null>(null)
   const [box, setBox] = useState<Box | null>(null)
