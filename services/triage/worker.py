@@ -105,20 +105,26 @@ def handle(t, conn, r, msg_id, fields) -> None:
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    r = redis.Redis.from_url(os.environ.get("REDIS_URL", "redis://localhost:6379/0"), decode_responses=True)
+    r = redis.Redis.from_url(os.environ.get("REDIS_URL", "redis://localhost:6379/0"), decode_responses=True,
+                           socket_timeout=30, health_check_interval=30)
     conn = psycopg.connect(os.environ["DATABASE_URL"], autocommit=True)
     t0 = time.time()
     t = triage.load(os.environ.get("TRIAGE_MODEL_DIR", "model_v1"))
     log.info("model loaded in %.1fs, consumer=%s", time.time() - t0, CONSUMER)
     ensure_group(r)
     while True:
-        # pending (unacked, e.g. after a crash) first, then new messages
-        for start in ("0", ">"):
-            resp = r.xreadgroup(GROUP, CONSUMER, {IN_STREAM: start}, count=16, block=None if start == "0" else 5000)
-            for _stream, msgs in resp or []:
-                for msg_id, fields in msgs:
-                    if fields:
-                        handle(t, conn, r, msg_id, fields)
+        try:
+            # pending (unacked, e.g. after a crash) first, then new messages
+            for start in ("0", ">"):
+                resp = r.xreadgroup(GROUP, CONSUMER, {IN_STREAM: start}, count=16,
+                                    block=None if start == "0" else 2000)
+                for _stream, msgs in resp or []:
+                    for msg_id, fields in msgs:
+                        if fields:
+                            handle(t, conn, r, msg_id, fields)
+        except (redis.ConnectionError, redis.TimeoutError) as e:
+            log.warning("redis unavailable (%s), retrying in 5s", type(e).__name__)
+            time.sleep(5)
 
 
 if __name__ == "__main__":
